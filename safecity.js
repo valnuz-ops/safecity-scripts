@@ -22,13 +22,13 @@ var scProduct = (function () {
   var TTL = 3600 * 1000, mem = {};
   function read(k) {
     try {
-      var v = JSON.parse(localStorage.getItem('scp:' + k));
+      var v = JSON.parse(localStorage.getItem('scp2:' + k));
       if (v && Date.now() - v.t < TTL) return v.d;
     } catch (e) {}
     return null;
   }
   function write(k, d) {
-    try { localStorage.setItem('scp:' + k, JSON.stringify({ t: Date.now(), d: d })); } catch (e) {}
+    try { localStorage.setItem('scp2:' + k, JSON.stringify({ t: Date.now(), d: d })); } catch (e) {}
   }
   return function (url) {
     if (mem[url]) return mem[url];
@@ -38,12 +38,28 @@ var scProduct = (function () {
       .then(function (r) { return r.text(); })
       .then(function (html) {
         var d = new DOMParser().parseFromString(html, 'text/html');
-        var name = ((d.querySelector('h1') || {}).textContent || '').trim();
+        var name = ((d.querySelector('h1') || {}).textContent ||
+                    (d.querySelector('meta[property="og:title"]') || {}).content || '').trim();
         if (!name) return null;
+        // Наявність: текст із десктопу, інакше schema.org (є і в мобільній версії)
+        var avail = ((d.querySelector('.product-header__availability') || {}).textContent || '').trim();
+        if (!avail) {
+          var a = d.querySelector('[itemprop="availability"]');
+          var v = a ? (a.getAttribute('href') || a.getAttribute('content') || a.textContent || '') : '';
+          avail = /InStock/i.test(v) ? 'в наявності' : /Limited/i.test(v) ? 'закінчується'
+                : /OutOfStock|Discontinued/i.test(v) ? 'немає' : /PreOrder|BackOrder/i.test(v) ? 'під замовлення' : '';
+        }
+        var price = ((d.querySelector('.product-price__item') || {}).textContent || '').trim().replace(/\s+/g, ' ').replace(/\/шт/, '');
+        if (!price) {
+          var pe = d.querySelector('[itemprop="price"]');
+          var pv = pe ? (pe.getAttribute('content') || pe.textContent || '') : '';
+          var pn = parseFloat(String(pv).replace(/[^\d.,]/g, '').replace(',', '.'));
+          if (pn) price = Math.round(pn).toLocaleString('uk-UA') + ' грн';
+        }
         var res = {
           name: name,
-          avail: ((d.querySelector('.product-header__availability') || {}).textContent || '').trim(),
-          price: ((d.querySelector('.product-price__item') || {}).textContent || '').trim().replace(/\s+/g, ' ').replace(/\/шт/, ''),
+          avail: avail,
+          price: price,
           img: (d.querySelector('meta[property="og:image"]') || {}).content || ''
         };
         write(url, res);
@@ -52,6 +68,51 @@ var scProduct = (function () {
       .catch(function () { return null; }));
   };
 })();
+
+// Характеристики товару: десктопна таблиця або будь-які пари «назва — значення» (мобільна версія)
+function scFeatures() {
+  var map = {};
+  function add(k, v) {
+    k = String(k || '').replace(/\s+/g, ' ').trim().toLowerCase().replace(/:$/, '');
+    v = String(v || '').replace(/\s+/g, ' ').trim();
+    if (k && v && k.length < 80 && !(k in map)) map[k] = v;
+  }
+  document.querySelectorAll('.product-features__table .product-features__row').forEach(function (r) {
+    var th = r.querySelector('th'), td = r.querySelector('td');
+    if (th && td) add(th.textContent, td.textContent);
+  });
+  document.querySelectorAll('tr').forEach(function (r) {
+    if (r.children.length === 2) add(r.children[0].textContent, r.children[1].textContent);
+  });
+  document.querySelectorAll('dt').forEach(function (dt) {
+    var dd = dt.nextElementSibling;
+    if (dd && dd.tagName === 'DD') add(dt.textContent, dd.textContent);
+  });
+  document.querySelectorAll('[class*="feature"],[class*="characteristic"],[class*="propert"],[class*="param"]').forEach(function (el) {
+    var c = el.children;
+    if (c.length === 2 && !c[0].children.length) add(c[0].textContent, c[1].textContent);
+  });
+  return map;
+}
+function scGet(map, re) { for (var k in map) if (re.test(k)) return map[k]; return ''; }
+
+function scDesc() {
+  var el = document.querySelector('.product-description') || document.querySelector('[itemprop="description"]') ||
+           document.querySelector('[class*="description"]');
+  return ((el || {}).textContent || '').replace(/\s+/g, ' ');
+}
+
+// Куди ставити блоки підказок: після блоку з кнопкою «Купити» (десктоп і мобільна версія)
+function scAnchor() {
+  if (!document.querySelector('[itemtype*="schema.org/Product"]')) return null;
+  var sels = ['.product__section--order', '.product-card--main .product-card__order-box',
+              '.product__section--price', '.product-card--main .product-card__price-box'];
+  for (var i = 0; i < sels.length; i++) {
+    var el = document.querySelector(sels[i]);
+    if (el && el.parentNode) return el;
+  }
+  return null;
+}
 
 
 /* =====================================================================
@@ -393,15 +454,7 @@ var scProduct = (function () {
     document.head.appendChild(s);
   }
 
-  function features() {
-    var map = {};
-    document.querySelectorAll('.product-features__table .product-features__row').forEach(function (r) {
-      var th = r.querySelector('th'), td = r.querySelector('td');
-      if (th && td) map[th.textContent.trim().toLowerCase()] = td.textContent.trim();
-    });
-    return map;
-  }
-  function get(map, re) { for (var k in map) if (re.test(k)) return map[k]; return ''; }
+  var features = scFeatures, get = scGet;
 
   function needsPsu() {
     var f = features();
@@ -414,7 +467,7 @@ var scProduct = (function () {
     var title = ((document.querySelector('h1') || {}).textContent || '');
     if (/з блоком живлення|с блоком питания/i.test(title)) return false;
 
-    var desc = ((document.querySelector('.product-description') || {}).textContent || '').replace(/\s+/g, ' ');
+    var desc = scDesc();
     var kit = (desc.match(/Комплектаці[^.]{0,200}/i) || [''])[0];
     if (/блок живлення (не входить|окремо)|без блока живлення|блок питания не входит/i.test(desc)) return true;
     if (/блок живлення|блок питания|адаптер/i.test(kit)) return false;
@@ -431,7 +484,7 @@ var scProduct = (function () {
 
   function init() {
     if (document.getElementById('sc-psu')) return;
-    var anchor = document.querySelector('.product__section--order');
+    var anchor = scAnchor();
     if (!anchor || !needsPsu()) return;
 
     addStyle();
@@ -464,7 +517,7 @@ var scProduct = (function () {
     });
   }
 
-  scIdle(init);
+  scIdle(function () { init(); setTimeout(init, 2000); });
 })();
 
 
@@ -550,21 +603,13 @@ var scProduct = (function () {
     document.head.appendChild(s);
   }
 
-  function features() {
-    var map = {};
-    document.querySelectorAll('.product-features__table .product-features__row').forEach(function (r) {
-      var th = r.querySelector('th'), td = r.querySelector('td');
-      if (th && td) map[th.textContent.trim().toLowerCase()] = td.textContent.trim();
-    });
-    return map;
-  }
-  function get(map, re) { for (var k in map) if (re.test(k)) return map[k]; return ''; }
+  var features = scFeatures, get = scGet;
 
   function detect() {
     var f = features();
     var type = get(f, /^тип (пристрою|устройства)$/);
     var title = ((document.querySelector('h1') || {}).textContent || '');
-    var desc = ((document.querySelector('.product-description') || {}).textContent || '').replace(/\s+/g, ' ');
+    var desc = scDesc();
 
     // --- Інвертор ---
     if (/інвертор|инвертор/i.test(type)) {
@@ -645,7 +690,7 @@ var scProduct = (function () {
 
   function init() {
     if (document.getElementById('sc-akb')) return;
-    var anchor = document.querySelector('.product__section--order');
+    var anchor = scAnchor();
     if (!anchor) return;
     var cfg = detect();
     if (!cfg) return;
@@ -681,7 +726,7 @@ var scProduct = (function () {
     });
   }
 
-  scIdle(init);
+  scIdle(function () { init(); setTimeout(init, 2000); });
 })();
 
 
