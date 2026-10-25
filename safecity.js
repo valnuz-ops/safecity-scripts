@@ -898,3 +898,288 @@ function scAnchor() {
     init();
   }
 })();
+
+
+/* =====================================================================
+ * 6. Картка відеокамери → «Підберіть до цієї камери» (реєстратори TVT)
+ * ===================================================================== */
+(function () {
+  'use strict';
+
+  var CFG = {
+    nvrCat: '/videoreiestratory/',
+    nvrTypeIP: [47],               // NVR-відеореєстратор
+    nvrTypeAnalog: [66],           // MHD-відеореєстратор
+    tvt: 101, ajax: 96,
+    // [кількість каналів, ID значення фільтра «Кількість каналів IP»]
+    channels:     [[4, 5], [8, 1], [16, 2], [32, 4]],
+    channelsAjax: [[8, 1], [16, 2]],
+    switches: '/poe-prystroi/2364/',
+    psu: '/bloky-zhyvlennia-12-24-48v/', psu12: 1,
+    utp: '/kabel-vyta-para/2348/',
+    coax: '/koaksialnyi-kabel/',
+    connectors: '/kabeli-i-roziemy/',
+    storage: '/nakopychuvachi/2297/', sd: 151
+  };
+
+  var CSS =
+    '.sc-kit{margin:16px 0 0;padding:14px 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fafbfc;font-size:14px;line-height:1.4}' +
+    '.sc-kit__title{font-weight:700;font-size:15px;margin:0 0 10px}' +
+    '.sc-kit__row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 0;border-top:1px dashed #e3e6ea}' +
+    '.sc-kit__row:first-of-type{border-top:0;padding-top:0}' +
+    '.sc-kit__label{flex:0 0 100%;font-weight:600;color:#333}' +
+    '.sc-kit__hint{flex:0 0 100%;font-size:12px;color:#7a828c;margin-top:-2px}' +
+    '.sc-kit a.sc-chip{display:inline-flex;align-items:center;padding:5px 11px;border:1px solid #cfd5dc;border-radius:16px;background:#fff;color:#1a1a1a;text-decoration:none;white-space:nowrap;transition:border-color .15s,background .15s}' +
+    '.sc-kit a.sc-chip:hover{border-color:#2b7de9;background:#f0f6ff}' +
+    '.sc-kit label.sc-poe{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#444;cursor:pointer;margin-left:4px}' +
+    '.sc-kit label.sc-poe input{margin:0}';
+
+  var langPrefix = /^\/(ru|en)\//.test(location.pathname) ? '/' + location.pathname.split('/')[1] : '';
+
+  function addStyle() {
+    if (document.getElementById('sc-kit-style')) return;
+    var s = document.createElement('style');
+    s.id = 'sc-kit-style'; s.textContent = CSS;
+    document.head.appendChild(s);
+  }
+
+  // Хорошоп: /cat/filter/a=1,2;b=3/ — параметри за алфавітом
+  function url(cat, params) {
+    params = params || {};
+    var keys = Object.keys(params).sort();
+    var path = langPrefix + cat;
+    if (!keys.length) return path;
+    return path + 'filter/' + keys.map(function (k) {
+      return k + '=' + [].concat(params[k]).sort(function (a, b) { return a - b; }).join(',');
+    }).join(';') + '/';
+  }
+
+  function init() {
+    if (document.getElementById('sc-cam')) return;
+    var anchor = scAnchor();
+    if (!anchor) return;
+
+    var f = scFeatures();
+    var type = scGet(f, /^тип (пристрою|устройства)$/);
+    if (!/відеокамер|видеокамер/i.test(type) || /web/i.test(type)) return;
+
+    var title    = ((document.querySelector('h1') || {}).textContent || '');
+    var isAnalog = /hdtvi|hdcvi|ahd|mhd|аналог/i.test(type);
+    var poe      = /так|да|yes/i.test(scGet(f, /^poe$/));
+    var power    = scGet(f, /^(живлення|питание)$/);
+    var wireless = /бездрот|беспровод|wi-?fi/i.test(scGet(f, /^(підключення|подключение)$/));
+    var hasSD    = /sd|карт/i.test(scGet(f, /^карта пам/));
+    var isAjax   = /ajax/i.test(title);
+
+    addStyle();
+    var box = document.createElement('div');
+    box.id = 'sc-cam'; box.className = 'sc-kit';
+    box.innerHTML = '<div class="sc-kit__title">Підберіть до цієї камери</div>';
+
+    function row(label, hint) {
+      var r = document.createElement('div');
+      r.className = 'sc-kit__row';
+      r.innerHTML = '<div class="sc-kit__label"></div>' + (hint ? '<div class="sc-kit__hint"></div>' : '');
+      r.querySelector('.sc-kit__label').textContent = label;
+      if (hint) r.querySelector('.sc-kit__hint').textContent = hint;
+      box.appendChild(r);
+      return r;
+    }
+    function chip(r, text, href) {
+      var a = document.createElement('a');
+      a.className = 'sc-chip'; a.href = href; a.textContent = text;
+      r.appendChild(a);
+      return a;
+    }
+
+    // 1. Відеореєстратор
+    if (isAnalog) {
+      var ar = row('Відеореєстратор', 'MHD-реєстратори TVT працюють з аналоговими HD-камерами');
+      chip(ar, 'Реєстратори TVT →', url(CFG.nvrCat, { brand: CFG.tvt, tipPristrou: CFG.nvrTypeAnalog }));
+    } else {
+      var nr = row('Відеореєстратор', isAjax
+        ? 'Для камер Ajax — реєстратори Ajax NVR. Оберіть кількість камер:'
+        : 'Реєстратори TVT. Скільки камер плануєте підключити?');
+      var chips = (isAjax ? CFG.channelsAjax : CFG.channels).map(function (c) {
+        return { id: c[1], el: chip(nr, 'до ' + c[0] + ' камер', '#') };
+      });
+
+      var poeBox = null;
+      if (poe && !isAjax && !wireless) {
+        var lbl = document.createElement('label');
+        lbl.className = 'sc-poe';
+        lbl.innerHTML = '<input type="checkbox" checked> з вбудованим PoE';
+        nr.appendChild(lbl);
+        poeBox = lbl.querySelector('input');
+      }
+      var refresh = function () {
+        chips.forEach(function (c) {
+          var p = isAjax ? { brand: CFG.ajax } : { brand: CFG.tvt, tipPristrou: CFG.nvrTypeIP };
+          if (poeBox && poeBox.checked) p.poe = 1;
+          p.klkstKanalvIp = c.id;
+          c.el.href = url(CFG.nvrCat, p);
+        });
+      };
+      if (poeBox) poeBox.addEventListener('change', refresh);
+      refresh();
+    }
+
+    // 2. Живлення
+    if (!isAnalog && poe && !wireless) {
+      var pr = row('Живлення', 'PoE-комутатор потрібен, якщо реєстратор без PoE або камер більше, ніж PoE-портів');
+      chip(pr, 'PoE-комутатори →', url(CFG.switches, { poe: 1, presence: 1 }));
+    }
+    if (/12\s?(в|v)/i.test(power) && (!poe || isAnalog || wireless)) {
+      var pr2 = row('Живлення', 'Камера живиться від 12 В');
+      chip(pr2, 'Блоки живлення 12 В →', url(CFG.psu, { presence: 1, vixdnaNapruga: CFG.psu12 }));
+    }
+
+    // 3. Кабель і роз'єми
+    if (!wireless) {
+      var cr = row('Кабель і роз’єми');
+      if (isAnalog) chip(cr, 'Коаксіальний кабель →', url(CFG.coax, { presence: 1 }));
+      else chip(cr, 'Вита пара →', url(CFG.utp, { presence: 1 }));
+      chip(cr, 'Роз’єми та патч-корди →', url(CFG.connectors, { presence: 1 }));
+    }
+
+    // 4. Карта пам'яті (якщо в камері є слот)
+    if (hasSD) {
+      var sr = row('Запис на камеру', 'Камера може писати на microSD без реєстратора');
+      chip(sr, 'Карти пам’яті →', url(CFG.storage, { tipPristrou: CFG.sd }));
+    }
+
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
+  }
+
+  scIdle(function () { init(); setTimeout(init, 2000); });
+})();
+
+
+/* =====================================================================
+ * 7. Картка відеореєстратора → «Підберіть до цього реєстратора» (камери TVT)
+ * ===================================================================== */
+(function () {
+  'use strict';
+
+  var CFG = {
+    cams: '/videokamery/',
+    tvt: 101, ajax: 96,
+    ipCam: 50, ptz: 68,
+    // групи роздільної здатності камер: [назва, макс. Мп, ID значень фільтра]
+    res: [['4 Мп', 4, [3, 5]], ['5–6 Мп', 6, [1, 7, 9, 14]], ['8 Мп', 8, [2, 13]]],
+    switches: '/poe-prystroi/2364/',
+    utp: '/kabel-vyta-para/2348/',
+    connectors: '/kabeli-i-roziemy/'
+  };
+
+  var langPrefix = /^\/(ru|en)\//.test(location.pathname) ? '/' + location.pathname.split('/')[1] : '';
+
+  // Стилі спільні з блоком 6 (.sc-kit)
+  var CSS =
+    '.sc-kit{margin:16px 0 0;padding:14px 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fafbfc;font-size:14px;line-height:1.4}' +
+    '.sc-kit__title{font-weight:700;font-size:15px;margin:0 0 10px}' +
+    '.sc-kit__row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 0;border-top:1px dashed #e3e6ea}' +
+    '.sc-kit__row:first-of-type{border-top:0;padding-top:0}' +
+    '.sc-kit__label{flex:0 0 100%;font-weight:600;color:#333}' +
+    '.sc-kit__hint{flex:0 0 100%;font-size:12px;color:#7a828c;margin-top:-2px}' +
+    '.sc-kit a.sc-chip{display:inline-flex;align-items:center;padding:5px 11px;border:1px solid #cfd5dc;border-radius:16px;background:#fff;color:#1a1a1a;text-decoration:none;white-space:nowrap;transition:border-color .15s,background .15s}' +
+    '.sc-kit a.sc-chip:hover{border-color:#2b7de9;background:#f0f6ff}';
+
+  function addStyle() {
+    if (document.getElementById('sc-kit-style')) return;
+    var s = document.createElement('style');
+    s.id = 'sc-kit-style'; s.textContent = CSS;
+    document.head.appendChild(s);
+  }
+
+  function url(cat, params) {
+    params = params || {};
+    var keys = Object.keys(params).sort();
+    var path = langPrefix + cat;
+    if (!keys.length) return path;
+    return path + 'filter/' + keys.map(function (k) {
+      return k + '=' + [].concat(params[k]).sort(function (a, b) { return a - b; }).join(',');
+    }).join(';') + '/';
+  }
+  function num(s) { var m = String(s).match(/\d+(\.\d+)?/); return m ? parseFloat(m[0]) : 0; }
+
+  function init() {
+    if (document.getElementById('sc-nvr')) return;
+    var anchor = scAnchor();
+    if (!anchor) return;
+
+    var f = scFeatures();
+    var title = ((document.querySelector('h1') || {}).textContent || '').trim();
+    var type = scGet(f, /^тип (пристрою|устройства)$/) || title;   // у кількох карток характеристики не заповнені
+    if (!/реєстратор|регистратор/i.test(type) || /нагрудн|автомоб|кабель|живлення/i.test(type)) return;
+
+    var format = scGet(f, /^формат відеореєстратора$/);
+    var isIP = /^ip$/i.test(format) || /nvr/i.test(type) || /^(ip-|мережев)/i.test(title) || /nvr|ds-7[6-9]\d\d/i.test(title);
+    var isAjax = /ajax/i.test(title);
+    var ipCh = num(scGet(f, /^кількість каналів ip$/)) || (isIP ? num((title.match(/(\d+)-канальн/) || [])[1]) : 0);
+    var recMp = num(scGet(f, /^роздільна здатність запису$/)) || num((title.match(/(\d+)\s?mp/i) || [])[1]);
+    var poe = /так|да|yes/i.test(scGet(f, /^poe$/)) || /poe/i.test(title);
+    var poePorts = num(scGet(f, /^кількість poe-портів$/));
+
+    if (!isAjax && !isIP && !ipCh) return;   // аналогові без IP-каналів — камер TVT для них немає
+
+    addStyle();
+    var box = document.createElement('div');
+    box.id = 'sc-nvr'; box.className = 'sc-kit';
+    box.innerHTML = '<div class="sc-kit__title">Підберіть до цього реєстратора</div>';
+
+    function row(label, hint) {
+      var r = document.createElement('div');
+      r.className = 'sc-kit__row';
+      r.innerHTML = '<div class="sc-kit__label"></div>' + (hint ? '<div class="sc-kit__hint"></div>' : '');
+      r.querySelector('.sc-kit__label').textContent = label;
+      if (hint) r.querySelector('.sc-kit__hint').textContent = hint;
+      box.appendChild(r);
+      return r;
+    }
+    function chip(r, text, href) {
+      var a = document.createElement('a');
+      a.className = 'sc-chip'; a.href = href; a.textContent = text;
+      r.appendChild(a);
+    }
+
+    // 1. Камери
+    if (isAjax) {
+      var ar = row('Камери', 'Для Ajax NVR — камери Ajax');
+      chip(ar, 'Камери Ajax →', url(CFG.cams, { brand: CFG.ajax, presence: 1 }));
+    } else {
+      var hint = isIP
+        ? (ipCh ? 'До ' + ipCh + ' IP-камер' : 'Мережевий реєстратор') + (recMp ? ' · запис до ' + recMp + ' Мп' : '')
+        : 'Гібридний: можна додати до ' + ipCh + ' IP-камер';
+      var cr = row('IP-камери TVT', hint);
+      CFG.res.forEach(function (g) {
+        if (recMp && g[1] > recMp) return;          // реєстратор не запише таку роздільну здатність
+        chip(cr, g[0], url(CFG.cams, { brand: CFG.tvt, presence: 1, rozdlnaZdatnstKameri: g[2], tipPristrou: CFG.ipCam }));
+      });
+      chip(cr, 'Поворотні PTZ', url(CFG.cams, { brand: CFG.tvt, presence: 1, tipPristrou: CFG.ptz }));
+      chip(cr, 'Усі камери TVT →', url(CFG.cams, { brand: CFG.tvt, presence: 1, tipPristrou: [CFG.ipCam, CFG.ptz] }));
+    }
+
+    // 2. Живлення камер
+    if (isIP && !isAjax) {
+      var pr;
+      if (poe) {
+        var ports = poePorts || ipCh;
+        pr = row('Живлення камер', 'Вбудований PoE' + (ports ? ' на ' + ports + ' портів' : '') +
+          ' — камери живляться по кабелю від реєстратора. Для додаткових камер — PoE-комутатор.');
+      } else {
+        pr = row('Живлення камер', 'Реєстратор без PoE: камерам потрібен PoE-комутатор');
+      }
+      chip(pr, 'PoE-комутатори →', url(CFG.switches, { poe: 1, presence: 1 }));
+    }
+
+    // 3. Кабель
+    var kr = row('Кабель і роз’єми');
+    chip(kr, 'Вита пара →', url(CFG.utp, { presence: 1 }));
+    chip(kr, 'Роз’єми та патч-корди →', url(CFG.connectors, { presence: 1 }));
+
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
+  }
+
+  scIdle(function () { init(); setTimeout(init, 2000); });
+})();
