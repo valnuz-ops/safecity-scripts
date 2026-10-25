@@ -5,6 +5,7 @@
 
 /* ===== Загальні налаштування ===== */
 var SC_TG_BOT = 'clienttext_bot'; // username Telegram-бота БЕЗ @
+var SC_PHONE  = '380503941500';     // номер для Viber і WhatsApp (лише цифри, з 380)
 
 /* ===== Спільні помічники (швидкість) ===== */
 // Запуск після повного завантаження сторінки, коли браузер вільний — не заважає основному контенту
@@ -743,15 +744,20 @@ function scAnchor() {
     if (!m) return false;
     var num = m[1];
 
+    var msg = 'Добрий день! Підтверджую замовлення №' + num + ' на сайті SafeCity.';
+    var btn = 'display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:1 1 180px;max-width:240px;' +
+              'color:#fff;text-decoration:none;padding:12px 16px;border-radius:10px;font-size:16px;font-weight:600;box-sizing:border-box';
     var box = document.createElement('div');
     box.id = 'sc-tg';
     box.style.cssText = 'margin:0 0 24px;padding:18px;border:1px solid #d6ecf8;border-radius:12px;background:#f3faff;text-align:center;max-width:1100px';
     box.innerHTML =
       '<div style="font-size:17px;font-weight:600;margin-bottom:6px">Підтвердіть замовлення №' + num + ' в один клік</div>' +
-      '<div style="font-size:14px;color:#555;margin-bottom:14px">Без дзвінка менеджера — перевірте склад замовлення та доставку в Telegram</div>' +
-      '<a href="https://t.me/' + SC_TG_BOT + '?start=order_' + num + '" target="_blank" rel="noopener" ' +
-      'style="display:inline-block;background:#2AABEE;color:#fff;text-decoration:none;padding:12px 24px;border-radius:10px;font-size:16px;font-weight:600">' +
-      '✈️ Підтвердити в Telegram</a>';
+      '<div style="font-size:14px;color:#555;margin-bottom:14px">Без дзвінка менеджера — оберіть зручний месенджер</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">' +
+        '<a href="https://t.me/' + SC_TG_BOT + '?start=order_' + num + '" target="_blank" rel="noopener" style="' + btn + ';background:#2AABEE">✈️ Telegram</a>' +
+        '<a href="viber://chat?number=%2B' + SC_PHONE + '&draft=' + encodeURIComponent(msg) + '" style="' + btn + ';background:#7360F2">📞 Viber</a>' +
+        '<a href="https://wa.me/' + SC_PHONE + '?text=' + encodeURIComponent(msg) + '" target="_blank" rel="noopener" style="' + btn + ';background:#25D366">💬 WhatsApp</a>' +
+      '</div>';
 
     var h1 = document.querySelector('h1');
     if (h1 && h1.parentNode) h1.parentNode.insertBefore(box, h1.nextSibling);
