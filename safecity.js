@@ -1539,7 +1539,7 @@ function scAnchor() {
   function title() { return ((document.querySelector('h1') || {}).textContent || '').replace(/\s+/g, ' ').trim(); }
 
   // Не показуємо на аксесуарах і товарах, яким хаб не потрібен
-  var SKIP = /Smartbracket|DummyBox|муляж|кріпильна|кронштейн|корпус|Case\b|JunctionBox|Holder|тримач|Hood|навіс|PSU|блок живлення|акумулятор|батарея|ExternalAntenna|антена|EN54|відеокамера|IP-відео|NVR|відеореєстратор|DoorBell|підписка|передплата|Frame|рамка|Cover|панель|SoloButton|SideButton|CenterButton|Bypass|ocBridge|uartBridge|SpaceControl S\b/i;
+  var SKIP = /Smartbracket|DummyBox|муляж|кріпильна|кронштейн|корпус|Case\b|JunctionBox|Holder|тримач|Hood|навіс|PSU|блок живлення|Акумулятор Ajax|Батарея CR|ExternalAntenna|антена|EN54|відеокамера|IP-відео|NVR|відеореєстратор|DoorBell|підписка|передплата|Frame|рамка|Cover|панель|SoloButton|SideButton|CenterButton|Bypass|ocBridge|uartBridge|SpaceControl S\b/i;
 
   function detect() {
     var t = title();
