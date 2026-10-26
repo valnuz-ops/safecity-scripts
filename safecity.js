@@ -1788,7 +1788,9 @@ function scAnchor() {
     // десктоп: .checkout-footer; мобільна: блок з кнопкою «Оформити замовлення»
     var foot = document.querySelector('#checkout-container .checkout-footer');
     if (!foot) {
-      var btn = document.querySelector('#checkout-container button.btn--block, #checkout-container button[type="submit"]');
+      var btn = [].filter.call(document.querySelectorAll('#checkout-container button'), function (x) {
+        return x.offsetParent !== null && /оформити|підтвердити/i.test(x.textContent);
+      })[0];
       foot = btn && (btn.closest('.form-item') || btn);
     }
     if (!stockOk || typeof window.scShipText !== 'function' || !foot) return setText(old, '');
