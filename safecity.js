@@ -1796,17 +1796,11 @@ function scAnchor() {
     if (p.value === '12') openComment();
   }
 
-  // Безнал: відкриваємо поле коментаря і підказуємо, що туди написати (один раз)
-  var commentOpened = false;
+  // Безнал: лише підказка всередині поля коментаря. Кнопку «Додати коментар» НЕ натискаємо —
+  // це <button> всередині форми замовлення, натискання може відправити форму.
   function openComment() {
     var ta = form().querySelector('textarea[name="Recipient[comment]"]');
-    if (!ta) return;
-    if (!ta.placeholder) ta.placeholder = 'Назва компанії, ЄДРПОУ або ІПН ФОП';
-    if (commentOpened || ta.offsetParent !== null || ta.value) return;
-    var link = [].filter.call(form().querySelectorAll('a, button'), function (x) {
-      return x.offsetParent !== null && /додати коментар/i.test(x.textContent);
-    })[0];
-    if (link) { commentOpened = true; link.click(); }
+    if (ta && !ta.placeholder) ta.placeholder = 'Назва компанії, ЄДРПОУ або ІПН ФОП';
   }
 
   /* ---- 4. Термін відправки (лише якщо всі товари в наявності) ---- */
