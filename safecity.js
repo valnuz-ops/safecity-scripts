@@ -1691,6 +1691,7 @@ function scAnchor() {
     return /^\s*Відділення\s*№\s*\d+\s*:/i.test(t);
   }
   var POSTOMAT = /поштомат/i;
+  var NP_RULES = 'https://novaposhta.ua/forbidden-items/?from=ua&to=ua#acc-h6'; // розділ «Акумулятори та зарядні пристрої»
   // Комісія NovaPay за післяплату для отримувача (novapay.ua, жовтень 2026): 2% + 20 грн; карткою NovaPay — 1% + 10 грн
   var COD = { pct: 0.02, fix: 20, npPct: 0.01, npFix: 10 };
   var PAY_HINTS = {
@@ -1758,19 +1759,28 @@ function scAnchor() {
 
     var typeText = optText(type), text = '';
     if (POSTOMAT.test(typeText)) {
-      text = 'Акумулятори не відправляємо в поштомат. Оберіть доставку «Новою поштою» і вантажне відділення (з позначкою «до 200 кг», «до 1100 кг» або без обмеження ваги в назві), а якщо у вашому населеному пункті такого немає — звичайне.';
+      text = 'За правилами Нової пошти акумулятори не приймають у поштомати — лише у вантажних відділеннях або кур’єром на адресу. Будь ласка, оберіть доставку «Новою поштою» і відділення з позначкою «до 200 кг», «до 1100 кг» або без обмеження ваги в назві. Якщо у вашому населеному пункті такого немає — підійде звичайне відділення.';
     } else if (wh && shown(wh)) {
       var hasCargo = [].some.call(wh.options, function (o) { return isCargo(o.textContent); });
       var cur = optText(wh);
       if (hasCargo && !isCargo(cur)) {
-        text = 'Акумулятори відправляємо на вантажне відділення Нової пошти. Оберіть у списку відділення з позначкою «до 200 кг», «до 1100 кг» або без обмеження ваги в назві.';
+        text = 'За правилами Нової пошти акумулятори приймають лише у вантажних відділеннях або кур’єром на адресу. Щоб посилка не затрималась, оберіть, будь ласка, відділення з позначкою «до 200 кг», «до 1100 кг» або без обмеження ваги в назві.';
       } else if (!hasCargo && POSTOMAT.test(cur)) {
-        text = 'Акумулятори не відправляємо в поштомат. Оберіть звичайне відділення Нової пошти.';
+        text = 'За правилами Нової пошти акумулятори не приймають у поштомати. Будь ласка, оберіть відділення Нової пошти.';
       }
     }
     if (!text) return setText(old, '');
     var anchor = (wh && shown(wh) ? wh : type).parentElement;
-    setText(el('sc-co-akb', 'warn', anchor), text);
+    var n = el('sc-co-akb', 'warn', anchor);
+    if (n.getAttribute('data-t') !== text) {
+      n.textContent = text + ' ';
+      var a = document.createElement('a');
+      a.href = NP_RULES; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = 'Правила Нової пошти';
+      a.style.cssText = 'color:inherit;text-decoration:underline';
+      n.appendChild(a);
+      n.setAttribute('data-t', text);
+    }
   }
 
   /* ---- 2. Підказка до способу оплати ---- */
