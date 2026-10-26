@@ -1441,3 +1441,222 @@ function scAnchor() {
 
   scIdle(function () { init(); setTimeout(init, 2000); });
 })();
+
+
+/* =====================================================================
+ * 9. Ajax: сумісність хабів і пристроїв
+ *    На картці хаба / стартового комплекту → сумісні датчики і пристрої
+ *    На картці пристрою → з якими хабами працює + хаби в наявності
+ *    Дані: таблиця сумісності ajax.systems/ua/tools/devices-compatibility (жовтень 2026)
+ *    Класи: B — усі хаби; P — крім Hub (2G); G — лише Hub 2 / Hub 2 Plus / Hub BP;
+ *           C — як G, а через ретранслятор лише ReX 2
+ * ===================================================================== */
+(function () {
+  'use strict';
+
+  var MAX = 8;
+  var U = function (w, b) { return { w: w, b: b || w }; };
+
+  // Хаби: що підтримують
+  var HUBS = {
+    hub:      { name: 'Hub',        cls: ['B'],                url: U('/intelektualna-tsentral-ajax-hub-bila-z-2g-ethernet/', '/intelektualna-tsentral-ajax-hub-chorna-z-2g-ethernet/') },
+    hubplus:  { name: 'Hub Plus',   cls: ['B', 'P'],           url: U('/intelektualna-tsentral-ajax-hub-plus-bila-z-wifi-2g-3g-ethernet/', '/intelektualna-tsentral-ajax-hub-plus-chorna-z-wifi-2g-3g-ethernet/') },
+    hub2:     { name: 'Hub 2',      cls: ['B', 'P', 'G', 'C'], url: U('/intelektualna-tsentral-ajax-hub-2-2g-bila-z-2g-ethernet-pidtrymkoiu-datchykiv-z-fotoveryfikatsiieiu/', '/intelektualna-tsentral-ajax-hub-2-2g-chorna-z-2g-ethernet-pidtrymkoiu-datchykiv-z-fotoveryfikatsiieiu/') },
+    hub24g:   { name: 'Hub 2 (4G)', cls: ['B', 'P', 'G', 'C'], url: U('/intelektualna-tsentral-ajax-hub-2-4g-bila-z-2g-3g-4g-ethernet-pidtrymkoiu-datchykiv-z-fotoveryfikatsiieiu/', '/intelektualna-tsentral-ajax-hub-2-4g-chorna-z-2g-3g-4g-ethernet-pidtrymkoiu-datchykiv-z-fotoveryfikatsiieiu/') },
+    hub2plus: { name: 'Hub 2 Plus', cls: ['B', 'P', 'G', 'C'], url: U('/intelektualna-tsentral-ajax-hub-2-plus-bila-z-wifi-2g-3g-4g-ethernet-pidtrymkoiu-datchykiv-z-fotoveryfikatsiieiu/', '/intelektualna-tsentral-ajax-hub-2-plus-chorna-z-wifi-2g-3g-4g-ethernet-pidtrymkoiu-datchykiv-z-fotoveryfikatsiieiu/') },
+    hubbp:    { name: 'Hub BP',     cls: ['B', 'P', 'G', 'C'], url: U('/okhoronna-tsentral-z-zhyvlenniam-vid-zovnishnoi-batarei-ajax-hub-bp-jeweller-white/', '/okhoronna-tsentral-z-zhyvlenniam-vid-zovnishnoi-batarei-ajax-hub-bp-jeweller-black/') }
+  };
+  var HUB_ORDER = ['hub2', 'hub24g', 'hub2plus', 'hubplus', 'hubbp', 'hub'];
+
+  // Пристрої: клас сумісності, посилання (біла / чорна версія); порядок — пріоритет показу на картці хаба
+  var DEV = [
+    { k: 'motioncam',  re: /MotionCam(?! Outdoor)/i,          cls: 'C', name: 'MotionCam',     url: U('/bezdrotovyi-datchyk-rukhu-z-kameroiu-ajax-motioncam-phod-bilyi/', '/bezdrotovyi-datchyk-rukhu-z-kameroiu-ajax-motioncam-phod-chornyi/') },
+    { k: 'motion',     re: /MotionProtect(?! (Plus|Curtain|Outdoor))/i, cls: 'B', url: U('/bezdrotovyi-datchyk-rukhu-ajax-motionprotect-bilyi/', '/bezdrotovyi-datchyk-rukhu-ajax-motionprotect-chornyi/') },
+    { k: 'door',       re: /DoorProtect(?! Plus)/i,           cls: 'B', url: U('/bezdrotovyi-datchyk-vidchynennia-ajax-doorprotect-bilyi/', '/bezdrotovyi-datchyk-vidchynennia-ajax-doorprotect-chornyi/') },
+    { k: 'kptouch',    re: /KeyPad TouchScreen/i,             cls: 'C', reader: true, url: U('/klaviatura-ajax-keypad-touchscreen-white/', '/klaviatura-ajax-keypad-touchscreen-black/') },
+    { k: 'kpplus',     re: /KeyPad Plus/i,                    cls: 'P', reader: true, url: U('/klaviatura-ajax-keypad-plus-bila/', '/klaviatura-ajax-keypad-plus-chorna/') },
+    { k: 'keypad',     re: /KeyPad(?! (Plus|TouchScreen|Outdoor))/i, cls: 'B', url: U('/klaviatura-ajax-keypad-bila/', '/klaviatura-ajax-keypad-chorna/') },
+    { k: 'homesiren',  re: /HomeSiren/i,                      cls: 'B', url: U('/bezdrotova-vnutrishnia-syrena-ajax-homesiren-bila/', '/bezdrotova-vnutrishnia-syrena-ajax-homesiren-chorna/') },
+    // FireProtect 2 RB з датчиком диму (Heat/Smoke, Heat/Smoke/CO) працює і з Hub першої версії; решта FireProtect 2 — ні
+    { k: 'fire2',      re: /диму.*FireProtect 2 RB/i,         cls: 'B', url: U('/datchyk-dymu-ta-temperatury-ajax-fireprotect-2-rb-smoke-heat-bilyi/', '/datchyk-dymu-ta-temperatury-ajax-fireprotect-2-rb-smoke-heat-chornyi/') },
+    { k: 'fire2p',     re: /FireProtect 2/i,                  cls: 'P', url: null },
+    { k: 'fire',       re: /FireProtect(?! 2)/i,              cls: 'B', url: U('/bezdrotovyi-datchyk-dymu-ajax-fireprotect-bilyi-z-temperaturnym-sensorom/', '/bezdrotovyi-datchyk-dymu-ajax-fireprotect-chornyi-z-temperaturnym-sensorom/') },
+    { k: 'leaks',      re: /LeaksProtect/i,                   cls: 'B', url: U('/bezdrotovyi-datchyk-zatoplennia-ajax-leaksprotect-bilyi/', '/bezdrotovyi-datchyk-zatoplennia-ajax-leaksprotect-chornyi/') },
+    { k: 'waterstop',  re: /WaterStop/i,                      cls: 'P', url: U('/kran-perekryttia-vody-ajax-waterstop-1-2-bilyi/', '/kran-perekryttia-vody-ajax-waterstop-1-2-chornyi/') },
+    { k: 'streetsiren', re: /StreetSiren/i,                   cls: 'B', url: U('/bezdrotova-vulychna-syrena-ajax-streetsiren-bila/', '/bezdrotova-vulychna-syrena-ajax-streetsiren-chorna/') },
+    { k: 'mcamout',    re: /MotionCam Outdoor/i,              cls: 'C', url: U('/bezdrotovyi-vulychnyi-datchyk-rukhu-z-kameroiu-ajax-motioncam-outdoor-phod-bilyi/') },
+    { k: 'kpout',      re: /KeyPad Outdoor/i,                 cls: 'G', reader: true, url: U('/klaviatura-vulychna-ajax-keypad-outdoor-white/', '/klaviatura-vulychna-ajax-keypad-outdoor-black/') },
+    { k: 'glass',      re: /GlassProtect/i,                   cls: 'B', url: U('/bezdrotovyi-datchyk-rozbyttia-skla-ajax-glassprotect-bilyi/', '/bezdrotovyi-datchyk-rozbyttia-skla-ajax-glassprotect-chornyi/') },
+    { k: 'combi',      re: /CombiProtect/i,                   cls: 'B', url: U('/bezdrotovyi-datchyk-rukhu-ta-rozbyttia-ajax-combiprotect-bilyi/', '/bezdrotovyi-datchyk-rukhu-ta-rozbyttia-ajax-combiprotect-chornyi/') },
+    { k: 'doorplus',   re: /DoorProtect Plus/i,               cls: 'B', url: U('/bezdrotovyi-datchyk-vidchynennia-ajax-doorprotect-plus-bilyi-z-datchykom-udaru-i-nakhylu/', '/bezdrotovyi-datchyk-vidchynennia-doorprotect-plus-chornyi-ajax-z-datchykom-udaru-i-nakhylu/') },
+    { k: 'motionplus', re: /MotionProtect Plus/i,             cls: 'B', url: U('/bezdrotovyi-datchyk-rukhu-ajax-motionprotect-plus-bilyi-z-mikrokhvylovym-sensorom/', '/bezdrotovyi-datchyk-rukhu-ajax-motionprotect-plus-chornyi-z-mikrokhvylovym-sensorom/') },
+    { k: 'curtain',    re: /MotionProtect Curtain/i,          cls: 'B', url: U('/bezdrotovyi-datchyk-rukhu-shtora-ajax-motionprotect-curtain-bilyi/', '/bezdrotovyi-datchyk-rukhu-shtora-ajax-motionprotect-curtain-chornyi/') },
+    { k: 'motionout',  re: /MotionProtect Outdoor/i,          cls: 'B', url: U('/bezdrotovyi-vulychnyi-datchyk-rukhu-ajax-motionprotect-outdoor-bilyi/') },
+    { k: 'dualcurtain', re: /DualCurtain Outdoor/i,           cls: 'P', url: U('/bezdrotovyi-vulychnyi-dvonapravlenyi-datchyk-rukhu-shtora-ajax-dualcurtain-outdoor-bilyi/') },
+    { k: 'curtainout', re: /(?<!Dual)Curtain Outdoor/i,       cls: 'G', url: U('/datchyk-shtora-ajax-curtain-outdoor-jeweller-white/') },
+    { k: 'spacecontrol', re: /SpaceControl(?! S\b)/i,         cls: 'B', url: U('/brelok-ajax-spacecontrol-bilyi/', '/brelok-ajax-spacecontrol-chornyi/') },
+    { k: 'button',     re: /\b(Double)?Button\b(?!\/)/i,      cls: 'B', url: U('/tryvozhna-knopka-ajax-button-bila/', '/tryvozhna-knopka-ajax-button-chorna/') },
+    { k: 'lifequality', re: /LifeQuality/i,                   cls: 'C', url: U('/datchyk-yakosti-povitria-ajax-lifequality-bilyi/', '/datchyk-yakosti-povitria-ajax-lifequality-chornyi/') },
+    { k: 'socket',     re: /Socket/i,                         cls: 'B', url: U('/rozetka-ajax-socket-bila/', '/rozetka-ajax-socket-chorna/') },
+    { k: 'relay',      re: /\bRelay\b|WallSwitch/i,           cls: 'B', url: U('/kontroler-dystantsiinoho-keruvannia-ajax-relay/') },
+    { k: 'mcp',        re: /ManualCallPoint/i,                cls: 'P', url: U('/bezdrotova-knopka-dlia-aktyvatsii-pozhezhnoi-tryvohy-vruchnu-ajax-manualcallpoint-red-jeweller/') },
+    { k: 'light',      re: /LightSwitch|LightCore/i,          cls: 'P', url: U('/rozumnyi-odnoklavishnyi-vymykach-ajax-lightswitch-1-gang-bilyi/', '/rozumnyi-odnoklavishnyi-vymykach-ajax-lightswitch-1-gang-chornyi/') },
+    { k: 'outlet',     re: /OutletCore/i,                     cls: 'P', url: null },
+    { k: 'transmitter', re: /Transmitter/i,                   cls: 'B', url: U('/transmitter-ajax-multitransmitter-bilyi/', '/transmitter-ajax-multitransmitter-chornyi/') },
+    { k: 'vhf',        re: /vhfBridge/i,                      cls: 'P', url: null },
+    { k: 'rex2',       re: /ReX 2/i,                          cls: 'G', isRex2: true, url: U('/retransliator-syhnalu-ajax-rex-2-bilyi-z-pidtrymkoiu-datchykiv-z-fotoveryfikatsiieiu/', '/retransliator-syhnalu-ajax-rex-2-chornyi-z-pidtrymkoiu-datchykiv-z-fotoveryfikatsiieiu/') },
+    { k: 'rex',        re: /\bReX\b(?! 2)/i,                  cls: 'B', isRex: true, url: U('/retransliator-syhnalu-ajax-rex-bilyi/', '/retransliator-syhnalu-ajax-rex-chornyi/') }
+  ];
+  var ACCESS = [
+    { k: 'tag',  name: 'Tag',  url: U('/brelok-keruvannia-ajax-tag-rfid-3pcs-bilyi/', '/brelok-keruvannia-ajax-tag-rfid-3pcs-chornyi/') },
+    { k: 'pass', name: 'Pass', url: U('/kartka-keruvannia-ajax-pass-3pcs-bila/', '/kartka-keruvannia-ajax-pass-3pcs-chorna/') }
+  ];
+  // Що показувати на картці хаба (ключі DEV)
+  var FOR_HUB = ['motioncam', 'motion', 'door', 'kptouch', 'kpplus', 'keypad', 'homesiren', 'fire2', 'fire', 'leaks', 'waterstop', 'streetsiren', 'rex2', 'rex'];
+
+  var CLS_TEXT = {
+    B: 'Працює з будь-яким хабом Ajax: Hub, Hub Plus, Hub 2, Hub 2 Plus, Hub BP. Через ретранслятор — ReX або ReX 2.',
+    P: 'Працює з Hub Plus, Hub 2, Hub 2 Plus і Hub BP. З Hub першої версії (2G) не працює. Через ретранслятор — ReX або ReX 2.',
+    G: 'Працює з Hub 2, Hub 2 Plus і Hub BP. З Hub і Hub Plus не працює.',
+    C: 'Працює з Hub 2, Hub 2 Plus і Hub BP. З Hub і Hub Plus не працює. Через ретранслятор — лише ReX 2 (ReX фото не передає).'
+  };
+
+  var CSS =
+    '#sc-ajax{margin:16px 0 0;padding:14px 16px;border:1px solid #cfe0f5;border-radius:10px;background:#f4f8fd;font-size:14px;line-height:1.4}' +
+    '#sc-ajax .sca-t{font-weight:700;font-size:15px;margin:0 0 4px}' +
+    '#sc-ajax .sca-x{color:#555;margin:0 0 10px;font-size:13px}' +
+    '#sc-ajax .sca-w{color:#8a4b08;background:#fff4e2;border-radius:6px;padding:6px 8px;margin:0 0 10px;font-size:13px}' +
+    '#sc-ajax .sca-l{display:flex;flex-direction:column;gap:8px}' +
+    '#sc-ajax a.sca-i{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #d9e5f3;border-radius:8px;background:#fff;color:#1a1a1a;text-decoration:none;transition:border-color .15s}' +
+    '#sc-ajax a.sca-i:hover{border-color:#2b7de9}' +
+    '#sc-ajax .sca-img{flex:0 0 48px;width:48px;height:48px;object-fit:contain}' +
+    '#sc-ajax .sca-n{flex:1;min-width:0;font-size:13px;line-height:1.3}' +
+    '#sc-ajax .sca-p{flex:0 0 auto;font-weight:700;white-space:nowrap}' +
+    '#sc-ajax .sca-s{font-size:12px;color:#7a828c;margin:10px 0 0}';
+
+  var langPrefix = /^\/(ru|en)\//.test(location.pathname) ? '/' + location.pathname.split('/')[1] : '';
+
+  function title() { return ((document.querySelector('h1') || {}).textContent || '').replace(/\s+/g, ' ').trim(); }
+
+  // Не показуємо на аксесуарах і товарах, яким хаб не потрібен
+  var SKIP = /Smartbracket|DummyBox|муляж|кріпильна|кронштейн|корпус|Case\b|JunctionBox|Holder|тримач|Hood|навіс|PSU|блок живлення|акумулятор|батарея|ExternalAntenna|антена|EN54|відеокамера|IP-відео|NVR|відеореєстратор|DoorBell|підписка|передплата|Frame|рамка|Cover|панель|SoloButton|SideButton|CenterButton|Bypass|ocBridge|uartBridge|SpaceControl S\b/i;
+
+  function detect() {
+    var t = title();
+    if (!/Ajax/i.test(t) || SKIP.test(t)) return null;
+    // Хаб або стартовий комплект
+    if (/StarterKit/i.test(t)) {
+      if (/Cam Plus/i.test(t)) return { hub: 'hub2plus' };
+      if (/Cam|StarterKit 2/i.test(t)) return { hub: 'hub2' };
+      if (/Plus/i.test(t)) return { hub: 'hubplus' };
+      return { hub: 'hub' };
+    }
+    if (/централь|\bHub\b/i.test(t) && !/для Hub/i.test(t)) {
+      if (/Hub 2 Plus/i.test(t)) return { hub: 'hub2plus' };
+      if (/Hub 2\b/i.test(t)) return { hub: /4G/i.test(t) ? 'hub24g' : 'hub2' };
+      if (/Hub BP/i.test(t)) return { hub: 'hubbp' };
+      if (/Hub Plus/i.test(t)) return { hub: 'hubplus' };
+      if (/Hub\b/i.test(t)) return { hub: 'hub' };
+    }
+    if (/\b(Tag|Pass)\b/.test(t) && /брелок|картка/i.test(t)) return { access: true };
+    for (var i = 0; i < DEV.length; i++) if (DEV[i].re.test(t)) return { dev: DEV[i] };
+    return null;
+  }
+
+  function pickUrl(u, dark) { return langPrefix + (dark ? u.b : u.w); }
+
+  function load(item, dark) {
+    var url = pickUrl(item.url, dark);
+    return scProduct(url).then(function (p) {
+      if (!p || !scInStock(p.avail)) {
+        if (dark && item.url.b !== item.url.w) return load(item, false); // чорної нема — пробуємо білу
+        return null;
+      }
+      return { url: url, name: p.name, price: p.price, img: p.img };
+    });
+  }
+
+  function pickInStock(items, dark, cb) {
+    var found = [], i = 0;
+    (function next() {
+      if (found.length >= MAX || i >= items.length) return cb(found);
+      var batch = items.slice(i, i + 4); i += 4;
+      Promise.all(batch.map(function (it) { return load(it, dark); })).then(function (res) {
+        res.forEach(function (p) { if (p && found.length < MAX) found.push(p); });
+        next();
+      });
+    })();
+  }
+
+  function build(cfg) {
+    var dark = /чорн|black/i.test(title());
+    var head, text, warn = '', items = [];
+
+    if (cfg.hub) {
+      var h = HUBS[cfg.hub];
+      head = 'Сумісні датчики і пристрої';
+      text = 'Пристрої Ajax, які працюють з ' + h.name + ' (за таблицею сумісності Ajax).';
+      if (cfg.hub === 'hub') warn = 'Hub першої версії не підтримує KeyPad Plus, WaterStop, LightSwitch, FireProtect 2 SB, датчики з фотоверифікацією MotionCam, KeyPad TouchScreen і LifeQuality. Для них потрібен Hub 2 або Hub 2 Plus.';
+      if (cfg.hub === 'hubplus') warn = 'Hub Plus не підтримує датчики з фотоверифікацією MotionCam, KeyPad TouchScreen, KeyPad Outdoor і LifeQuality. Для них потрібен Hub 2 або Hub 2 Plus.';
+      FOR_HUB.forEach(function (k) {
+        var d = DEV.filter(function (x) { return x.k === k; })[0];
+        if (d && d.url && h.cls.indexOf(d.cls) !== -1) items.push(d);
+      });
+    } else if (cfg.access) {
+      head = 'Потрібна клавіатура зі зчитувачем';
+      text = 'Брелоки Tag і картки Pass працюють з клавіатурами KeyPad Plus, KeyPad TouchScreen і KeyPad Outdoor. Звичайна KeyPad їх не зчитує.';
+      items = DEV.filter(function (x) { return x.reader; });
+    } else {
+      var d = cfg.dev;
+      head = d.isRex || d.isRex2 ? 'З якими хабами працює' : 'Для роботи потрібен хаб Ajax';
+      text = CLS_TEXT[d.cls];
+      if (d.isRex2) text = 'ReX 2 працює з Hub 2, Hub 2 Plus і Hub BP і передає фото з MotionCam. З Hub і Hub Plus не працює — для них підійде ReX.';
+      if (d.isRex) text = 'ReX працює з Hub, Hub Plus, Hub 2, Hub 2 Plus і Hub BP. Фото з датчиків MotionCam не передає — для них потрібен ReX 2.';
+      HUB_ORDER.forEach(function (k) {
+        var hb = HUBS[k];
+        var ok = d.isRex2 ? hb.cls.indexOf('C') !== -1 : hb.cls.indexOf(d.cls) !== -1;
+        if (ok) items.push({ url: hb.url });
+      });
+      items = items.slice(0, 4);
+      if (d.reader) items = items.concat(ACCESS);
+    }
+
+    var box = document.createElement('div');
+    box.id = 'sc-ajax';
+    box.innerHTML = '<div class="sca-t"></div><div class="sca-x"></div>' + (warn ? '<div class="sca-w"></div>' : '') +
+      '<div class="sca-l"></div><div class="sca-s">Сумісність — за даними Ajax Systems, за умови оновленої прошивки хаба (оновлюється автоматично).</div>';
+    box.querySelector('.sca-t').textContent = head;
+    box.querySelector('.sca-x').textContent = text;
+    if (warn) box.querySelector('.sca-w').textContent = warn;
+
+    var listEl = box.querySelector('.sca-l');
+    pickInStock(items, dark, function (found) {
+      found.forEach(function (p) {
+        if (p.url.replace(/\/$/, '') === location.pathname.replace(/\/$/, '')) return;
+        var a = document.createElement('a');
+        a.className = 'sca-i'; a.href = p.url;
+        a.innerHTML = (p.img ? '<img class="sca-img" loading="lazy" alt="">' : '') + '<span class="sca-n"></span><span class="sca-p"></span>';
+        if (p.img) a.querySelector('img').src = p.img;
+        a.querySelector('.sca-n').textContent = p.name;
+        a.querySelector('.sca-p').textContent = p.price;
+        listEl.appendChild(a);
+      });
+      if (!listEl.children.length) listEl.remove();
+    });
+    return box;
+  }
+
+  function init() {
+    if (document.getElementById('sc-ajax')) return;
+    var anchor = scAnchor();
+    if (!anchor) return;
+    var cfg = detect();
+    if (!cfg) return;
+    if (!document.getElementById('sc-ajax-style')) {
+      var s = document.createElement('style'); s.id = 'sc-ajax-style'; s.textContent = CSS; document.head.appendChild(s);
+    }
+    anchor.parentNode.insertBefore(build(cfg), anchor.nextSibling);
+  }
+
+  scIdle(function () { init(); setTimeout(init, 2000); });
+})();
