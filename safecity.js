@@ -1856,3 +1856,125 @@ function scAnchor() {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })();
+
+
+/* =====================================================================
+ * 11. Оформлення замовлення → орієнтовна вартість доставки Новою поштою з Києва
+ *     Тарифи «Посилки до 30 кг» (між відділеннями, за кожне місце), жовтень 2026
+ * ===================================================================== */
+(function () {
+  'use strict';
+  if (location.pathname.indexOf('/checkout') === -1) return;
+
+  var CFG = {
+    defaultKg: 1,                 // вага товару, якщо в характеристиках немає «Вага»
+    maxKg: 30,                    // більше — «вартість уточнимо»
+    freeFrom: 3000,               // від цієї суми доставка безкоштовна (блок 5)
+    local: [[2, 70], [10, 115], [30, 180]],     // Київ → Київ
+    ukraine: [[2, 90], [10, 135], [30, 200]],   // Київ → інші міста
+    village: 30,                  // доставка в селище / село
+    postomat: 10,                 // доставка в поштомат
+    insFree: 500, insPct: 0.005,  // оголошена вартість: до 500 грн включно — без доплати, далі 0,5%
+    extra: 15,                    // службова надбавка (не показується окремо)
+    roundTo: 5
+  };
+
+  /* ---- вага товару з картки (кеш у браузері на 7 днів) ---- */
+  var wMem = {};
+  function parseKg(s) {
+    var m = String(s).replace(',', '.').match(/(\d+(?:\.\d+)?)\s*(кг|kg|г|g)\b/i);
+    if (!m) return 0;
+    var v = parseFloat(m[1]);
+    return /^(г|g)$/i.test(m[2]) ? v / 1000 : v;
+  }
+  function weightOf(url) {
+    if (wMem[url]) return wMem[url];
+    try {
+      var c = JSON.parse(localStorage.getItem('scw:' + url));
+      if (c && Date.now() - c.t < 7 * 86400000) return (wMem[url] = Promise.resolve(c.kg));
+    } catch (e) {}
+    return (wMem[url] = fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.text(); }).then(function (html) {
+      var d = new DOMParser().parseFromString(html, 'text/html'), kg = 0;
+      [].some.call(d.querySelectorAll('tr'), function (tr) {
+        if (tr.children.length === 2 && /^\s*вага\s*$/i.test(tr.children[0].textContent)) { kg = parseKg(tr.children[1].textContent); return kg > 0; }
+        return false;
+      });
+      try { localStorage.setItem('scw:' + url, JSON.stringify({ t: Date.now(), kg: kg })); } catch (e) {}
+      return kg;
+    }).catch(function () { return 0; }));
+  }
+
+  function form() { return document.getElementById('checkout-container') || document; }
+  function optText(s) { return s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].textContent.trim() : ''; }
+  function cityText() {
+    var c = form().querySelector('[name="Recipient[delivery_city]"]');
+    if (!c) return '';
+    return (c.tagName === 'SELECT' ? optText(c) : c.value || '').trim();
+  }
+  function items() {
+    return [].map.call(document.querySelectorAll('.j-cart-product'), function (li) {
+      var a = li.querySelector('.order-i-title a, .cart-item__title a');
+      var q = li.querySelector('input[type="number"], input[name*="quantity"], input[type="text"]');
+      return a ? { url: a.getAttribute('href'), qty: Math.max(1, parseInt(q && q.value, 10) || 1) } : null;
+    }).filter(Boolean);
+  }
+  function orderSum() {
+    var t = document.querySelector('.j-total-sum');
+    var m = t && String(t.textContent).replace(/[\s ]/g, '').match(/\d+(?:[.,]\d+)?/);
+    return m ? parseFloat(m[0].replace(',', '.')) : 0;
+  }
+  function tier(table, kg) { for (var i = 0; i < table.length; i++) if (kg <= table[i][0]) return table[i][1]; return 0; }
+
+  var CSS = '#sc-co-dlv{box-sizing:border-box;margin:8px 0 4px;padding:9px 12px;border-radius:8px;font-size:14px;line-height:1.4;background:#f3f7fb;border:1px solid #dbe5ef;color:#3d4a57}';
+
+  var lastKey = '', lastText = '', busy = false;
+  function render(text) {
+    var old = document.getElementById('sc-co-dlv');
+    var type = form().querySelector('select[name="Delivery[delivery_type]"]');
+    var wh = form().querySelector('select[name^="Delivery[delivery_method]"]');
+    var anchor = wh && wh.parentElement && wh.parentElement.offsetParent !== null ? wh.parentElement : (type && type.parentElement);
+    if (!text || !anchor) { if (old) old.remove(); return; }
+    if (!old) {
+      old = document.createElement('div'); old.id = 'sc-co-dlv';
+      var after = document.getElementById('sc-co-akb');
+      after = after && after.parentNode === anchor.parentNode ? after : anchor;
+      after.parentNode.insertBefore(old, after.nextSibling);
+    }
+    if (old.textContent !== text) old.textContent = text;
+  }
+
+  function tick() {
+    var list = items(), city = cityText(), sum = orderSum();
+    var typeText = optText(form().querySelector('select[name="Delivery[delivery_type]"]'));
+    var whText = optText(form().querySelector('select[name^="Delivery[delivery_method]"]'));
+    var key = JSON.stringify([list, city, sum, typeText, whText]);
+    if (busy) return;
+    if (key === lastKey) return render(lastText);   // Хорошоп іноді перемальовує блок доставки
+    if (!list.length || !city || /кур/i.test(typeText) || sum >= CFG.freeFrom) { lastKey = key; lastText = ''; return render(''); }
+    busy = true;
+    Promise.all(list.map(function (i) { return weightOf(i.url); })).then(function (ws) {
+      busy = false; lastKey = key;
+      var kg = 0;
+      list.forEach(function (it, n) { kg += (ws[n] || CFG.defaultKg) * it.qty; });
+      if (kg > CFG.maxKg) return render(lastText = 'Доставка Новою поштою: вартість для посилки понад 30 кг уточнимо після оформлення.');
+      var local = /^м\.\s*Київ$/i.test(city);
+      var price = tier(local ? CFG.local : CFG.ukraine, kg);
+      if (!local && /^(с\.|смт|сел\.|с-ще|селище)/i.test(city)) price += CFG.village;
+      if (/поштомат/i.test(typeText) || /поштомат/i.test(whText)) price += CFG.postomat;
+      if (sum > CFG.insFree) price += sum * CFG.insPct;
+      price += CFG.extra;
+      price = Math.ceil(price / CFG.roundTo) * CFG.roundTo;
+      render(lastText = 'Доставка Новою поштою — орієнтовно ' + price + ' грн, оплачується при отриманні за тарифами перевізника.');
+    }, function () { busy = false; });
+  }
+
+  function start() {
+    if (!document.getElementById('sc-co-dlv-style')) {
+      var s = document.createElement('style'); s.id = 'sc-co-dlv-style'; s.textContent = CSS; document.head.appendChild(s);
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
