@@ -1263,6 +1263,7 @@ function scAnchor() {
     '#sc-calc .scc-w{display:flex;align-items:center;gap:4px;color:#5f6b78;font-size:13px}' +
     '#sc-calc .scc-w input{width:64px;padding:5px 6px;border:1px solid #cfd8e2;border-radius:6px;text-align:right;font:inherit;color:#1d2733;background:#fff}' +
     '#sc-calc .scc-res{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:4px 16px;margin-top:12px;padding:12px 14px;border-radius:8px;background:#e7f6ed}' +
+    '#sc-calc .scc-res>div:nth-child(2){margin-left:auto;text-align:right}' +
     '#sc-calc .scc-res.warn{background:#fdf2e3}#sc-calc .scc-res.bad{background:#fdeaea}' +
     '#sc-calc .scc-l{font-size:12px;color:#5f6b78}' +
     '#sc-calc .scc-load{font-weight:500;font-size:15px}' +
