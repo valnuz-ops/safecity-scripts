@@ -300,6 +300,9 @@ function scAnchor() {
     return out;
   }
 
+  // Той самий розрахунок використовує сторінка оформлення (блок 10)
+  window.scShipText = buildText;
+
   function render(box) {
     var t = buildText();
     box.innerHTML =
@@ -1659,4 +1662,161 @@ function scAnchor() {
   }
 
   scIdle(function () { init(); setTimeout(init, 2000); });
+})();
+
+
+/* =====================================================================
+ * 10. Оформлення замовлення: АКБ → вантажне відділення, підказки до оплати,
+ *     термін відправки (як у плашці на картці, блок 1)
+ * ===================================================================== */
+(function () {
+  'use strict';
+  if (location.pathname.indexOf('/checkout') === -1) return;
+
+  var MIN_AH = 7;                              // правило вантажного відділення — для АКБ від 7 А·год
+  var CARGO = /до\s*(200|1100)\s*кг/i;         // вантажні відділення НП
+  var POSTOMAT = /поштомат/i;
+  // Комісія NovaPay за післяплату для отримувача (novapay.ua, жовтень 2026): 2% + 20 грн; карткою NovaPay — 1% + 10 грн
+  var COD = { pct: 0.02, fix: 20, npPct: 0.01, npFix: 10 };
+  var PAY_HINTS = {
+    '15': 'Оплата при отриманні. Нова пошта бере комісію за післяплату: 2% + 20 грн{sum} (карткою NovaPay у застосунку — 1% + 10 грн).',
+    '22': 'Оплата карткою одразу після оформлення — без комісії за післяплату{save}. Посилку просто забираєте у відділенні.',
+    '12': 'Надішлемо рахунок для оплати. Відправляємо після надходження коштів на рахунок.'
+  };
+  function orderSum() {
+    var t = document.querySelector('#checkout-container .j-total-sum, .order-summary .j-total-sum, .j-total-sum');
+    var m = t && String(t.textContent).replace(/[\s\u00a0]/g, '').match(/\d+(?:[.,]\d+)?/);
+    return m ? parseFloat(m[0].replace(',', '.')) : 0;
+  }
+  function codFee() { var s = orderSum(); return s > 0 ? Math.round(s * COD.pct + COD.fix) : 0; }
+
+  var CSS =
+    '.sc-co-note{box-sizing:border-box;margin:8px 0 4px;padding:9px 12px;border-radius:8px;font-size:14px;line-height:1.4}' +
+    '.sc-co-note.warn{background:#fff4e2;border:1px solid #f3d29b;color:#7a4306}' +
+    '.sc-co-note.info{background:#f3f7fb;border:1px solid #dbe5ef;color:#3d4a57}' +
+    '#sc-co-ship{background:#f1f8f1;border:1px solid #cfe5cf;color:#1d2733}' +
+    '#sc-co-ship .sub{font-size:13px;color:#4c5a67;margin-top:2px}';
+
+  function el(id, cls, after) {
+    var n = document.getElementById(id);
+    if (!n) {
+      n = document.createElement('div');
+      n.id = id; n.className = 'sc-co-note ' + cls;
+      after.parentNode.insertBefore(n, after.nextSibling);
+    }
+    return n;
+  }
+  function setText(n, text) {
+    if (!text) { if (n) n.remove(); return; }
+    if (n.getAttribute('data-t') !== text) { n.textContent = text; n.setAttribute('data-t', text); }
+  }
+  function form() { return document.getElementById('checkout-container') || document; }
+  function sel(q) { return form().querySelector(q); }
+  function shown(s) {                          // select прихований плагіном — дивимося на його обгортку
+    var box = s && s.parentElement;
+    return !!(box && box.offsetParent !== null);
+  }
+  function optText(s) { return s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].textContent.trim() : ''; }
+
+  function cartItems() {
+    var out = [];
+    document.querySelectorAll('.j-cart-product .order-i-title a, .j-cart-product .cart-item__title a').forEach(function (a) {
+      var t = a.textContent.replace(/\s+/g, ' ').trim();
+      var h = a.getAttribute('href');
+      if (t && h && !out.some(function (x) { return x.url === h; })) out.push({ name: t, url: h });
+    });
+    return out;
+  }
+  function batteryAh(name) {
+    if (!/акумулятор|акб|батаре/i.test(name)) return 0;
+    var m = name.replace(',', '.').match(/(\d+(?:\.\d+)?)\s*(?:Ah|А\*?·?год|Аг|Ач)/i);
+    return m ? parseFloat(m[1]) : 0;
+  }
+
+  /* ---- 1. АКБ і вантажне відділення ---- */
+  function batteryNote() {
+    var hasBat = cartItems().some(function (i) { return batteryAh(i.name) >= MIN_AH; });
+    var type = sel('select[name="Delivery[delivery_type]"]');
+    var wh = sel('select[name^="Delivery[delivery_method]"]');
+    var old = document.getElementById('sc-co-akb');
+    if (!hasBat || !type) return setText(old, '');
+
+    var typeText = optText(type), text = '';
+    if (POSTOMAT.test(typeText)) {
+      text = 'Акумулятори не відправляємо в поштомат. Оберіть доставку «Новою поштою» і вантажне відділення (з позначкою «до 200 кг» або «до 1100 кг»), а якщо у вашому населеному пункті такого немає — звичайне.';
+    } else if (wh && shown(wh)) {
+      var hasCargo = [].some.call(wh.options, function (o) { return CARGO.test(o.textContent); });
+      var cur = optText(wh);
+      if (hasCargo && !CARGO.test(cur)) {
+        text = 'Акумулятори відправляємо на вантажне відділення Нової пошти. Оберіть у списку відділення з позначкою «до 200 кг» або «до 1100 кг».';
+      } else if (!hasCargo && POSTOMAT.test(cur)) {
+        text = 'Акумулятори не відправляємо в поштомат. Оберіть звичайне відділення Нової пошти.';
+      }
+    }
+    if (!text) return setText(old, '');
+    var anchor = (wh && shown(wh) ? wh : type).parentElement;
+    setText(el('sc-co-akb', 'warn', anchor), text);
+  }
+
+  /* ---- 2. Підказка до способу оплати ---- */
+  function payNote() {
+    var p = sel('select[name="Payment[payment_type]"]');
+    var old = document.getElementById('sc-co-pay');
+    var hint = p && shown(p) ? PAY_HINTS[p.value] : '';
+    var fee = codFee();
+    if (hint) hint = hint.replace('{sum}', fee ? ' — для цього замовлення ≈ ' + fee + ' грн' : '')
+                         .replace('{save}', fee ? ' (економія ≈ ' + fee + ' грн)' : '');
+    if (!hint) return setText(old, '');
+    setText(el('sc-co-pay', 'info', p.parentElement), hint);
+  }
+
+  /* ---- 4. Термін відправки (лише якщо всі товари в наявності) ---- */
+  var stockOk = null, stockKey = '';
+  function checkStock() {
+    var items = cartItems(), key = items.map(function (i) { return i.url; }).join('|');
+    if (!items.length || typeof scProduct !== 'function') { stockOk = false; return; }
+    if (key === stockKey) return;
+    stockKey = key; stockOk = null;
+    Promise.all(items.map(function (i) { return scProduct(i.url); })).then(function (res) {
+      if (key !== stockKey) return;
+      stockOk = res.every(function (p) { return p && scInStock(p.avail); });
+      shipNote();
+    });
+  }
+  function shipNote() {
+    var old = document.getElementById('sc-co-ship');
+    // десктоп: .checkout-footer; мобільна: блок з кнопкою «Оформити замовлення»
+    var foot = document.querySelector('#checkout-container .checkout-footer');
+    if (!foot) {
+      var btn = [].filter.call(document.querySelectorAll('#checkout-container button'), function (x) {
+        return x.offsetParent !== null && /оформити|підтвердити/i.test(x.textContent);
+      })[0];
+      foot = btn && (btn.closest('.form-item') || btn);
+    }
+    if (!stockOk || typeof window.scShipText !== 'function' || !foot) return setText(old, '');
+    var t = window.scShipText();
+    var html = '🚚 <strong>' + t.main + '</strong>' + t.lines.map(function (l) { return '<div class="sub">' + l + '</div>'; }).join('');
+    var n = old;
+    if (!n) {
+      n = document.createElement('div');
+      n.id = 'sc-co-ship'; n.className = 'sc-co-note';
+      foot.parentNode.insertBefore(n, foot);
+    }
+    if (n.getAttribute('data-t') !== html) { n.innerHTML = html; n.setAttribute('data-t', html); }
+  }
+
+  function tick() {
+    try { batteryNote(); payNote(); checkStock(); shipNote(); } catch (e) {}
+  }
+
+  function start() {
+    if (!document.getElementById('sc-co-style')) {
+      var s = document.createElement('style'); s.id = 'sc-co-style'; s.textContent = CSS; document.head.appendChild(s);
+    }
+    tick();
+    // Поля оформлення — плагін selectboxit, події change ненадійні; перевіряємо стан щосекунди
+    setInterval(tick, 1000);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
 })();
