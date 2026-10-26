@@ -1231,7 +1231,7 @@ function scAnchor() {
     { id: 'boiler', name: 'Газовий котел', v: 100, hint: 'з насосом — близько 120 Вт' },
     { id: 'lamp',   name: 'LED-лампа', v: 10, qty: true },
     { id: 'tv',     name: 'Телевізор', v: 80 },
-    { id: 'cam',    name: 'Камера відеоспостереження', v: 5, qty: true },
+    { id: 'cam',    name: 'Відеокамера', v: 5, qty: true },
     { id: 'micro',  name: 'Мікрохвильовка', v: 1200 },
     { id: 'tool',   name: 'Електроінструмент', v: 1500 },
     { id: 'kettle', name: 'Чайник', v: 2000 }
@@ -1255,7 +1255,7 @@ function scAnchor() {
     '#sc-calc .scc-r{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #dde3ea;border-radius:8px;background:#fff}' +
     '#sc-calc .scc-r.on{background:#e8f3fc;border-color:#b9d8f2}' +
     '#sc-calc .scc-r input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:#1b7fd1;flex:0 0 auto}' +
-    '#sc-calc .scc-r label{flex:1 1 auto;min-width:0;cursor:pointer;margin:0;overflow-wrap:anywhere}' +
+    '#sc-calc .scc-r label{flex:1 1 auto;min-width:0;cursor:pointer;margin:0;overflow-wrap:break-word}' +
     '#sc-calc .scc-ctl{display:flex;align-items:center;gap:6px;flex:0 0 auto;margin-left:auto}' +
     '#sc-calc .scc-h{display:block;font-size:12px;color:#7a828c}' +
     '#sc-calc .scc-q{display:flex;align-items:center;border:1px solid #cfd8e2;border-radius:6px;background:#fff}' +
