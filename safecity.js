@@ -1720,7 +1720,7 @@ function scAnchor() {
 
   function cartItems() {
     var out = [];
-    document.querySelectorAll('.j-cart-product .order-i-title a, .order-i-title a, .j-cart-product a[href]').forEach(function (a) {
+    document.querySelectorAll('.j-cart-product .order-i-title a, .j-cart-product .cart-item__title a').forEach(function (a) {
       var t = a.textContent.replace(/\s+/g, ' ').trim();
       var h = a.getAttribute('href');
       if (t && h && !out.some(function (x) { return x.url === h; })) out.push({ name: t, url: h });
@@ -1785,7 +1785,12 @@ function scAnchor() {
   }
   function shipNote() {
     var old = document.getElementById('sc-co-ship');
+    // десктоп: .checkout-footer; мобільна: блок з кнопкою «Оформити замовлення»
     var foot = document.querySelector('#checkout-container .checkout-footer');
+    if (!foot) {
+      var btn = document.querySelector('#checkout-container button.btn--block, #checkout-container button[type="submit"]');
+      foot = btn && (btn.closest('.form-item') || btn);
+    }
     if (!stockOk || typeof window.scShipText !== 'function' || !foot) return setText(old, '');
     var t = window.scShipText();
     var html = '🚚 <strong>' + t.main + '</strong>' + t.lines.map(function (l) { return '<div class="sub">' + l + '</div>'; }).join('');
