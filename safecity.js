@@ -1882,7 +1882,7 @@ function scAnchor() {
   /* ---- вага товару з картки (кеш у браузері на 7 днів) ---- */
   var wMem = {};
   function parseKg(s) {
-    var m = String(s).replace(',', '.').match(/(\d+(?:\.\d+)?)\s*(кг|kg|г|g)\b/i);
+    var m = String(s).replace(',', '.').match(/(\d+(?:\.\d+)?)\s*(кг|kg|г|g)(?![a-zа-яіїєґ])/i);
     if (!m) return 0;
     var v = parseFloat(m[1]);
     return /^(г|g)$/i.test(m[2]) ? v / 1000 : v;
