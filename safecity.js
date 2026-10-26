@@ -773,6 +773,13 @@ function scAnchor() {
     return null;
   }
 
+  // Ширина — як у картки замовлення під блоком (на десктопі вона вужча за 1100 px)
+  function fitWidth(box) {
+    var next = box.nextElementSibling;
+    while (next && !next.offsetWidth) next = next.nextElementSibling;
+    if (next && next.offsetWidth > 200) box.style.maxWidth = next.offsetWidth + 'px';
+  }
+
   function inject() {
     if (document.getElementById('sc-tg')) return true;
     var num = findNum();
@@ -796,6 +803,8 @@ function scAnchor() {
     var h1 = anchor();
     if (h1 && h1.parentNode) h1.parentNode.insertBefore(box, h1.nextSibling);
     else (document.querySelector('main') || document.body).prepend(box);
+    fitWidth(box);
+    window.addEventListener('resize', function () { fitWidth(box); });
     return true;
   }
 
