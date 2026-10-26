@@ -96,6 +96,11 @@ function scFeatures() {
   return map;
 }
 function scGet(map, re) { for (var k in map) if (re.test(k)) return map[k]; return ''; }
+// «Немає в наявності» теж містить «в наявності», тому спершу відсіюємо відсутні
+function scInStock(avail) {
+  if (/немає|нема\b|нет в наличии|відсутн|отсутств|під замовлення|под заказ|очікується|ожидается/i.test(avail)) return false;
+  return /в наявності|в наличии|закінчується|заканчивается/i.test(avail);
+}
 
 function scDesc() {
   var el = document.querySelector('.product-description') || document.querySelector('[itemprop="description"]') ||
@@ -671,7 +676,7 @@ function scAnchor() {
   function loadProduct(pick) {
     var u = langPrefix + pick.url;
     return scProduct(u).then(function (p) {
-      if (!p || !/в наявності|в наличии|закінчується|заканчивается/i.test(p.avail)) return null;
+      if (!p || !scInStock(p.avail)) return null;
       return { url: u, name: p.name, price: p.price, img: p.img, note: pick.note || '' };
     });
   }
@@ -1389,7 +1394,7 @@ function scAnchor() {
         h = total > 0 ? cfg.wh * cfg.k / total : NaN;
         if (total > cfg.maxW) { res.classList.add('bad'); msg = 'Навантаження більше ' + cfg.maxW + ' Вт — пристрій не потягне все одночасно. Вимкніть щось потужне або оберіть потужнішу модель.'; }
         else if (h < 6) { res.classList.add('warn'); msg = 'На тривалі відключення може не вистачити — зверніть увагу на моделі з більшою ємністю.'; }
-        else if (h >= 48) { msg = 'Це приблизно ' + Math.floor(h / 24) + ' доби без підзарядки.'; }
+        else if (h >= 48) { var dd = Math.floor(h / 24); msg = 'Це приблизно ' + dd + (dd % 10 >= 2 && dd % 10 <= 4 && (dd % 100 < 12 || dd % 100 > 14) ? ' доби' : ' діб') + ' без підзарядки.'; }
       }
       box.querySelector('.scc-load').textContent = total > 0 ? loadTxt : 'нічого не обрано';
       box.querySelector('.scc-hours').textContent = total > 0 ? fmtH(h) : '—';
