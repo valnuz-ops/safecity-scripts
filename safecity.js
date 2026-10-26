@@ -736,20 +736,35 @@ function scAnchor() {
  * ===================================================================== */
 (function () {
   'use strict';
-  if (location.pathname.indexOf('/checkout/complete/') === -1) return;
+  if (!/checkout.*complete|complete.*order/i.test(location.pathname)) return;
+
+  // Номер замовлення: «замовлення №123», «Номер замовлення: 123», «№ 123» (мобільна тема пише інакше)
+  function findNum() {
+    var t = (document.body && document.body.innerText) || '';
+    var m = t.match(/замовлен\S*\s*(?:№|#|N\s*[o°]?)\s*(\d{3,10})/i) ||
+            t.match(/номер\S*\s*(?:вашого\s*)?замовлен\S*\s*[:№#]?\s*(\d{3,10})/i) ||
+            t.match(/№\s*(\d{4,10})/);
+    return m ? m[1] : null;
+  }
+
+  // Перший ВИДИМИЙ h1 (у мобільній темі перший h1 може бути прихованим)
+  function anchor() {
+    var hs = document.querySelectorAll('h1');
+    for (var i = 0; i < hs.length; i++) if (hs[i].offsetParent !== null) return hs[i];
+    return null;
+  }
 
   function inject() {
     if (document.getElementById('sc-tg')) return true;
-    var m = ((document.body && document.body.innerText) || '').match(/замовлен\S*\s*№\s*(\d{3,10})/i);
-    if (!m) return false;
-    var num = m[1];
+    var num = findNum();
+    if (!num) return false;
 
     var msg = 'Добрий день! Підтверджую замовлення №' + num + ' на сайті SafeCity.';
     var btn = 'display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:1 1 180px;max-width:240px;' +
               'color:#fff;text-decoration:none;padding:12px 16px;border-radius:10px;font-size:16px;font-weight:600;box-sizing:border-box';
     var box = document.createElement('div');
     box.id = 'sc-tg';
-    box.style.cssText = 'margin:0 0 24px;padding:18px;border:1px solid #d6ecf8;border-radius:12px;background:#f3faff;text-align:center;max-width:1100px';
+    box.style.cssText = 'margin:0 0 24px;padding:18px;border:1px solid #d6ecf8;border-radius:12px;background:#f3faff;text-align:center;max-width:1100px;box-sizing:border-box';
     box.innerHTML =
       '<div style="font-size:17px;font-weight:600;margin-bottom:6px">Підтвердіть замовлення №' + num + ' в один клік</div>' +
       '<div style="font-size:14px;color:#555;margin-bottom:14px">Без дзвінка менеджера — оберіть зручний месенджер</div>' +
@@ -759,7 +774,7 @@ function scAnchor() {
         '<a href="https://wa.me/' + SC_PHONE + '?text=' + encodeURIComponent(msg) + '" target="_blank" rel="noopener" style="' + btn + ';background:#25D366">💬 WhatsApp</a>' +
       '</div>';
 
-    var h1 = document.querySelector('h1');
+    var h1 = anchor();
     if (h1 && h1.parentNode) h1.parentNode.insertBefore(box, h1.nextSibling);
     else (document.querySelector('main') || document.body).prepend(box);
     return true;
