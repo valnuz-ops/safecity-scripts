@@ -1252,16 +1252,17 @@ function scAnchor() {
     '#sc-calc .scc-bat{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:0 0 10px}' +
     '#sc-calc .scc-bat select{max-width:100%;min-width:0;padding:6px 8px;border:1px solid #cfd8e2;border-radius:6px;background:#fff;color:#1d2733;font:inherit}' +
     '#sc-calc .scc-rows{display:flex;flex-direction:column;gap:6px}' +
-    '#sc-calc .scc-r{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:7px 10px;border:1px solid #dde3ea;border-radius:8px;background:#fff}' +
+    '#sc-calc .scc-r{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #dde3ea;border-radius:8px;background:#fff}' +
     '#sc-calc .scc-r.on{background:#e8f3fc;border-color:#b9d8f2}' +
     '#sc-calc .scc-r input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:#1b7fd1;flex:0 0 auto}' +
-    '#sc-calc .scc-r label{flex:1 1 160px;min-width:0;cursor:pointer;margin:0}' +
+    '#sc-calc .scc-r label{flex:1 1 auto;min-width:0;cursor:pointer;margin:0;overflow-wrap:anywhere}' +
+    '#sc-calc .scc-ctl{display:flex;align-items:center;gap:6px;flex:0 0 auto;margin-left:auto}' +
     '#sc-calc .scc-h{display:block;font-size:12px;color:#7a828c}' +
     '#sc-calc .scc-q{display:flex;align-items:center;border:1px solid #cfd8e2;border-radius:6px;background:#fff}' +
-    '#sc-calc .scc-q button{width:30px;height:30px;border:0;background:none;font-size:17px;cursor:pointer;color:#1d2733;padding:0}' +
-    '#sc-calc .scc-q span{min-width:22px;text-align:center;font-weight:500}' +
+    '#sc-calc .scc-q button{width:28px;height:30px;border:0;background:none;font-size:17px;cursor:pointer;color:#1d2733;padding:0}' +
+    '#sc-calc .scc-q span{min-width:20px;text-align:center;font-weight:500}' +
     '#sc-calc .scc-w{display:flex;align-items:center;gap:4px;color:#5f6b78;font-size:13px}' +
-    '#sc-calc .scc-w input{width:64px;padding:5px 6px;border:1px solid #cfd8e2;border-radius:6px;text-align:right;font:inherit;color:#1d2733;background:#fff}' +
+    '#sc-calc .scc-w input{width:58px;padding:5px 6px;border:1px solid #cfd8e2;border-radius:6px;text-align:right;font:inherit;color:#1d2733;background:#fff}' +
     '#sc-calc .scc-res{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:4px 16px;margin-top:12px;padding:12px 14px;border-radius:8px;background:#e7f6ed}' +
     '#sc-calc .scc-res>div:nth-child(2){margin-left:auto;text-align:right}' +
     '#sc-calc .scc-res.warn{background:#fdf2e3}#sc-calc .scc-res.bad{background:#fdeaea}' +
@@ -1328,9 +1329,9 @@ function scAnchor() {
     html += '<div class="scc-rows">';
     list.forEach(function (d) {
       html += '<div class="scc-r" id="scc-r-' + d.id + '"><input type="checkbox" id="scc-c-' + d.id + '">' +
-        '<label for="scc-c-' + d.id + '">' + d.name + (d.hint ? '<span class="scc-h">' + d.hint + '</span>' : '') + '</label>' +
+        '<label for="scc-c-' + d.id + '">' + d.name + (d.hint ? '<span class="scc-h">' + d.hint + '</span>' : '') + '</label><span class="scc-ctl">' +
         (d.qty ? '<div class="scc-q"><button type="button" data-d="' + d.id + '" data-s="-1" aria-label="Менше">−</button><span id="scc-q-' + d.id + '"></span><button type="button" data-d="' + d.id + '" data-s="1" aria-label="Більше">+</button></div>' : '') +
-        '<span class="scc-w"><input id="scc-w-' + d.id + '" inputmode="decimal" aria-label="' + unit + ': ' + d.name + '"> ' + unit + '</span></div>';
+        '<span class="scc-w"><input id="scc-w-' + d.id + '" inputmode="decimal" aria-label="' + unit + ': ' + d.name + '"> ' + unit + '</span></span></div>';
     });
     html += '</div><div class="scc-res" aria-live="polite"><div><div class="scc-l">Одночасне навантаження</div><div class="scc-load"></div></div>' +
       '<div><div class="scc-l" style="text-align:right">Пропрацює приблизно</div><div class="scc-hours"></div></div><div class="scc-msg"></div></div>' +
