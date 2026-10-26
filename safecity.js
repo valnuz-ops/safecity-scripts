@@ -741,16 +741,22 @@ function scAnchor() {
   // Номер замовлення: «замовлення №123», «Номер замовлення: 123», «№ 123» (мобільна тема пише інакше)
   function findNum() {
     var t = (document.body && document.body.innerText) || '';
-    var m = t.match(/замовлен\S*\s*(?:№|#|N\s*[o°]?)\s*(\d{3,10})/i) ||
+    var m = t.match(/замовлен\S*\s*(?:№|#|N\s*[o°]?)?\s*(\d{3,10})/i) ||
             t.match(/номер\S*\s*(?:вашого\s*)?замовлен\S*\s*[:№#]?\s*(\d{3,10})/i) ||
             t.match(/№\s*(\d{4,10})/);
     return m ? m[1] : null;
   }
 
-  // Перший ВИДИМИЙ h1 (у мобільній темі перший h1 може бути прихованим)
+  // Перший ВИДИМИЙ h1; у мобільній темі h1 немає — тоді напис «Ваше замовлення отримано»
   function anchor() {
     var hs = document.querySelectorAll('h1');
     for (var i = 0; i < hs.length; i++) if (hs[i].offsetParent !== null) return hs[i];
+    var els = document.querySelectorAll('h2,h3,div,p,span,strong');
+    for (var j = 0; j < els.length; j++) {
+      var e = els[j];
+      if (e.children.length === 0 && e.offsetParent !== null &&
+          /^\s*ваше замовлення отримано/i.test(e.textContent)) return e;
+    }
     return null;
   }
 
