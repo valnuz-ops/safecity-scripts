@@ -1777,6 +1777,20 @@ function scAnchor() {
                          .replace('{save}', fee ? ' (економія ≈ ' + fee + ' грн)' : '');
     if (!hint) return setText(old, '');
     setText(el('sc-co-pay', 'info', p.parentElement), hint);
+    if (p.value === '12') openComment();
+  }
+
+  // Безнал: відкриваємо поле коментаря і підказуємо, що туди написати (один раз)
+  var commentOpened = false;
+  function openComment() {
+    var ta = form().querySelector('textarea[name="Recipient[comment]"]');
+    if (!ta) return;
+    if (!ta.placeholder) ta.placeholder = 'Назва компанії, ЄДРПОУ або ІПН ФОП';
+    if (commentOpened || ta.offsetParent !== null || ta.value) return;
+    var link = [].filter.call(form().querySelectorAll('a, button'), function (x) {
+      return x.offsetParent !== null && /додати коментар/i.test(x.textContent);
+    })[0];
+    if (link) { commentOpened = true; link.click(); }
   }
 
   /* ---- 4. Термін відправки (лише якщо всі товари в наявності) ---- */
