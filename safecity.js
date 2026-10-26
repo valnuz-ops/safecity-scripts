@@ -96,6 +96,11 @@ function scFeatures() {
   return map;
 }
 function scGet(map, re) { for (var k in map) if (re.test(k)) return map[k]; return ''; }
+// «Немає в наявності» теж містить «в наявності», тому спершу відсіюємо відсутні
+function scInStock(avail) {
+  if (/немає|нема\b|нет в наличии|відсутн|отсутств|під замовлення|под заказ|очікується|ожидается/i.test(avail)) return false;
+  return /в наявності|в наличии|закінчується|заканчивается/i.test(avail);
+}
 
 function scDesc() {
   var el = document.querySelector('.product-description') || document.querySelector('[itemprop="description"]') ||
@@ -663,7 +668,7 @@ function scAnchor() {
       if (lfp) text += ' Підтримує свинцево-кислотні та LiFePO4 АКБ.';
       else text += ' Підходять свинцево-кислотні АКБ (AGM або GEL).';
 
-      return { list: list, links: links, title: '🔋 Акумулятор не входить у комплект', text: text };
+      return { list: list, links: links, title: '🔋 Акумулятор не входить у комплект', text: text, slot: slot, lfp: lfp };
     }
     return null;
   }
@@ -671,7 +676,7 @@ function scAnchor() {
   function loadProduct(pick) {
     var u = langPrefix + pick.url;
     return scProduct(u).then(function (p) {
-      if (!p || !/в наявності|в наличии|закінчується|заканчивается/i.test(p.avail)) return null;
+      if (!p || !scInStock(p.avail)) return null;
       return { url: u, name: p.name, price: p.price, img: p.img, note: pick.note || '' };
     });
   }
@@ -724,6 +729,11 @@ function scAnchor() {
         listEl.appendChild(a);
       });
       if (!listEl.children.length) listEl.remove();
+      // Для калькулятора автономності (блок 8): ті самі сумісні АКБ у наявності
+      if (cfg.slot !== undefined) {
+        window.scAkb = { items: items, slot: cfg.slot, lfp: cfg.lfp };
+        document.dispatchEvent(new CustomEvent('sc-akb'));
+      }
     });
   }
 
@@ -1200,6 +1210,232 @@ function scAnchor() {
     chip(kr, 'Роз’єми та патч-корди →', url(CFG.connectors, { presence: 1 }));
 
     anchor.parentNode.insertBefore(box, anchor.nextSibling);
+  }
+
+  scIdle(function () { init(); setTimeout(init, 2000); });
+})();
+
+
+/* =====================================================================
+ * 8. Картки зарядних станцій, систем накопичення і ДБЖ 12 В → калькулятор автономності
+ *    Коефіцієнти — як у текстах описів:
+ *    станції ×0.85, системи накопичення ×0.9×0.9 = 0.81, ДБЖ 12 В — А·год ÷ А без втрат
+ * ===================================================================== */
+(function () {
+  'use strict';
+
+  var DEV_AC = [
+    { id: 'router', name: 'Роутер (+ ONT)', v: 10 },
+    { id: 'laptop', name: 'Ноутбук', v: 50 },
+    { id: 'fridge', name: 'Холодильник', v: 150, hint: 'середнє споживання з урахуванням циклів компресора' },
+    { id: 'boiler', name: 'Газовий котел', v: 100, hint: 'з насосом — близько 120 Вт' },
+    { id: 'lamp',   name: 'LED-лампа', v: 10, qty: true },
+    { id: 'tv',     name: 'Телевізор', v: 80 },
+    { id: 'cam',    name: 'Камера відеоспостереження', v: 5, qty: true },
+    { id: 'micro',  name: 'Мікрохвильовка', v: 1200 },
+    { id: 'tool',   name: 'Електроінструмент', v: 1500 },
+    { id: 'kettle', name: 'Чайник', v: 2000 }
+  ];
+  var DEV_DC = [
+    { id: 'cam',      name: 'Камера 12 В', v: 0.5, qty: true },
+    { id: 'nvr',      name: 'Відеореєстратор', v: 1.5 },
+    { id: 'router',   name: 'Роутер 12 В', v: 1 },
+    { id: 'intercom', name: 'Домофон / відеопанель', v: 0.5, qty: true },
+    { id: 'lock',     name: 'Електромагнітний замок', v: 0.5, qty: true }
+  ];
+
+  var CSS =
+    '#sc-calc{margin:20px 0;padding:16px;border:1px solid #d6e4f0;border-radius:10px;background:#f7fbff;font-size:14px;line-height:1.4;color:#1d2733;max-width:900px;box-sizing:border-box}' +
+    '#sc-calc *{box-sizing:border-box}' +
+    '#sc-calc .scc-t{font-weight:700;font-size:16px;margin:0 0 4px}' +
+    '#sc-calc .scc-s{color:#5f6b78;font-size:13px;margin:0 0 12px}' +
+    '#sc-calc .scc-bat{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:0 0 10px}' +
+    '#sc-calc .scc-bat select{max-width:100%;min-width:0;padding:6px 8px;border:1px solid #cfd8e2;border-radius:6px;background:#fff;color:#1d2733;font:inherit}' +
+    '#sc-calc .scc-rows{display:flex;flex-direction:column;gap:6px}' +
+    '#sc-calc .scc-r{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:7px 10px;border:1px solid #dde3ea;border-radius:8px;background:#fff}' +
+    '#sc-calc .scc-r.on{background:#e8f3fc;border-color:#b9d8f2}' +
+    '#sc-calc .scc-r input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:#1b7fd1;flex:0 0 auto}' +
+    '#sc-calc .scc-r label{flex:1 1 160px;min-width:0;cursor:pointer;margin:0}' +
+    '#sc-calc .scc-h{display:block;font-size:12px;color:#7a828c}' +
+    '#sc-calc .scc-q{display:flex;align-items:center;border:1px solid #cfd8e2;border-radius:6px;background:#fff}' +
+    '#sc-calc .scc-q button{width:30px;height:30px;border:0;background:none;font-size:17px;cursor:pointer;color:#1d2733;padding:0}' +
+    '#sc-calc .scc-q span{min-width:22px;text-align:center;font-weight:500}' +
+    '#sc-calc .scc-w{display:flex;align-items:center;gap:4px;color:#5f6b78;font-size:13px}' +
+    '#sc-calc .scc-w input{width:64px;padding:5px 6px;border:1px solid #cfd8e2;border-radius:6px;text-align:right;font:inherit;color:#1d2733;background:#fff}' +
+    '#sc-calc .scc-res{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:4px 16px;margin-top:12px;padding:12px 14px;border-radius:8px;background:#e7f6ed}' +
+    '#sc-calc .scc-res>div:nth-child(2){margin-left:auto;text-align:right}' +
+    '#sc-calc .scc-res.warn{background:#fdf2e3}#sc-calc .scc-res.bad{background:#fdeaea}' +
+    '#sc-calc .scc-l{font-size:12px;color:#5f6b78}' +
+    '#sc-calc .scc-load{font-weight:500;font-size:15px}' +
+    '#sc-calc .scc-hours{font-weight:700;font-size:26px;line-height:1.1;color:#1f8a4c;text-align:right}' +
+    '#sc-calc .scc-res.warn .scc-hours{color:#b45309}#sc-calc .scc-res.bad .scc-hours{color:#c62828}' +
+    '#sc-calc .scc-msg{flex:1 1 100%;font-size:13px;margin-top:4px}' +
+    '#sc-calc .scc-f{font-size:12px;color:#7a828c;margin:10px 0 0}';
+
+  function num(s) { var m = String(s || '').replace(',', '.').match(/\d+(\.\d+)?/); return m ? parseFloat(m[0]) : 0; }
+  function watts(s) { var v = num(s); return /к(Вт|ВА)/i.test(s) ? v * 1000 : v; }
+
+  function detect() {
+    var f = scFeatures(), get = scGet;
+    var type = get(f, /^тип (пристрою|устройства)$/);
+    var title = ((document.querySelector('h1') || {}).textContent || '');
+
+    if (/зарядна станція|зарядная станция/i.test(type)) {
+      var wh = num(get(f, /^ємність$|^емкость$/));
+      var w = watts(get(f, /^номінальна потужність$|^номинальная мощность$/));
+      if (!wh || !w) return null;
+      return { mode: 'wh', wh: wh, k: 0.85, maxW: w, preset: { fridge: 1 },
+        formula: 'Розрахунково: ємність ' + wh + ' Вт·год × 0.85 ÷ навантаження. 0.85 — запас на втрати інвертора; реальний час залежить від приладів.' };
+    }
+    if (/система накопичення|система накопления/i.test(type)) {
+      var e = get(f, /енергоємність|энергоемкость/);
+      var wh2 = /квт/i.test(e) ? num(e) * 1000 : num(e);
+      var w2 = watts(get(f, /^потужність$|^мощность$/));
+      if (!wh2 || !w2) return null;
+      return { mode: 'wh', wh: wh2, k: 0.81, maxW: w2, preset: { fridge: 1, boiler: 1, router: 1, lamp: 4 },
+        formula: 'Розрахунково: ' + wh2 + ' Вт·год × 0.9 (глибина розряду) × 0.9 (ККД) ÷ навантаження.' };
+    }
+    if (/безперебійн|бесперебойн/i.test(type) && /PSU-/i.test(title)) {
+      var a = num(get(f, /^вихідний струм$|^выходной ток$/));
+      if (!a) return null;
+      return { mode: 'ah', maxA: a, preset: { cam: 4 } };
+    }
+    return null;
+  }
+
+  function fmtH(h) {
+    if (!isFinite(h)) return '—';
+    if (h < 1.5) return '~' + String(Math.round(h * 10) / 10).replace('.', ',') + ' год';
+    return '~' + Math.round(h) + ' год';
+  }
+  function ahOf(name, fallback) {
+    var m = String(name).replace(',', '.').match(/(\d+(?:\.\d+)?)\s*(?:Ah|А\*?·?год|Аг|Ач|А·ч)/i);
+    return m ? parseFloat(m[1]) : fallback;
+  }
+
+  function build(cfg, bats) {
+    var list = cfg.mode === 'ah' ? DEV_DC : DEV_AC, unit = cfg.mode === 'ah' ? 'А' : 'Вт';
+    var state = {};
+    list.forEach(function (d) { state[d.id] = { on: !!cfg.preset[d.id], qty: cfg.preset[d.id] || 1, v: d.v }; });
+
+    var box = document.createElement('div');
+    box.id = 'sc-calc';
+    var sub = cfg.mode === 'ah'
+      ? 'Акумулятор не входить у комплект. Оберіть сумісну АКБ і пристрої 12 В, які живляться від ДБЖ.'
+      : 'Позначте, що буде працювати одночасно під час відключення. Потужність можна змінити під свій прилад.';
+    var html = '<div class="scc-t">Скільки пропрацює: порахуйте для свого набору</div><div class="scc-s">' + sub + '</div>';
+    if (cfg.mode === 'ah') html += '<div class="scc-bat"><label for="scc-bat">Акумулятор:</label><select id="scc-bat"></select></div>';
+    html += '<div class="scc-rows">';
+    list.forEach(function (d) {
+      html += '<div class="scc-r" id="scc-r-' + d.id + '"><input type="checkbox" id="scc-c-' + d.id + '">' +
+        '<label for="scc-c-' + d.id + '">' + d.name + (d.hint ? '<span class="scc-h">' + d.hint + '</span>' : '') + '</label>' +
+        (d.qty ? '<div class="scc-q"><button type="button" data-d="' + d.id + '" data-s="-1" aria-label="Менше">−</button><span id="scc-q-' + d.id + '"></span><button type="button" data-d="' + d.id + '" data-s="1" aria-label="Більше">+</button></div>' : '') +
+        '<span class="scc-w"><input id="scc-w-' + d.id + '" inputmode="decimal" aria-label="' + unit + ': ' + d.name + '"> ' + unit + '</span></div>';
+    });
+    html += '</div><div class="scc-res" aria-live="polite"><div><div class="scc-l">Одночасне навантаження</div><div class="scc-load"></div></div>' +
+      '<div><div class="scc-l" style="text-align:right">Пропрацює приблизно</div><div class="scc-hours"></div></div><div class="scc-msg"></div></div>' +
+      '<p class="scc-f"></p>';
+    box.innerHTML = html;
+
+    var $ = function (id) { return box.querySelector('#' + id); };
+    var sel = $('scc-bat');
+    if (sel) {
+      bats.forEach(function (b, i) {
+        var o = document.createElement('option');
+        o.value = i;
+        o.textContent = b.name + (b.price ? ' — ' + b.price : '');
+        sel.appendChild(o);
+      });
+      sel.onchange = calc;
+      box.querySelector('.scc-f').textContent = 'Розрахунково: ємність АКБ (А·год) ÷ сумарний струм (А). Струм пристроїв — типові значення, точний дивіться на корпусі або в паспорті.';
+    } else {
+      box.querySelector('.scc-f').textContent = cfg.formula;
+    }
+
+    list.forEach(function (d) {
+      var ck = $('scc-c-' + d.id), w = $('scc-w-' + d.id);
+      ck.checked = state[d.id].on;
+      w.value = String(d.v).replace('.', ',');
+      ck.onchange = function () { state[d.id].on = ck.checked; calc(); };
+      w.oninput = function () {
+        var v = parseFloat(w.value.replace(',', '.'));
+        state[d.id].v = isNaN(v) ? 0 : v;
+        if (!state[d.id].on) { state[d.id].on = true; ck.checked = true; }
+        calc();
+      };
+    });
+    box.querySelectorAll('.scc-q button').forEach(function (b) {
+      b.onclick = function () {
+        var s = state[b.getAttribute('data-d')];
+        s.qty = Math.max(1, Math.min(32, s.qty + Number(b.getAttribute('data-s'))));
+        s.on = true; $('scc-c-' + b.getAttribute('data-d')).checked = true;
+        calc();
+      };
+    });
+
+    function calc() {
+      var total = 0;
+      list.forEach(function (d) {
+        var s = state[d.id];
+        $('scc-r-' + d.id).classList.toggle('on', s.on);
+        var q = $('scc-q-' + d.id); if (q) q.textContent = s.qty;
+        if (s.on) total += s.v * (d.qty ? s.qty : 1);
+      });
+      var res = box.querySelector('.scc-res'), msg = '', h, loadTxt;
+      res.className = 'scc-res';
+      if (cfg.mode === 'ah') {
+        total = Math.round(total * 100) / 100;
+        loadTxt = String(total).replace('.', ',') + ' А';
+        var ah = bats.length ? bats[+sel.value].ah : 0;
+        h = total > 0 && ah ? ah / total : NaN;
+        if (total > cfg.maxA) { res.classList.add('bad'); msg = 'ДБЖ видає до ' + String(cfg.maxA).replace('.', ',') + ' А — для такого навантаження потрібна потужніша модель.'; }
+        else if (h < 6) { res.classList.add('warn'); msg = 'Більша АКБ у бокс не поміститься. Для довших відключень потрібен ДБЖ із більшим відсіком або виносна АКБ.'; }
+      } else {
+        loadTxt = Math.round(total) + ' Вт';
+        h = total > 0 ? cfg.wh * cfg.k / total : NaN;
+        if (total > cfg.maxW) { res.classList.add('bad'); msg = 'Навантаження більше ' + cfg.maxW + ' Вт — пристрій не потягне все одночасно. Вимкніть щось потужне або оберіть потужнішу модель.'; }
+        else if (h < 6) { res.classList.add('warn'); msg = 'На тривалі відключення може не вистачити — зверніть увагу на моделі з більшою ємністю.'; }
+        else if (h >= 48) { var dd = Math.floor(h / 24); msg = 'Це приблизно ' + dd + (dd % 10 >= 2 && dd % 10 <= 4 && (dd % 100 < 12 || dd % 100 > 14) ? ' доби' : ' діб') + ' без підзарядки.'; }
+      }
+      box.querySelector('.scc-load').textContent = total > 0 ? loadTxt : 'нічого не обрано';
+      box.querySelector('.scc-hours').textContent = total > 0 ? fmtH(h) : '—';
+      var m = box.querySelector('.scc-msg'); m.textContent = msg; m.hidden = !msg;
+    }
+    calc();
+    return box;
+  }
+
+  function place(box) {
+    var desc = document.querySelector('.product-description') || document.querySelector('[itemprop="description"]');
+    if (desc && desc.parentNode) { desc.parentNode.insertBefore(box, desc.nextSibling); return true; }
+    var after = document.getElementById('sc-akb') || scAnchor();
+    if (after && after.parentNode) { after.parentNode.insertBefore(box, after.nextSibling); return true; }
+    return false;
+  }
+
+  function batteries() {
+    var a = window.scAkb;
+    if (!a) return null;
+    var out = a.items.map(function (p) { return { name: p.name, price: p.price, note: p.note, ah: ahOf(p.name, a.slot) }; });
+    if (!out.length && a.slot) out.push({ name: 'АКБ 12 В / ' + a.slot + ' А·год (під замовлення)', ah: a.slot });
+    return out;
+  }
+
+  function init() {
+    if (document.getElementById('sc-calc')) return;
+    if (!document.querySelector('[itemtype*="schema.org/Product"]')) return;
+    var cfg = detect();
+    if (!cfg) return;
+    if (cfg.mode === 'ah') {
+      var bats = batteries();
+      if (!bats) { document.addEventListener('sc-akb', init, { once: true }); return; }
+      if (!bats.length) return;
+      cfg.bats = bats;
+    }
+    if (!document.getElementById('sc-calc-style')) {
+      var s = document.createElement('style'); s.id = 'sc-calc-style'; s.textContent = CSS; document.head.appendChild(s);
+    }
+    place(build(cfg, cfg.bats || []));
   }
 
   scIdle(function () { init(); setTimeout(init, 2000); });
