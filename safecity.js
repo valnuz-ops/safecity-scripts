@@ -1527,10 +1527,10 @@ function scAnchor() {
   var FOR_HUB = ['motioncam', 'motion', 'door', 'kptouch', 'kpplus', 'keypad', 'homesiren', 'fire2', 'fire', 'leaks', 'waterstop', 'streetsiren', 'rex2', 'rex'];
 
   var CLS_TEXT = {
-    B: 'Працює з будь-яким хабом Ajax: Hub, Hub Plus, Hub 2, Hub 2 Plus, Hub BP. Через ретранслятор — ReX або ReX 2.',
-    P: 'Працює з Hub Plus, Hub 2, Hub 2 Plus і Hub BP. З Hub першої версії (2G) не працює. Через ретранслятор — ReX або ReX 2.',
-    G: 'Працює з Hub 2, Hub 2 Plus і Hub BP. З Hub і Hub Plus не працює.',
-    C: 'Працює з Hub 2, Hub 2 Plus і Hub BP. З Hub і Hub Plus не працює. Через ретранслятор — лише ReX 2 (ReX фото не передає).'
+    B: 'Працює з будь-яким хабом Ajax: Hub 2, Hub 2 Plus, Hub BP, Hub Plus і Hub. Через ретранслятор — ReX або ReX 2.',
+    P: 'Працює з Hub 2, Hub 2 Plus, Hub BP і Hub Plus. Не підходить лише найперша модель — Ajax Hub (без цифри 2 і без Plus у назві). Через ретранслятор — ReX або ReX 2.',
+    G: 'Працює з Hub 2, Hub 2 Plus і Hub BP. Зі старими моделями Ajax Hub і Hub Plus не працює.',
+    C: 'Працює з Hub 2, Hub 2 Plus і Hub BP. Зі старими моделями Ajax Hub і Hub Plus не працює. Через ретранслятор — лише ReX 2 (ReX фото не передає).'
   };
 
   var CSS =
@@ -1608,7 +1608,7 @@ function scAnchor() {
       var h = HUBS[cfg.hub];
       head = 'Сумісні датчики і пристрої';
       text = 'Пристрої Ajax, які працюють з ' + h.name + ' (за таблицею сумісності Ajax).';
-      if (cfg.hub === 'hub') warn = 'Hub першої версії не підтримує KeyPad Plus, WaterStop, LightSwitch, FireProtect 2 SB, датчики з фотоверифікацією MotionCam, KeyPad TouchScreen і LifeQuality. Для них потрібен Hub 2 або Hub 2 Plus.';
+      if (cfg.hub === 'hub') warn = 'Ця модель Hub (перше покоління) не підтримує KeyPad Plus, WaterStop, LightSwitch, FireProtect 2 SB, датчики з фотоверифікацією MotionCam, KeyPad TouchScreen і LifeQuality. Для них потрібен Hub 2 або Hub 2 Plus.';
       if (cfg.hub === 'hubplus') warn = 'Hub Plus не підтримує датчики з фотоверифікацією MotionCam, KeyPad TouchScreen, KeyPad Outdoor і LifeQuality. Для них потрібен Hub 2 або Hub 2 Plus.';
       FOR_HUB.forEach(function (k) {
         var d = DEV.filter(function (x) { return x.k === k; })[0];
