@@ -2244,46 +2244,71 @@ function scAnchor() {
 
 
 /* =====================================================================
- * 15. Картка товару → плашка довіри під «Купити»:
- *     оплата при отриманні · гарантія (з характеристик товару) · обмін і повернення 14 днів
+ * 15. Картка товару → плашка довіри під «Купити» (картки як у TRINITI):
+ *     Оплата при отриманні · Гарантія N місяців (з характеристик товару) · Повернення 14 днів
  * ===================================================================== */
 (function () {
   'use strict';
 
-  var CSS =
-    '#sc-trust{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0 0;padding:0;list-style:none;font-size:13px;line-height:1.35;color:#3d4a57}' +
-    '#sc-trust li{display:inline-flex;align-items:center;gap:5px;margin:0;padding:0}' +
-    '#sc-trust li:before{content:none}' +
-    '#sc-trust .sct-i{font-size:14px;line-height:1}';
+  var GREEN = '#38ab87';
+  var ICONS = {
+    pay: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#38ab87" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><circle cx="12" cy="12.5" r="2.6"/><path d="M6 9.5v.01M18 15.5v.01"/></svg>',
+    warranty: '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="#f59e0b"/><path d="M8.3 12.2l2.5 2.5 4.9-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    ret: '<svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="11" fill="#3b82f6"/><path d="M16.6 9.4A5 5 0 0 0 7.5 9.8M7.4 14.6a5 5 0 0 0 9.1-.4" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/><path d="M16.9 6.8v2.9H14M7.1 17.2v-2.9H10" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  };
 
-  // «Гарантія: 24 міс.» / «12 місяців» / «1 рік» → «Гарантія 24 міс.»
-  function warranty() {
+  var CSS =
+    '#sc-trust{display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr));gap:8px;margin:12px 0 0;padding:0;list-style:none;box-sizing:border-box}' +
+    '#sc-trust li{margin:0;padding:10px;border:1px solid #e3e8ee;border-radius:10px;background:#fff;box-sizing:border-box;min-width:0}' +
+    '#sc-trust li:before{content:none}' +
+    '#sc-trust a{display:block;color:inherit;text-decoration:none}' +
+    '#sc-trust .sct-i{display:block;width:22px;height:22px;margin-bottom:6px}' +
+    '#sc-trust .sct-i svg{display:block}' +
+    '#sc-trust .sct-t{display:block;font-size:14px;font-weight:600;color:#1d2733;line-height:1.25;overflow-wrap:break-word}' +
+    '#sc-trust .sct-v{display:block;font-size:13px;color:' + GREEN + ';line-height:1.3;margin-top:2px;overflow-wrap:break-word}' +
+    // широка колонка (десктоп) — іконка зліва, як у TRINITI
+    '#sc-trust.wide li{display:flex}#sc-trust.wide a{display:flex;align-items:center;gap:10px;width:100%}' +
+    '#sc-trust.wide .sct-i{flex:0 0 22px;margin:0}' +
+    '#sc-trust li:hover{border-color:#cfd8e2}';
+
+  // «24 міс.» / «12 місяців» / «1 рік» → 24 / 12 / 12
+  function warrantyMonths() {
     var v = scGet(scFeatures(), /^(гарантія|гарантия|гарантійний термін|гарантийный срок)/);
     var m = v.replace(',', '.').match(/(\d+(?:\.\d+)?)\s*(міс|мес|m|рік|роки|років|год|лет|р\.?)/i);
-    if (!m) return '';
+    if (!m) return 0;
     var n = parseFloat(m[1]);
     if (/^(рік|роки|років|год|лет|р)/i.test(m[2])) n = n * 12;
-    return n >= 1 && n <= 120 ? 'Гарантія ' + Math.round(n) + ' міс.' : '';
+    return n >= 1 && n <= 120 ? Math.round(n) : 0;
+  }
+  function months(n) {
+    var d = n % 10, dd = n % 100;
+    return n + ' ' + (d === 1 && dd !== 11 ? 'місяць' : d >= 2 && d <= 4 && (dd < 12 || dd > 14) ? 'місяці' : 'місяців');
   }
 
   function init() {
     if (document.getElementById('sc-trust')) return;
     var anchor = scAnchor();
     if (!anchor) return;
-    var items = [['💵', 'Оплата при отриманні']];
-    var w = warranty();
-    if (w) items.push(['🛡️', w]);
-    items.push(['↩️', 'Обмін і повернення 14 днів']);
+    var items = [{ i: 'pay', t: 'Оплата', v: 'при отриманні', href: '/oplata-i-dostavka/' }];
+    var w = warrantyMonths();
+    if (w) items.push({ i: 'warranty', t: 'Гарантія', v: months(w) });
+    items.push({ i: 'ret', t: 'Повернення', v: 'протягом 14 днів', href: '/obmin-ta-povernennya/' });
 
     if (!document.getElementById('sc-trust-style')) {
       var s = document.createElement('style'); s.id = 'sc-trust-style'; s.textContent = CSS; document.head.appendChild(s);
     }
+    var lang = /^\/ru\//.test(location.pathname) ? '/ru' : '';
     var ul = document.createElement('ul');
     ul.id = 'sc-trust';
+    ul.style.setProperty('--n', items.length);
     items.forEach(function (it) {
       var li = document.createElement('li');
-      li.innerHTML = '<span class="sct-i" aria-hidden="true"></span><span></span>';
-      li.firstChild.textContent = it[0]; li.lastChild.textContent = it[1];
+      var inner = document.createElement(it.href ? 'a' : 'div');
+      if (it.href) { inner.href = lang + it.href; inner.target = '_blank'; inner.rel = 'noopener'; }
+      inner.innerHTML = '<span class="sct-i" aria-hidden="true">' + ICONS[it.i] + '</span><span><span class="sct-t"></span><span class="sct-v"></span></span>';
+      inner.querySelector('.sct-t').textContent = it.t;
+      inner.querySelector('.sct-v').textContent = it.v;
+      li.appendChild(inner);
       ul.appendChild(li);
     });
 
@@ -2300,7 +2325,9 @@ function scAnchor() {
     // на десктопі блок кнопок має великий нижній відступ — підтягуємо плашку ближче до кнопок
     var prev = ul.previousElementSibling;
     var mb = prev ? parseFloat(getComputedStyle(prev).marginBottom) || 0 : 0;
-    if (mb > 16) ul.style.marginTop = (10 - mb) + 'px';
+    if (mb > 16) ul.style.marginTop = (12 - mb) + 'px';
+    // кожна картка ширша за 150 px — іконку ставимо зліва
+    if (ul.offsetWidth / items.length >= 150) ul.className = 'wide';
   }
 
   scIdle(function () { init(); setTimeout(init, 2000); });
