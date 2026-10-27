@@ -1925,7 +1925,8 @@ function scAnchor() {
   }
   function tier(table, kg) { for (var i = 0; i < table.length; i++) if (kg <= table[i][0]) return table[i][1]; return 0; }
 
-  var CSS = '#sc-co-dlv-aside{margin:-2px 0 10px;padding:0 24px;text-align:right;font-size:13px;color:#5f6b78}' +
+  var CSS = '#sc-co-dlv-aside{margin:-2px 0 10px;padding:0 24px;text-align:right;font-size:13px;color:#5f6b78;list-style:none}' +
+    'li#sc-co-dlv-aside{margin-top:-14px;padding-right:0}' +
     '#sc-co-dlv{box-sizing:border-box;margin:8px 0 4px;padding:9px 12px;border-radius:8px;font-size:14px;line-height:1.4;background:#f3f7fb;border:1px solid #dbe5ef;color:#3d4a57}';
 
   var lastKey = '', lastText = '', lastShort = '', busy = false;
@@ -1936,7 +1937,7 @@ function scAnchor() {
     if (!short || !row || row.offsetParent === null) { if (old) old.remove(); return; }
     if (!old || old.previousElementSibling !== row) {
       if (old) old.remove();
-      old = document.createElement('div'); old.id = 'sc-co-dlv-aside';
+      old = document.createElement(row.tagName === 'LI' ? 'li' : 'div'); old.id = 'sc-co-dlv-aside';   // мобільна: список <ul>
       row.parentNode.insertBefore(old, row.nextSibling);
     }
     if (old.textContent !== short) old.textContent = short;
