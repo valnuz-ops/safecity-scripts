@@ -2292,7 +2292,7 @@ function scAnchor() {
     var items = [{ i: 'pay', t: 'Оплата', v: 'при отриманні', href: '/oplata-i-dostavka/' }];
     var w = warrantyMonths();
     if (w) items.push({ i: 'warranty', t: 'Гарантія', v: months(w) });
-    items.push({ i: 'ret', t: 'Повернення', v: 'протягом 14 днів', href: '/obmin-ta-povernennya/' });
+    items.push({ i: 'ret', t: 'Повернення', v: '14 днів', href: '/obmin-ta-povernennya/' });
 
     if (!document.getElementById('sc-trust-style')) {
       var s = document.createElement('style'); s.id = 'sc-trust-style'; s.textContent = CSS; document.head.appendChild(s);
