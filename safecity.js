@@ -3,6 +3,15 @@
  * <script src="https://cdn.jsdelivr.net/gh/valnuz-ops/safecity-scripts@main/safecity.js" defer></script>
  */
 
+/* ===== Вимикач для перевірки швидкості =====
+ * ?sc_off=1 у будь-якій адресі — скрипт не працює до кінця сеансу вкладки; ?sc_off=0 — увімкнути знову */
+(function () {
+  var m = location.search.match(/[?&]sc_off=([01])/);
+  try { if (m) sessionStorage.setItem('sc_off', m[1]); } catch (e) {}
+  var off = m ? m[1] === '1' : (function () { try { return sessionStorage.getItem('sc_off') === '1'; } catch (e) { return false; } })();
+  if (off) throw new Error('safecity.js вимкнено (sc_off=1)');
+})();
+
 /* ===== Загальні налаштування ===== */
 var SC_TG_BOT = 'clienttext_bot'; // username Telegram-бота БЕЗ @
 var SC_PHONE  = '380503941500';     // номер для Viber і WhatsApp (лише цифри, з 380)
