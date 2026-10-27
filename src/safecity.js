@@ -2333,3 +2333,56 @@ function scAnchor() {
 
   scIdle(function () { init(); setTimeout(init, 2000); });
 })();
+
+
+/* =====================================================================
+ * 16. Товар не в наявності → «Повідомити в Telegram, коли з'явиться»
+ *     Клієнтський бот (start=stock_<артикул>) підписує клієнта і сам пише йому,
+ *     щойно товар з'явиться у фіді TRINITI; менеджеру — сповіщення про попит.
+ * ===================================================================== */
+(function () {
+  'use strict';
+
+  var CSS =
+    '#sc-stock{display:flex;align-items:center;gap:10px;box-sizing:border-box;width:100%;margin:12px 0 0;padding:10px 12px;' +
+    'border:1px solid #cfe3f5;border-radius:10px;background:#f4f9fe;color:#1d2733;text-decoration:none;font-size:14px;line-height:1.35}' +
+    '#sc-stock:hover{border-color:#9fcbef}' +
+    '#sc-stock svg{flex:0 0 22px}' +
+    '#sc-stock .scs-s{display:block;font-size:12.5px;color:#5f6b78;margin-top:1px}';
+  var TG = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#2AABEE"/>' +
+    '<path d="M5.4 11.7l11.2-4.3c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.1-1.4 1.3c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6.1-.9z" fill="#fff"/></svg>';
+
+  function init() {
+    if (document.getElementById('sc-stock') || typeof SC_CLIENT_BOT === 'undefined' || !SC_CLIENT_BOT) return;
+    var anchor = scAnchor();
+    if (!anchor) return;
+    var av = document.querySelector('[itemprop="availability"]');
+    var href = av ? av.getAttribute('href') || av.getAttribute('content') || '' : '';
+    if (!/OutOfStock|SoldOut|Discontinued/i.test(href)) return;   // лише «Немає в наявності»
+    var art = ((document.body.innerText || '').match(/Артикул:?\s*([\w-]+)/) || [])[1] || '';
+    art = art.replace(/[^\w-]/g, '').slice(0, 50);
+    if (!art) return;
+
+    if (!document.getElementById('sc-stock-style')) {
+      var s = document.createElement('style'); s.id = 'sc-stock-style'; s.textContent = CSS; document.head.appendChild(s);
+    }
+    var a = document.createElement('a');
+    a.id = 'sc-stock';
+    a.href = 'https://t.me/' + SC_CLIENT_BOT + '?start=stock_' + art;
+    a.target = '_blank'; a.rel = 'noopener';
+    a.innerHTML = TG + '<span><b>Повідомити в Telegram, коли з’явиться</b>' +
+      '<span class="scs-s">Без e-mail і телефону — бот напише сам, щойно товар надійде</span></span>';
+    anchor.parentNode.insertBefore(a, anchor.nextSibling);
+
+    // відступи: плашка довіри (блок 15) могла підтягнутися до кнопок від’ємним відступом — тепер він у нас
+    var trust = document.getElementById('sc-trust');
+    if (trust && trust.previousElementSibling === a && trust.style.marginTop) {
+      a.style.marginTop = trust.style.marginTop; trust.style.marginTop = '';
+    } else {
+      var mb = parseFloat(getComputedStyle(anchor).marginBottom) || 0;
+      if (mb > 16) a.style.marginTop = (12 - mb) + 'px';
+    }
+  }
+
+  scIdle(function () { init(); setTimeout(init, 2000); });
+})();
