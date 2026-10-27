@@ -1577,14 +1577,15 @@ function scAnchor() {
 
   function pickUrl(u, dark) { return langPrefix + (dark ? u.b : u.w); }
 
-  function load(item, dark) {
+  // Спершу версія того ж кольору, що й товар; якщо її нема в наявності — іншого кольору
+  function load(item, dark, retry) {
     var url = pickUrl(item.url, dark);
     return scProduct(url).then(function (p) {
       if (!p || !scInStock(p.avail)) {
-        if (dark && item.url.b !== item.url.w) return load(item, false); // чорної нема — пробуємо білу
+        if (!retry && item.url.b !== item.url.w) return load(item, !dark, true);
         return null;
       }
-      return { url: url, name: p.name, price: p.price, img: p.img };
+      return { url: url, name: p.name, price: p.price, img: p.img, hub: !!item.hub };
     });
   }
 
@@ -1594,7 +1595,10 @@ function scAnchor() {
       if (found.length >= MAX || i >= items.length) return cb(found);
       var batch = items.slice(i, i + 4); i += 4;
       Promise.all(batch.map(function (it) { return load(it, dark); })).then(function (res) {
-        res.forEach(function (p) { if (p && found.length < MAX) found.push(p); });
+        res.forEach(function (p) {
+          var hubs = found.filter(function (x) { return x.hub; }).length;
+          if (p && found.length < MAX && !(p.hub && hubs >= 4)) found.push(p);
+        });
         next();
       });
     })();
@@ -1627,9 +1631,8 @@ function scAnchor() {
       HUB_ORDER.forEach(function (k) {
         var hb = HUBS[k];
         var ok = d.isRex2 ? hb.cls.indexOf('C') !== -1 : hb.cls.indexOf(d.cls) !== -1;
-        if (ok) items.push({ url: hb.url });
+        if (ok) items.push({ url: hb.url, hub: true });   // показуємо до 4 хабів у наявності
       });
-      items = items.slice(0, 4);
       if (d.reader) items = items.concat(ACCESS);
     }
 
