@@ -13,7 +13,8 @@
 })();
 
 /* ===== Загальні налаштування ===== */
-var SC_TG_BOT = 'clienttext_bot'; // username Telegram-бота БЕЗ @
+var SC_TG_BOT = 'clienttext_bot'; // username Telegram-бота БЕЗ @ (підтвердження замовлень)
+var SC_CLIENT_BOT = '';            // username клієнтського бота (наявність, менеджер) — для «Знайшли дешевше?»; порожньо = без кнопки Telegram
 var SC_PHONE  = '380503941500';     // номер для Viber і WhatsApp (лише цифри, з 380)
 
 /* ===== Спільні помічники (швидкість) ===== */
@@ -2189,12 +2190,12 @@ function scAnchor() {
       '<div class="scc-box" hidden>' +
         '<div class="scc-t">Надішліть посилання на пропозицію — перевіримо й запропонуємо ціну.</div>' +
         '<div class="scc-b">' +
-          '<a target="_blank" rel="noopener" style="background:#2AABEE" data-m="tg">✈️ Telegram</a>' +
+          (SC_CLIENT_BOT ? '<a target="_blank" rel="noopener" style="background:#2AABEE" data-m="tg">✈️ Telegram</a>' : '') +
           '<a style="background:#7360F2" data-m="viber">📞 Viber</a>' +
           '<a target="_blank" rel="noopener" style="background:#25D366" data-m="wa">💬 WhatsApp</a>' +
         '</div>' +
       '</div>';
-    box.querySelector('[data-m="tg"]').href = 'https://t.me/' + SC_TG_BOT + '?start=cheaper_' + (art || 'x').replace(/[^\w-]/g, '').slice(0, 50);
+    if (SC_CLIENT_BOT) box.querySelector('[data-m="tg"]').href = 'https://t.me/' + SC_CLIENT_BOT + '?start=cheaper_' + (art || 'x').replace(/[^\w-]/g, '').slice(0, 50);
     box.querySelector('[data-m="viber"]').href = 'viber://chat?number=%2B' + SC_PHONE + '&draft=' + encodeURIComponent(msg);
     box.querySelector('[data-m="wa"]').href = 'https://wa.me/' + SC_PHONE + '?text=' + encodeURIComponent(msg);
     box.querySelector('.scc-open').addEventListener('click', function () {
