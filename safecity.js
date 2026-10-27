@@ -19,8 +19,11 @@ function scIdle(fn) {
 
 // Дані товару за URL (назва, наявність, ціна, фото). Кешуються в браузері на 1 год,
 // тож повторні перегляди карток не завантажують сторінки товарів знову.
+// Швидкість: сторінку читаємо потоком і обриваємо, щойно дійшли до наявності
+// (мобільна ≈ ¼ сторінки, десктоп ≈ ½); одночасно не більше 2 завантажень;
+// після «Купити» / відкриття кошика черга чекає 4 с, щоб кошик Хорошопа вантажився першим.
 var scProduct = (function () {
-  var TTL = 3600 * 1000, mem = {};
+  var TTL = 3600 * 1000, mem = {}, MAXC = 2, active = 0, queue = [], holdUntil = 0;
   function read(k) {
     try {
       var v = JSON.parse(localStorage.getItem('scp2:' + k));
@@ -31,42 +34,61 @@ var scProduct = (function () {
   function write(k, d) {
     try { localStorage.setItem('scp2:' + k, JSON.stringify({ t: Date.now(), d: d })); } catch (e) {}
   }
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest && e.target.closest('.j-buy-button-add, [class*="buy"], [href*="cart"], .j-cart, [data-cart]');
+    if (t) holdUntil = Date.now() + 4000;
+  }, true);
+  function pump() {
+    var wait = holdUntil - Date.now();
+    if (wait > 0) { setTimeout(pump, wait + 50); return; }
+    while (active < MAXC && queue.length) { active++; queue.shift()(); }
+  }
+  function decode(s) {
+    var t = document.createElement('textarea'); t.innerHTML = s; return t.value;
+  }
+  // Читаємо HTML до мітки наявності (+ запас), решту не завантажуємо
+  function readHead(url) {
+    var ctrl = window.AbortController ? new AbortController() : null;
+    return fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/html' }, signal: ctrl && ctrl.signal }).then(function (r) {
+      if (!r.body || !r.body.getReader || !window.TextDecoder) return r.text();
+      var reader = r.body.getReader(), dec = new TextDecoder('utf-8'), html = '';
+      return (function step() {
+        return reader.read().then(function (c) {
+          if (c.done) return html;
+          html += dec.decode(c.value, { stream: true });
+          var i = html.indexOf('itemprop="availability"');
+          if (i !== -1 && html.length > i + 200) { try { ctrl && ctrl.abort(); reader.cancel(); } catch (e) {} return html; }
+          return step();
+        });
+      })();
+    });
+  }
+  function parse(html) {
+    var m, name = '';
+    if ((m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i))) name = decode(m[1].replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+    if (!name && (m = html.match(/property="og:title"\s+content="([^"]*)"/i))) name = decode(m[1]).trim();
+    if (!name) return null;
+    var av = (html.match(/itemprop="availability"\s+(?:href|content)="([^"]*)"/i) || [])[1] || '';
+    var avail = /InStock/i.test(av) ? 'в наявності' : /Limited/i.test(av) ? 'закінчується'
+              : /OutOfStock|Discontinued/i.test(av) ? 'немає' : /PreOrder|BackOrder/i.test(av) ? 'під замовлення' : '';
+    var pn = parseFloat(((html.match(/itemprop="price"\s+content="([^"]*)"/i) || [])[1] || '').replace(',', '.'));
+    var img = (html.match(/property="og:image"\s+content="([^"]*)"/i) || [])[1] || '';
+    return { name: name, avail: avail, price: pn ? Math.round(pn).toLocaleString('uk-UA') + ' грн' : '', img: img };
+  }
   return function (url) {
     if (mem[url]) return mem[url];
     var cached = read(url);
     if (cached) return (mem[url] = Promise.resolve(cached));
-    return (mem[url] = fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/html' } })
-      .then(function (r) { return r.text(); })
-      .then(function (html) {
-        var d = new DOMParser().parseFromString(html, 'text/html');
-        var name = ((d.querySelector('h1') || {}).textContent ||
-                    (d.querySelector('meta[property="og:title"]') || {}).content || '').trim();
-        if (!name) return null;
-        // Наявність: текст із десктопу, інакше schema.org (є і в мобільній версії)
-        var avail = ((d.querySelector('.product-header__availability') || {}).textContent || '').trim();
-        if (!avail) {
-          var a = d.querySelector('[itemprop="availability"]');
-          var v = a ? (a.getAttribute('href') || a.getAttribute('content') || a.textContent || '') : '';
-          avail = /InStock/i.test(v) ? 'в наявності' : /Limited/i.test(v) ? 'закінчується'
-                : /OutOfStock|Discontinued/i.test(v) ? 'немає' : /PreOrder|BackOrder/i.test(v) ? 'під замовлення' : '';
-        }
-        var price = ((d.querySelector('.product-price__item') || {}).textContent || '').trim().replace(/\s+/g, ' ').replace(/\/шт/, '');
-        if (!price) {
-          var pe = d.querySelector('[itemprop="price"]');
-          var pv = pe ? (pe.getAttribute('content') || pe.textContent || '') : '';
-          var pn = parseFloat(String(pv).replace(/[^\d.,]/g, '').replace(',', '.'));
-          if (pn) price = Math.round(pn).toLocaleString('uk-UA') + ' грн';
-        }
-        var res = {
-          name: name,
-          avail: avail,
-          price: price,
-          img: (d.querySelector('meta[property="og:image"]') || {}).content || ''
-        };
-        write(url, res);
-        return res;
-      })
-      .catch(function () { return null; }));
+    return (mem[url] = new Promise(function (resolve) {
+      queue.push(function () {
+        readHead(url).then(function (html) {
+          var res = parse(html);
+          if (res) write(url, res);
+          resolve(res);
+        }).catch(function () { resolve(null); }).then(function () { active--; pump(); });
+      });
+      pump();
+    }));
   };
 })();
 
