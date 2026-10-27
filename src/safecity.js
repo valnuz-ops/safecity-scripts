@@ -1763,7 +1763,7 @@ function scAnchor() {
   var COD = { pct: 0.02, fix: 20, npPct: 0.01, npFix: 10 };
   var PAY_HINTS = {
     '15': 'Оплата при отриманні. Нова пошта бере комісію за післяплату: 2% + 20 грн{sum} (карткою NovaPay у застосунку — 1% + 10 грн).',
-    '22': 'Оплата карткою одразу після оформлення — без комісії за післяплату{save}. Посилку просто забираєте у відділенні.',
+    '22': 'Оплата карткою одразу після оформлення — без комісії за післяплату{save}. Залишиться лише отримати посилку.',
     '12': 'Надішлемо рахунок для оплати. Вкажіть, будь ласка, у коментарі до замовлення назву компанії та ЄДРПОУ (для ФОП — ІПН). Відправляємо після надходження коштів на рахунок.'
   };
   function orderSum() {
@@ -1777,7 +1777,9 @@ function scAnchor() {
     '.sc-co-note{box-sizing:border-box;margin:8px 0 4px;padding:9px 12px;border-radius:8px;font-size:14px;line-height:1.4}' +
     '.sc-co-note.warn{background:#fff4e2;border:1px solid #f3d29b;color:#7a4306}' +
     '.sc-co-note.info{background:#f3f7fb;border:1px solid #dbe5ef;color:#3d4a57}' +
-    '#sc-co-ship{background:#f1f8f1;border:1px solid #cfe5cf;color:#1d2733}' +
+    '#sc-co-ship{background:#f1f8f1;border:1px solid #cfe5cf;color:#1d2733;margin-bottom:12px}' +
+    '#sc-co-total{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:4px 0 12px;font-size:15px;color:#1d2733}' +
+    '#sc-co-total b{font-size:18px;white-space:nowrap}#sc-co-total .sub{display:block;font-size:12.5px;color:#5f6b78;margin-top:2px}' +
     '#sc-co-ship .sub{font-size:13px;color:#4c5a67;margin-top:2px}';
 
   function el(id, cls, after) {
@@ -1905,8 +1907,41 @@ function scAnchor() {
     if (n.getAttribute('data-t') !== html) { n.innerHTML = html; n.setAttribute('data-t', html); }
   }
 
+  /* ---- 5. Мобільна: підсумок над кнопкою «Оформити» (кошик на мобільній — аж під кнопкою) ---- */
+  function totalNote() {
+    var old = document.getElementById('sc-co-total');
+    var ship = document.getElementById('sc-co-ship');
+    var btn = [].filter.call(document.querySelectorAll('#checkout-container button'), function (x) {
+      return x.offsetParent !== null && /оформити|підтвердити/i.test(x.textContent);
+    })[0];
+    var foot = btn && (btn.closest('.form-item') || btn);
+    var sum = orderSum();
+    if (window.innerWidth >= 768 || !foot || !sum || document.querySelector('#checkout-container .checkout-footer')) { if (old) old.remove(); return; }
+    var dlv = window.scDlvPrice || 0;
+    var html = '<span>Разом за товари' + (dlv ? '<span class="sub">+ доставка ≈ ' + dlv + ' грн — при отриманні</span>' : '') + '</span>' +
+      '<b>' + Math.round(sum).toLocaleString('uk-UA') + ' грн</b>';
+    if (!old) { old = document.createElement('div'); old.id = 'sc-co-total'; }
+    if (old.nextElementSibling !== foot) foot.parentNode.insertBefore(old, foot);   // після плашки відправки, перед кнопкою
+    if (old.getAttribute('data-t') !== html) { old.innerHTML = html; old.setAttribute('data-t', html); }
+  }
+
+  /* ---- 6. Поштомат: підпис поля «Відділення» → «Поштомат» ---- */
+  function labelNote() {
+    var wh = sel('select[name^="Delivery[delivery_method]"]');
+    var item = wh && wh.closest('.form-item, .form-row, .checkout-step__item, .j-delivery-method');
+    if (!item) return;
+    var post = POSTOMAT.test(optText(sel('select[name="Delivery[delivery_type]"]')));
+    [].forEach.call(item.querySelectorAll('label, div, span'), function (e) {
+      if (e.children.length) return;
+      var t = e.textContent.trim();
+      if (post && t === 'Відділення') e.textContent = 'Поштомат';
+      else if (!post && t === 'Поштомат') e.textContent = 'Відділення';
+    });
+  }
+
   function tick() {
     try { batteryNote(); payNote(); checkStock(); shipNote(); } catch (e) {}
+    try { totalNote(); labelNote(); } catch (e) {}
   }
 
   function start() {
@@ -1938,6 +1973,7 @@ function scAnchor() {
     ukraine: [[2, 90], [10, 135], [30, 200]],   // Київ → інші міста
     village: 30,                  // доставка в селище / село
     postomat: 10,                 // доставка в поштомат
+    courier: 60,                  // адресна доставка кур'єром (тарифи НП 2026: +60 грн до тарифу відділення)
     insFree: 500, insPct: 0.005,  // оголошена вартість: до 500 грн включно — без доплати, далі 0,5%
     extra: 15,                    // службова надбавка (не показується окремо)
     roundTo: 5
@@ -2030,21 +2066,24 @@ function scAnchor() {
     var key = JSON.stringify([list, city, sum, typeText, whText]);
     if (busy) return;
     if (key === lastKey) return render(lastText, lastShort);   // Хорошоп іноді перемальовує блок доставки
-    if (!list.length || !city || /кур/i.test(typeText) || sum >= CFG.freeFrom) { lastKey = key; lastText = ''; return render(''); }
+    if (!list.length || !city || sum >= CFG.freeFrom) { lastKey = key; lastText = ''; window.scDlvPrice = 0; return render(''); }
     busy = true;
     Promise.all(list.map(function (i) { return weightOf(i.url); })).then(function (ws) {
       busy = false; lastKey = key;
       var kg = 0;
       list.forEach(function (it, n) { kg += (ws[n] || CFG.defaultKg) * it.qty; });
-      if (kg > CFG.maxKg) return render(lastText = 'Доставка Новою поштою: вартість для посилки понад 30 кг уточнимо після оформлення.', lastShort = 'вартість уточнимо');
+      if (kg > CFG.maxKg) { window.scDlvPrice = 0; return render(lastText = 'Доставка Новою поштою: вартість для посилки понад 30 кг уточнимо після оформлення.', lastShort = 'вартість уточнимо'); }
       var local = /^м\.\s*Київ$/i.test(city);
       var price = tier(local ? CFG.local : CFG.ukraine, kg);
       if (!local && /^(с\.|смт|сел\.|с-ще|селище)/i.test(city)) price += CFG.village;
-      if (/поштомат/i.test(typeText) || /поштомат/i.test(whText)) price += CFG.postomat;
+      var courier = /кур/i.test(typeText);
+      if (courier) price += CFG.courier;
+      else if (/поштомат/i.test(typeText) || /поштомат/i.test(whText)) price += CFG.postomat;
       if (sum > CFG.insFree) price += sum * CFG.insPct;
       price += CFG.extra;
       price = Math.round(price / CFG.roundTo) * CFG.roundTo;   // до найближчих 5 грн
-      render(lastText = 'Доставка Новою поштою — орієнтовно ' + price + ' грн, оплачується при отриманні за тарифами перевізника.', lastShort = 'орієнтовно ≈ ' + price + ' грн');
+      window.scDlvPrice = price;
+      render(lastText = (courier ? 'Доставка кур’єром Нової пошти' : 'Доставка Новою поштою') + ' — орієнтовно ' + price + ' грн, оплачується при отриманні за тарифами перевізника.', lastShort = 'орієнтовно ≈ ' + price + ' грн');
     }, function () { busy = false; });
   }
 
@@ -2123,7 +2162,7 @@ function scAnchor() {
 
 /* =====================================================================
  * 13. Мобільна картка → закріплена внизу панель «ціна + Купити»
- *     З'являється, коли основна кнопка «Купити» пішла за екран
+ *     Видно, поки основної кнопки «Купити» немає на екрані (ще не догорнули або вже прогорнули)
  * ===================================================================== */
 (function () {
   'use strict';
@@ -2166,9 +2205,10 @@ function scAnchor() {
     document.body.classList.add('sc-sticky-pad');
 
     var ticking = false;
-    function check() {                                            // показуємо, коли кнопка пішла вище екрана
+    function check() {                                            // показуємо, поки основної кнопки не видно (вище або нижче екрана)
       ticking = false;
-      var hidden = buy.getBoundingClientRect().bottom < 0;
+      var r = buy.getBoundingClientRect();
+      var hidden = r.bottom < 0 || r.top > window.innerHeight - 8;
       if (bar.classList.contains('on') !== hidden) { bar.classList.toggle('on', hidden); if (hidden) sync(); }
     }
     window.addEventListener('scroll', function () {
@@ -2385,4 +2425,42 @@ function scAnchor() {
   }
 
   scIdle(function () { init(); setTimeout(init, 2000); });
+})();
+
+
+/* =====================================================================
+ * 17. Картка товару → компактніший верх, щоб ціна і «Купити» були на першому екрані
+ *     • назва товару дрібніше (довгі назви на 5–6 рядків)
+ *     • вибір модифікації з одним-єдиним варіантом (напр. «Колір: Білий») ховаємо
+ * ===================================================================== */
+(function () {
+  'use strict';
+
+  var CSS =
+    '.product-header .product-title,.product-header__block .product-title{font-size:26px;line-height:1.3}' +          // десктоп (було 32px)
+    '.product__section--header h1.heading--xl{font-size:20px;line-height:1.3}' +                                         // мобільна (було 24px)
+    '.sc-mod-one{display:none!important}';
+
+  function hideSingle() {
+    [].forEach.call(document.querySelectorAll('.modification'), function (m) {
+      var n = m.querySelectorAll('.modification__button').length;
+      m.classList.toggle('sc-mod-one', n === 1);
+    });
+    [].forEach.call(document.querySelectorAll('.product__block--modifications'), function (b) {   // мобільна обгортка
+      var all = b.querySelectorAll('.modification'), one = b.querySelectorAll('.modification.sc-mod-one');
+      b.classList.toggle('sc-mod-one', all.length > 0 && all.length === one.length);
+    });
+  }
+
+  function init() {
+    if (!document.querySelector('[itemtype*="schema.org/Product"]')) return;
+    if (!document.getElementById('sc-head-style')) {
+      var s = document.createElement('style'); s.id = 'sc-head-style'; s.textContent = CSS; document.head.appendChild(s);
+    }
+    hideSingle();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+  window.addEventListener('load', hideSingle);
 })();
