@@ -27,10 +27,10 @@ function scIdle(fn) {
   else window.addEventListener('load', run);
 }
 
-// Запуск fn, коли елемент наближається до екрана (за margin px) — товари в блоках підбору
+// Запуск fn, коли елемент наближається до екрана (за margin px, типово 400) — товари в блоках підбору
 // завантажуються лише тоді, коли покупець до них гортає (менше трафіку на мобільному)
 function scNear(el, fn, margin) {
-  margin = margin || 800;
+  margin = margin || 400;
   var done = false, t = 0, io = null;
   function go() {
     if (done) return; done = true;
