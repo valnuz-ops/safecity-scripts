@@ -2289,10 +2289,18 @@ function scAnchor() {
 
     // одразу під «Купити» / плашкою відправки (блок 1), перед «Знайшли дешевше?» (блок 14)
     var cheaper = document.getElementById('sc-cheaper');
-    if (cheaper && cheaper.parentNode) { cheaper.parentNode.insertBefore(ul, cheaper); return; }
-    var ship = document.getElementById('ship-info');
-    var after = ship && ship.parentNode === anchor.parentNode ? ship : anchor;
-    after.parentNode.insertBefore(ul, after.nextSibling);
+    if (cheaper && cheaper.parentNode) {
+      cheaper.parentNode.insertBefore(ul, cheaper);
+      cheaper.style.marginTop = '';                                  // відступ тепер у плашки довіри
+    } else {
+      var ship = document.getElementById('ship-info');
+      var after = ship && ship.parentNode === anchor.parentNode ? ship : anchor;
+      after.parentNode.insertBefore(ul, after.nextSibling);
+    }
+    // на десктопі блок кнопок має великий нижній відступ — підтягуємо плашку ближче до кнопок
+    var prev = ul.previousElementSibling;
+    var mb = prev ? parseFloat(getComputedStyle(prev).marginBottom) || 0 : 0;
+    if (mb > 16) ul.style.marginTop = (10 - mb) + 'px';
   }
 
   scIdle(function () { init(); setTimeout(init, 2000); });
