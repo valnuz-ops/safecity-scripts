@@ -324,6 +324,12 @@ function scAnchor() {
 
   // Той самий розрахунок використовує сторінка оформлення (блок 10)
   window.scShipText = buildText;
+  // Орієнтовна дата доставки (YYYY-MM-DD) для Google Customer Reviews (блок 12)
+  window.scDeliveryDate = function () {
+    var r = calculate();
+    var d = addDeliveryDays(r.shipDate, Math.max(CONFIG.deliveryDaysMin, CONFIG.deliveryDaysMax));
+    return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());
+  };
 
   function render(box) {
     var t = buildText();
@@ -2015,4 +2021,65 @@ function scAnchor() {
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
+})();
+
+
+/* =====================================================================
+ * 12. Google Customer Reviews — запрошення залишити відгук після замовлення
+ *     Лише на сторінці «Ваше замовлення отримано», з реальним номером, e-mail і датою.
+ *     Без e-mail Google опитування не надсилає — тоді нічого не показуємо.
+ * ===================================================================== */
+(function () {
+  'use strict';
+  var MERCHANT_ID = 5698392861;
+  var onComplete = /checkout.*complete|complete.*order/i.test(location.pathname);
+
+  // Старий шаблонний код у налаштуваннях Хорошопа викликає renderOptIn на кожній сторінці з «ORDER_ID» —
+  // вимикаємо його, щоб не було помилок (сам шаблон краще видалити зі «Скриптів»)
+  try { window.renderOptIn = function () {}; } catch (e) {}
+  if (!onComplete) return;
+
+  function data() {
+    var main = document.querySelector('main') || document.body;
+    var t = (main.innerText || '').replace(/\u00a0/g, ' ');
+    var num = (t.match(/замовлен\S*\s*(?:№|#)?\s*(\d{3,10})/i) || [])[1];
+    var cut = t.search(/ваше замовлення\s*\n/i);                     // e-mail клієнта — у блоці даних до списку товарів
+    var head = cut > 0 ? t.slice(0, cut) : t;
+    // лише e-mail після підпису «E-mail» і не адреса самого магазину
+    var email = (head.match(/e-?mail\s*:?\s*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/i) || [])[1];
+    if (email && /safecity/i.test(email)) email = '';
+    return num && email ? { order_id: num, email: email } : null;
+  }
+
+  function render() {
+    var d = data();
+    if (!d || !window.gapi || window.__scGcrDone) return;
+    window.__scGcrDone = true;
+    var date = typeof window.scDeliveryDate === 'function' ? window.scDeliveryDate() : '';
+    window.gapi.load('surveyoptin', function () {
+      window.gapi.surveyoptin.render({
+        merchant_id: MERCHANT_ID,
+        order_id: d.order_id,
+        email: d.email,
+        delivery_country: 'UA',
+        estimated_delivery_date: date
+      });
+    });
+  }
+
+  function start() {
+    if (!data()) return;                                   // немає e-mail — Google не зможе надіслати опитування
+    window.scRenderOptIn = render;
+    if (window.gapi && window.gapi.load) return render();
+    var s = document.createElement('script');
+    s.src = 'https://apis.google.com/js/platform.js?onload=scRenderOptIn';
+    s.async = true; s.defer = true;
+    document.head.appendChild(s);
+  }
+
+  var tries = 0;
+  (function wait() {                                        // сторінка може дорендерюватись — чекаємо дані до 20 с
+    if (data() || tries++ > 40) return start();
+    setTimeout(wait, 500);
+  })();
 })();
