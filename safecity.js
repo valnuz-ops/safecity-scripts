@@ -2205,6 +2205,9 @@ function scAnchor() {
     var after = anchor.nextElementSibling && anchor.nextElementSibling.id === 'ship-info' ? anchor.nextElementSibling : anchor;
     if (ship && ship.compareDocumentPosition(anchor) & Node.DOCUMENT_POSITION_PRECEDING) after = ship;
     after.parentNode.insertBefore(box, after.nextSibling);
+    // на десктопі блок кнопок має великий нижній відступ — підтягуємо посилання ближче до кнопок
+    var mb = parseFloat(getComputedStyle(after).marginBottom) || 0;
+    if (mb > 16) box.style.marginTop = (10 - mb) + 'px';
   }
 
   scIdle(function () { init(); setTimeout(init, 2000); });
