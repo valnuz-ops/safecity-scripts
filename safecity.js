@@ -2167,7 +2167,7 @@ function scAnchor() {
     '#sc-cheaper .scc-box{margin-top:8px;padding:12px;border:1px solid #dbe5ef;border-radius:10px;background:#f6f9fc}' +
     '#sc-cheaper .scc-t{color:#3d4a57;margin:0 0 10px;font-size:13px}' +
     '#sc-cheaper .scc-b{display:flex;flex-wrap:wrap;gap:8px}' +
-    '#sc-cheaper .scc-b a{flex:1 1 100px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 10px;border-radius:8px;color:#fff;text-decoration:none;font-weight:600;font-size:14px}';
+    '#sc-cheaper .scc-b a{flex:1 1 0;min-width:0;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 10px;border-radius:8px;color:#fff;text-decoration:none;font-weight:600;font-size:14px}';
 
   function init() {
     if (document.getElementById('sc-cheaper')) return;
