@@ -1925,7 +1925,7 @@ function scAnchor() {
   }
   function tier(table, kg) { for (var i = 0; i < table.length; i++) if (kg <= table[i][0]) return table[i][1]; return 0; }
 
-  var CSS = '#sc-co-dlv-aside{margin:-6px 0 8px;padding:0 24px;text-align:right;font-size:13px;color:#5f6b78}' +
+  var CSS = '#sc-co-dlv-aside{margin:-2px 0 10px;padding:0 24px;text-align:right;font-size:13px;color:#5f6b78}' +
     '#sc-co-dlv{box-sizing:border-box;margin:8px 0 4px;padding:9px 12px;border-radius:8px;font-size:14px;line-height:1.4;background:#f3f7fb;border:1px solid #dbe5ef;color:#3d4a57}';
 
   var lastKey = '', lastText = '', lastShort = '', busy = false;
