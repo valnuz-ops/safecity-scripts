@@ -2261,13 +2261,13 @@ function scAnchor() {
     '#sc-trust{display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr));gap:8px;margin:12px 0 0;padding:0;list-style:none;box-sizing:border-box}' +
     '#sc-trust li{margin:0;padding:10px;border:1px solid #e3e8ee;border-radius:10px;background:#fff;box-sizing:border-box;min-width:0}' +
     '#sc-trust li:before{content:none}' +
-    '#sc-trust a{display:block;color:inherit;text-decoration:none}' +
+    '#sc-trust .sct-in{display:block;color:inherit;text-decoration:none}' +
     '#sc-trust .sct-i{display:block;width:22px;height:22px;margin-bottom:6px}' +
     '#sc-trust .sct-i svg{display:block}' +
     '#sc-trust .sct-t{display:block;font-size:14px;font-weight:600;color:#1d2733;line-height:1.25;overflow-wrap:break-word}' +
     '#sc-trust .sct-v{display:block;font-size:13px;color:' + GREEN + ';line-height:1.3;margin-top:2px;overflow-wrap:break-word}' +
     // широка колонка (десктоп) — іконка зліва, як у TRINITI
-    '#sc-trust.wide li{display:flex}#sc-trust.wide a{display:flex;align-items:center;gap:10px;width:100%}' +
+    '#sc-trust.wide li{display:flex}#sc-trust.wide .sct-in{display:flex;align-items:center;gap:10px;width:100%}' +
     '#sc-trust.wide .sct-i{flex:0 0 22px;margin:0}' +
     '#sc-trust li:hover{border-color:#cfd8e2}';
 
@@ -2304,6 +2304,7 @@ function scAnchor() {
     items.forEach(function (it) {
       var li = document.createElement('li');
       var inner = document.createElement(it.href ? 'a' : 'div');
+      inner.className = 'sct-in';
       if (it.href) { inner.href = lang + it.href; inner.target = '_blank'; inner.rel = 'noopener'; }
       inner.innerHTML = '<span class="sct-i" aria-hidden="true">' + ICONS[it.i] + '</span><span><span class="sct-t"></span><span class="sct-v"></span></span>';
       inner.querySelector('.sct-t').textContent = it.t;
