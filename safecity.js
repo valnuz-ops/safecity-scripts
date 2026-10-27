@@ -1925,10 +1925,25 @@ function scAnchor() {
   }
   function tier(table, kg) { for (var i = 0; i < table.length; i++) if (kg <= table[i][0]) return table[i][1]; return 0; }
 
-  var CSS = '#sc-co-dlv{box-sizing:border-box;margin:8px 0 4px;padding:9px 12px;border-radius:8px;font-size:14px;line-height:1.4;background:#f3f7fb;border:1px solid #dbe5ef;color:#3d4a57}';
+  var CSS = '#sc-co-dlv-aside{margin:-6px 0 8px;padding:0 24px;text-align:right;font-size:13px;color:#5f6b78}' +
+    '#sc-co-dlv{box-sizing:border-box;margin:8px 0 4px;padding:9px 12px;border-radius:8px;font-size:14px;line-height:1.4;background:#f3f7fb;border:1px solid #dbe5ef;color:#3d4a57}';
 
-  var lastKey = '', lastText = '', busy = false;
-  function render(text) {
+  var lastKey = '', lastText = '', lastShort = '', busy = false;
+  // Рядок «Доставка» у блоці «Ваше замовлення» праворуч: додаємо орієнтовну суму під ним
+  function renderAside(short) {
+    var old = document.getElementById('sc-co-dlv-aside');
+    var row = document.querySelector('#cart .j-delivery-commission');
+    if (!short || !row || row.offsetParent === null) { if (old) old.remove(); return; }
+    if (!old || old.previousElementSibling !== row) {
+      if (old) old.remove();
+      old = document.createElement('div'); old.id = 'sc-co-dlv-aside';
+      row.parentNode.insertBefore(old, row.nextSibling);
+    }
+    if (old.textContent !== short) old.textContent = short;
+  }
+
+  function render(text, short) {
+    renderAside(text ? short : '');
     var old = document.getElementById('sc-co-dlv');
     var type = form().querySelector('select[name="Delivery[delivery_type]"]');
     var wh = form().querySelector('select[name^="Delivery[delivery_method]"]');
@@ -1949,14 +1964,14 @@ function scAnchor() {
     var whText = optText(form().querySelector('select[name^="Delivery[delivery_method]"]'));
     var key = JSON.stringify([list, city, sum, typeText, whText]);
     if (busy) return;
-    if (key === lastKey) return render(lastText);   // Хорошоп іноді перемальовує блок доставки
+    if (key === lastKey) return render(lastText, lastShort);   // Хорошоп іноді перемальовує блок доставки
     if (!list.length || !city || /кур/i.test(typeText) || sum >= CFG.freeFrom) { lastKey = key; lastText = ''; return render(''); }
     busy = true;
     Promise.all(list.map(function (i) { return weightOf(i.url); })).then(function (ws) {
       busy = false; lastKey = key;
       var kg = 0;
       list.forEach(function (it, n) { kg += (ws[n] || CFG.defaultKg) * it.qty; });
-      if (kg > CFG.maxKg) return render(lastText = 'Доставка Новою поштою: вартість для посилки понад 30 кг уточнимо після оформлення.');
+      if (kg > CFG.maxKg) return render(lastText = 'Доставка Новою поштою: вартість для посилки понад 30 кг уточнимо після оформлення.', lastShort = 'вартість уточнимо');
       var local = /^м\.\s*Київ$/i.test(city);
       var price = tier(local ? CFG.local : CFG.ukraine, kg);
       if (!local && /^(с\.|смт|сел\.|с-ще|селище)/i.test(city)) price += CFG.village;
@@ -1964,7 +1979,7 @@ function scAnchor() {
       if (sum > CFG.insFree) price += sum * CFG.insPct;
       price += CFG.extra;
       price = Math.ceil(price / CFG.roundTo) * CFG.roundTo;
-      render(lastText = 'Доставка Новою поштою — орієнтовно ' + price + ' грн, оплачується при отриманні за тарифами перевізника.');
+      render(lastText = 'Доставка Новою поштою — орієнтовно ' + price + ' грн, оплачується при отриманні за тарифами перевізника.', lastShort = 'орієнтовно ≈ ' + price + ' грн');
     }, function () { busy = false; });
   }
 
