@@ -2145,7 +2145,7 @@ function scAnchor() {
       if (bar.classList.contains('on') !== hidden) { bar.classList.toggle('on', hidden); if (hidden) sync(); }
     }
     window.addEventListener('scroll', function () {
-      if (!ticking) { ticking = true; (window.requestAnimationFrame || setTimeout)(check); }
+      if (!ticking) { ticking = true; setTimeout(check, 60); }   // не rAF: у фонових вкладках він «засинає»
     }, { passive: true });
     check();
   }
