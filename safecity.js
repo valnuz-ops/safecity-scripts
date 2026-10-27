@@ -1979,7 +1979,7 @@ function scAnchor() {
       if (/поштомат/i.test(typeText) || /поштомат/i.test(whText)) price += CFG.postomat;
       if (sum > CFG.insFree) price += sum * CFG.insPct;
       price += CFG.extra;
-      price = Math.ceil(price / CFG.roundTo) * CFG.roundTo;
+      price = Math.round(price / CFG.roundTo) * CFG.roundTo;   // до найближчих 5 грн
       render(lastText = 'Доставка Новою поштою — орієнтовно ' + price + ' грн, оплачується при отриманні за тарифами перевізника.', lastShort = 'орієнтовно ≈ ' + price + ' грн');
     }, function () { busy = false; });
   }
