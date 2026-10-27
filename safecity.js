@@ -2138,13 +2138,16 @@ function scAnchor() {
     document.body.appendChild(bar);
     document.body.classList.add('sc-sticky-pad');
 
-    if ('IntersectionObserver' in window) {
-      new IntersectionObserver(function (es) {
-        var hidden = !es[0].isIntersecting && es[0].boundingClientRect.top < 0;   // кнопка вище екрана
-        bar.classList.toggle('on', hidden);
-        if (hidden) sync();
-      }).observe(buy);
+    var ticking = false;
+    function check() {                                            // показуємо, коли кнопка пішла вище екрана
+      ticking = false;
+      var hidden = buy.getBoundingClientRect().bottom < 0;
+      if (bar.classList.contains('on') !== hidden) { bar.classList.toggle('on', hidden); if (hidden) sync(); }
     }
+    window.addEventListener('scroll', function () {
+      if (!ticking) { ticking = true; (window.requestAnimationFrame || setTimeout)(check); }
+    }, { passive: true });
+    check();
   }
 
   scIdle(init);
