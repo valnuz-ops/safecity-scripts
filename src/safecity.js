@@ -2073,7 +2073,7 @@ function scAnchor() {
       var kg = 0;
       list.forEach(function (it, n) { kg += (ws[n] || CFG.defaultKg) * it.qty; });
       if (kg > CFG.maxKg) { window.scDlvPrice = 0; return render(lastText = 'Доставка Новою поштою: вартість для посилки понад 30 кг уточнимо після оформлення.', lastShort = 'вартість уточнимо'); }
-      var local = /^м\.\s*Київ$/i.test(city);
+      var local = /^(м\.\s*)?Київ$/i.test(city.replace(/\s*\(.*\)\s*$/, ""));
       var price = tier(local ? CFG.local : CFG.ukraine, kg);
       if (!local && /^(с\.|смт|сел\.|с-ще|селище)/i.test(city)) price += CFG.village;
       var courier = /кур/i.test(typeText);
