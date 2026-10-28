@@ -2464,3 +2464,62 @@ function scAnchor() {
   else init();
   window.addEventListener('load', hideSingle);
 })();
+
+
+/* =====================================================================
+ * 18. Cookie-банер Хорошопа → вузька смуга внизу замість вікна посередині
+ *     Той самий банер і та сама кнопка «Погодитися» (згода зберігається Хорошопом),
+ *     змінюємо лише вигляд: без затемнення, сторінку можна гортати одразу.
+ * ===================================================================== */
+(function () {
+  'use strict';
+  var SHORT = 'Ми використовуємо cookie для роботи сайту та статистики. ';
+
+  var CSS =
+    '#cookies-modal.is-visible{position:fixed!important;top:auto!important;left:0!important;right:0!important;bottom:0!important;height:auto!important;' +
+      'overflow:visible!important;background:none!important;z-index:10000!important}' +
+    '#cookies-modal .modal__box{position:relative!important;top:auto!important;left:auto!important;margin:0 auto!important;width:100%!important;max-width:1180px;' +
+      'box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))!important;' +
+      'border-radius:12px 12px 0 0;box-shadow:0 -4px 18px rgba(0,0,0,.14);transform:none!important}' +
+    '#cookies-modal .modal__body,#cookies-modal .modal__content{flex:1;min-width:0;padding:0!important;margin:0!important}' +
+    '#cookies-modal .text p{margin:0!important;font-size:13px;line-height:1.4}' +
+    '#cookies-modal .text p:first-child{display:none}' +
+    '#cookies-modal .modal__close-button{position:static!important;flex:0 0 auto;margin:0!important;padding:0!important;width:auto!important}' +
+    '#cookies-modal .modal__close-button .btn{width:auto!important;min-width:0;height:38px;padding:0 18px;white-space:nowrap}' +
+    'body.sc-cookie-bar .backdrop{display:none!important}';
+
+  function visible(m) { return m && m.classList.contains('is-visible'); }
+  function otherModal() {
+    return [].some.call(document.querySelectorAll('.modal.is-visible'), function (x) { return x.id !== 'cookies-modal'; });
+  }
+
+  var timer = 0;
+  function apply() {
+    var m = document.getElementById('cookies-modal');
+    if (!visible(m)) { document.body && document.body.classList.remove('sc-cookie-bar'); if (timer) { clearInterval(timer); timer = 0; } return false; }
+    if (!document.getElementById('sc-cookie-style')) {
+      var s = document.createElement('style'); s.id = 'sc-cookie-style'; s.textContent = CSS; document.head.appendChild(s);
+    }
+    var p = m.querySelectorAll('.text p')[1];
+    if (p && !p.getAttribute('data-sc')) {                          // коротший текст, посилання на угоду лишаємо
+      var a = p.querySelector('a');
+      p.textContent = SHORT;
+      if (a) { a.textContent = 'Детальніше'; p.appendChild(a); }
+      p.setAttribute('data-sc', '1');
+    }
+    var box = m.querySelector('.modal__box'); if (box) box.style.marginTop = '';
+    if (otherModal()) { document.body.classList.remove('sc-cookie-bar'); return true; }   // відкрито інше вікно (кошик) — не заважаємо
+    document.body.classList.add('sc-cookie-bar');
+    if (document.body.style.overflow === 'hidden') document.body.style.overflow = '';
+    document.documentElement.classList.remove('modal-opened');
+    return true;
+  }
+
+  function start() {
+    if (apply() && !timer) timer = setInterval(apply, 500);          // Хорошоп може знову заблокувати прокрутку
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+  window.addEventListener('load', start);
+  setTimeout(start, 1500);
+})();
