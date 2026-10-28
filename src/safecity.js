@@ -2486,7 +2486,10 @@ function scAnchor() {
     '#cookies-modal .text p:first-child{display:none}' +
     '#cookies-modal .modal__close-button{position:static!important;flex:0 0 auto;margin:0!important;padding:0!important;width:auto!important}' +
     '#cookies-modal .modal__close-button .btn{width:auto!important;min-width:0;height:38px;padding:0 18px;white-space:nowrap}' +
-    'body.sc-cookie-bar .backdrop{display:none!important}';
+    'body.sc-cookie-bar .backdrop{display:none!important}' +
+    // десктоп: панель уже внизу — робимо її нижчою
+    '#cookies-panel .text p:first-child{display:none}#cookies-panel .text p{margin:0!important;font-size:13px;line-height:1.4}' +
+    '#cookies-panel .panel__content{padding-top:10px!important;padding-bottom:10px!important;align-items:center;gap:16px}';
 
   function visible(m) { return m && m.classList.contains('is-visible'); }
   function otherModal() {
@@ -2494,19 +2497,25 @@ function scAnchor() {
   }
 
   var timer = 0;
+  function shorten(root) {
+    var p = root && root.querySelectorAll('.text p')[1];
+    if (!p || p.getAttribute('data-sc')) return;                    // коротший текст, посилання на угоду лишаємо
+    var a = p.querySelector('a');
+    p.textContent = SHORT;
+    if (a) { a.textContent = 'Детальніше'; p.appendChild(a); }
+    p.setAttribute('data-sc', '1');
+  }
+  function style() {
+    if (document.getElementById('sc-cookie-style')) return;
+    var s = document.createElement('style'); s.id = 'sc-cookie-style'; s.textContent = CSS; document.head.appendChild(s);
+  }
+
   function apply() {
+    var panel = document.getElementById('cookies-panel');
+    if (panel && panel.offsetParent !== null) { style(); shorten(panel); }
     var m = document.getElementById('cookies-modal');
     if (!visible(m)) { document.body && document.body.classList.remove('sc-cookie-bar'); if (timer) { clearInterval(timer); timer = 0; } return false; }
-    if (!document.getElementById('sc-cookie-style')) {
-      var s = document.createElement('style'); s.id = 'sc-cookie-style'; s.textContent = CSS; document.head.appendChild(s);
-    }
-    var p = m.querySelectorAll('.text p')[1];
-    if (p && !p.getAttribute('data-sc')) {                          // коротший текст, посилання на угоду лишаємо
-      var a = p.querySelector('a');
-      p.textContent = SHORT;
-      if (a) { a.textContent = 'Детальніше'; p.appendChild(a); }
-      p.setAttribute('data-sc', '1');
-    }
+    style(); shorten(m);
     var box = m.querySelector('.modal__box'); if (box) box.style.marginTop = '';
     if (otherModal()) { document.body.classList.remove('sc-cookie-bar'); return true; }   // відкрито інше вікно (кошик) — не заважаємо
     document.body.classList.add('sc-cookie-bar');
