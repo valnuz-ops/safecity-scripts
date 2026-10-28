@@ -2524,6 +2524,13 @@ function scAnchor() {
     return true;
   }
 
+  // iOS: Хорошоп (body-scroll-lock) блокує свайп слухачем touchmove на document — поки відкрита лише cookie-смуга,
+  // зупиняємо подію на <html>, до того слухача (свайпи галерей на самих елементах працюють як раніше)
+  document.documentElement.addEventListener('touchmove', function (e) {
+    var m = document.getElementById('cookies-modal');
+    if (visible(m) && !otherModal() && !m.contains(e.target)) e.stopPropagation();
+  }, { passive: true });
+
   function start() {
     if (apply() && !timer) timer = setInterval(apply, 500);          // Хорошоп може знову заблокувати прокрутку
   }
