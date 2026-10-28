@@ -1928,7 +1928,7 @@ function scAnchor() {
   /* ---- 6. Поштомат: підпис поля «Відділення» → «Поштомат» ---- */
   function labelNote() {
     var wh = sel('select[name^="Delivery[delivery_method]"]');
-    var item = wh && wh.closest('.form-item, .form-row, .checkout-step__item, .j-delivery-method');
+    var item = wh && (wh.closest('.j-delivery-method') || wh.closest('.form-item, .form-row, .checkout-step__item'));   // десктоп: підпис у .j-delivery-method
     if (!item) return;
     var post = POSTOMAT.test(optText(sel('select[name="Delivery[delivery_type]"]')));
     [].forEach.call(item.querySelectorAll('label, div, span'), function (e) {
