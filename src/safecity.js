@@ -1931,7 +1931,7 @@ function scAnchor() {
     var item = wh && (wh.closest('.j-delivery-method') || wh.closest('.form-item, .form-row, .checkout-step__item'));   // десктоп: підпис у .j-delivery-method
     if (!item) return;
     var post = POSTOMAT.test(optText(sel('select[name="Delivery[delivery_type]"]')));
-    [].forEach.call(item.querySelectorAll('label, div, span'), function (e) {
+    [].forEach.call(item.querySelectorAll('label, div, span, dt, p'), function (e) {   // десктоп: <dt class="form-head">
       if (e.children.length) return;
       var t = e.textContent.trim();
       if (post && t === 'Відділення') e.textContent = 'Поштомат';
