@@ -2512,7 +2512,7 @@ function scAnchor() {
 
   function apply() {
     var panel = document.getElementById('cookies-panel');
-    if (panel && panel.offsetParent !== null) { style(); shorten(panel); }
+    if (panel && panel.getClientRects().length) { style(); shorten(panel); }   // fixed-елемент: offsetParent завжди null
     var m = document.getElementById('cookies-modal');
     if (!visible(m)) { document.body && document.body.classList.remove('sc-cookie-bar'); if (timer) { clearInterval(timer); timer = 0; } return false; }
     style(); shorten(m);
