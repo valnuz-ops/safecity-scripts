@@ -2478,7 +2478,7 @@ function scAnchor() {
   var CSS =
     '#cookies-modal.is-visible{position:fixed!important;top:auto!important;left:0!important;right:0!important;bottom:0!important;height:auto!important;' +
       'overflow:visible!important;background:none!important;z-index:10000!important}' +
-    '#cookies-modal .modal__box{position:relative!important;top:auto!important;left:auto!important;margin:0 auto!important;width:100%!important;max-width:1180px;' +
+    '#cookies-modal.is-visible .modal__box{position:relative!important;top:auto!important;left:0!important;right:0!important;margin:0 auto!important;width:100%!important;max-width:1180px;' +
       'box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))!important;' +
       'border-radius:12px 12px 0 0;box-shadow:0 -4px 18px rgba(0,0,0,.14);transform:none!important}' +
     '#cookies-modal .modal__body,#cookies-modal .modal__content{flex:1;min-width:0;padding:0!important;margin:0!important}' +
