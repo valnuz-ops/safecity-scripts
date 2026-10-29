@@ -2539,3 +2539,119 @@ function scAnchor() {
   window.addEventListener('load', start);
   setTimeout(start, 1500);
 })();
+
+
+/* =====================================================================
+ * 19. Starlink Mini: живлення від повербанка
+ *     • Перехідник Type-C → DC 65 Вт → повербанки Choetech з USB-C PD 20 В від 65 Вт
+ *     • Кабелі з USB-C (Type-C/DC, 3 в 1, 2 в 1 з перехідником USB-C у комплекті) → ті самі повербанки
+ *     • Подовжувачі DC/DC 18AWG → наш перехідник Type-C → DC + повербанки
+ *     Повербанки Choetech на 22,5 Вт не підходять: їхній USB-C не видає 20 В, Mini від них не запуститься.
+ *     Час роботи — орієнтовно при споживанні Mini 25–40 Вт (ККД перетворення ≈ 85 %).
+ * ===================================================================== */
+(function () {
+  'use strict';
+
+  var ADAPTER = { url: '/perekhidnyk-dlia-zhyvlennia-starlink-mini-type-c-na-dc-65-vt/',
+                  note: 'Вставляється в USB-C повербанка, до гнізда DC — цей подовжувач' };
+  var PB = {
+    b733:  { url: '/power-bank-b733-50000mah-black-choetech/',
+             note: 'USB-C 65 Вт (20 В) · ≈ 4–6 год роботи Mini' },
+    b1012: { url: '/poverbank-20000mah-choetech-b1012-grey-100w-z-eu-adapterom-qc3.0-pd3.0-vbudovanyi-kabel/',
+             note: 'USB-C 100 Вт (20 В / 5 А) · ≈ 1,5–2,5 год роботи Mini' },
+    b815:  { url: '/poverbank-20000mah-choetech-b815-grey-130w-qc3.0-pd3.0-tft-smart-dysplei-vbudovanyi-kabel/',
+             note: 'USB-C 100 Вт (20 В / 5 А) · ≈ 1,5–2,5 год роботи Mini' }
+  };
+
+  var CSS =
+    '#sc-slk{margin:16px 0 0;padding:14px 16px;border:1px solid #f0d58a;border-radius:10px;background:#fffbea;font-size:14px;line-height:1.4}' +
+    '#sc-slk .scs-t{font-weight:700;font-size:15px;margin:0 0 4px}' +
+    '#sc-slk .scs-x{color:#555;margin:0 0 10px;font-size:13px}' +
+    '#sc-slk .scs-l{display:flex;flex-direction:column;gap:8px}' +
+    '#sc-slk a.scs-i{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #e8dcb0;border-radius:8px;background:#fff;color:#1a1a1a;text-decoration:none;transition:border-color .15s}' +
+    '#sc-slk a.scs-i:hover{border-color:#2b7de9}' +
+    '#sc-slk .scs-img{flex:0 0 48px;width:48px;height:48px;object-fit:contain}' +
+    '#sc-slk .scs-in{flex:1;min-width:0}' +
+    '#sc-slk .scs-n{font-size:13px;line-height:1.3;display:block}' +
+    '#sc-slk .scs-o{font-size:12px;color:#7a828c;display:block;margin-top:2px}' +
+    '#sc-slk .scs-p{flex:0 0 auto;font-weight:700;white-space:nowrap}' +
+    '#sc-slk .scs-s{font-size:12px;color:#7a828c;margin:10px 0 0}';
+
+  var langPrefix = /^\/(ru|en)\//.test(location.pathname) ? '/' + location.pathname.split('/')[1] : '';
+
+  function detect() {
+    var t = ((document.querySelector('h1') || {}).textContent || '').replace(/\s+/g, ' ');
+    if (!/Starlink Mini/i.test(t)) return null;
+    // Перехідник Type-C → DC
+    if (/^\s*(перехідник|переходник)/i.test(t) && /Type-C/i.test(t)) return {   // не «кабель … з перехідником Type-C»
+      title: '🔋 Повербанк для Starlink Mini',
+      text: 'Потрібен повербанк із USB-C Power Delivery 20 В від 65 Вт — звичайні на 20–22,5 Вт Mini не запустять. Ці перевірені за характеристиками:',
+      list: [PB.b733, PB.b1012, PB.b815],
+      foot: 'Підключайте перехідник до порту USB-C повербанка (не до вбудованого кабелю). Час роботи орієнтовний — залежить від погоди й навантаження.'
+    };
+    // Подовжувач DC/DC: потрібен перехідник і джерело
+    if (/DC\s?\/\s?DC/i.test(t) && !/Type-C/i.test(t)) return {
+      title: '🔌 Живлення від повербанка',
+      text: 'Подовжувач з’єднує Mini з джерелом, що має гніздо DC 5.5×2.1. Щоб живити від повербанка, додайте перехідник Type-C → DC і повербанк з USB-C PD 20 В:',
+      list: [ADAPTER, PB.b733, PB.b1012],
+      foot: 'Перехідник розрахований на 65 Вт — для звичайної роботи Mini цього достатньо.'
+    };
+    // Кабелі з USB-C (вже з чипом PD або з перехідником у комплекті).
+    // «прикурювач/DC з USB Type-C та LED» поки не чіпаємо — з опису не зрозуміло, чи USB-C там вхід живлення
+    if (/Type-C\s?\/\s?DC|Type-C Plug|перехідником Type-C/i.test(t) && !/LED/i.test(t)) return {
+      title: '🔋 Повербанк для цього кабелю',
+      text: 'Для живлення Mini від USB-C потрібен повербанк з Power Delivery 20 В: за специфікацією Starlink — від 100 Вт, для звичайної роботи вистачає 65 Вт.',
+      list: [PB.b1012, PB.b815, PB.b733],
+      foot: 'Кабель під’єднуйте до порту USB-C повербанка (не до вбудованого кабелю). Час роботи орієнтовний.'
+    };
+    return null;
+  }
+
+  function load(pick) {
+    var u = langPrefix + pick.url;
+    return scProduct(u).then(function (p) {
+      if (!p || !scInStock(p.avail)) return null;
+      return { url: u, name: p.name, price: p.price, img: p.img, note: pick.note };
+    });
+  }
+
+  function init() {
+    if (document.getElementById('sc-slk')) return;
+    var anchor = scAnchor();
+    if (!anchor) return;
+    var cfg = detect();
+    if (!cfg) return;
+    if (!document.getElementById('sc-slk-style')) {
+      var s = document.createElement('style'); s.id = 'sc-slk-style'; s.textContent = CSS; document.head.appendChild(s);
+    }
+    var box = document.createElement('div');
+    box.id = 'sc-slk';
+    box.innerHTML = '<div class="scs-t"></div><div class="scs-x"></div><div class="scs-l"></div><div class="scs-s"></div>';
+    box.querySelector('.scs-t').textContent = cfg.title;
+    box.querySelector('.scs-x').textContent = cfg.text;
+    box.querySelector('.scs-s').textContent = cfg.foot;
+    // після плашки довіри / «Знайшли дешевше?» (блоки 14–15): вони підтягуються до «Купити» від'ємним відступом
+    // і розраховують, що стоять одразу під ним — між них не вклинюємось
+    var after = document.getElementById('sc-cheaper') || document.getElementById('sc-trust') || anchor;
+    after.parentNode.insertBefore(box, after.nextSibling);
+
+    var listEl = box.querySelector('.scs-l');
+    scNear(box, function () { Promise.all(cfg.list.map(load)).then(function (items) {
+      items.forEach(function (p) {
+        if (!p) return;
+        var a = document.createElement('a');
+        a.className = 'scs-i'; a.href = p.url;
+        a.innerHTML = (p.img ? '<img class="scs-img" loading="lazy" alt="">' : '') +
+          '<span class="scs-in"><span class="scs-n"></span><span class="scs-o"></span></span><span class="scs-p"></span>';
+        if (p.img) a.querySelector('img').src = p.img;
+        a.querySelector('.scs-n').textContent = p.name;
+        a.querySelector('.scs-o').textContent = p.note;
+        a.querySelector('.scs-p').textContent = p.price;
+        listEl.appendChild(a);
+      });
+      if (!listEl.children.length) box.remove();   // нічого немає в наявності — блок не показуємо
+    }); });
+  }
+
+  scIdle(function () { init(); setTimeout(init, 2000); });
+})();
