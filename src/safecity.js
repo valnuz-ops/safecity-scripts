@@ -2542,18 +2542,25 @@ function scAnchor() {
 
 
 /* =====================================================================
- * 19. Starlink Mini: живлення від повербанка
- *     • Перехідник Type-C → DC 65 Вт → повербанки Choetech з USB-C PD 20 В від 65 Вт
- *     • Кабелі з USB-C (Type-C/DC, 3 в 1, 2 в 1 з перехідником USB-C у комплекті) → ті самі повербанки
- *     • Подовжувачі DC/DC 18AWG → наш перехідник Type-C → DC + повербанки
- *     Повербанки Choetech на 22,5 Вт не підходять: їхній USB-C не видає 20 В, Mini від них не запуститься.
- *     Час роботи — орієнтовно при споживанні Mini 25–40 Вт (ККД перетворення ≈ 85 %).
+ * 19. Підбір супутніх товарів за моделлю — картки з фото й ціною
+ *     Одна таблиця правил RULES: кожне правило за назвою товару (h1) і характеристиками
+ *     повертає заголовок, текст, список товарів (показуються лише ті, що в наявності) і посилання.
+ *     • Starlink Mini: перехідник Type-C → DC і кабелі з USB-C → повербанки Choetech з USB-C PD 20 В;
+ *       подовжувачі DC/DC → перехідник + повербанки. 22,5 Вт павербанки не видають 20 В — Mini не запуститься.
+ *     • Електромагнітні замки Kraft / Trinix → кронштейни під модель (сумісність — з описів кронштейнів)
+ *     • Зарядні станції OUKITEL → чохол під модель, дод. батарея; сонячні панелі Kraft (XT60) — якщо в описі станції є XT60
+ *     • ІЧ-прожектори 12 В → блок живлення зі струмом ≥ споживання × 1,25
+ *     Товари вантажаться, лише коли покупець догортає до блоку (scNear), з кешем на 1 год (scProduct).
  * ===================================================================== */
 (function () {
   'use strict';
 
-  var ADAPTER = { url: '/perekhidnyk-dlia-zhyvlennia-starlink-mini-type-c-na-dc-65-vt/',
-                  note: 'Вставляється в USB-C повербанка, до гнізда DC — цей подовжувач' };
+  var MAX = 3;
+  var PSU12 = '/bloky-zhyvlennia-12-24-48v/filter/presence=1;vixdnaNapruga=1/';
+
+  // --- Starlink Mini ---
+  var SL_ADAPTER = { url: '/perekhidnyk-dlia-zhyvlennia-starlink-mini-type-c-na-dc-65-vt/',
+                     note: 'Вставляється в USB-C повербанка, до гнізда DC — цей подовжувач' };
   var PB = {
     b733:  { url: '/power-bank-b733-50000mah-black-choetech/',
              note: 'USB-C 65 Вт (20 В) · ≈ 4–6 год роботи Mini' },
@@ -2563,73 +2570,177 @@ function scAnchor() {
              note: 'USB-C 100 Вт (20 В / 5 А) · ≈ 1,5–2,5 год роботи Mini' }
   };
 
+  // --- Кронштейни для електромагнітних замків ---
+  var L_NOTE = 'L — якщо двері відчиняються від замка';
+  var BR = {
+    k200lK: { url: '/kronshtein-k-200l-kraft/',  note: L_NOTE },
+    k200lT: { url: '/kronshtein-k-200l-trinix/', note: L_NOTE },
+    k200uT: { url: '/kronshtein-k-200u-trinix/', note: 'U — для односторонніх скляних дверей' },
+    k300lK: { url: '/kronshtein-k-300l-kraft/',  note: L_NOTE },
+    k300lT: { url: '/kronshtein-k-300l-trinix/', note: L_NOTE },
+    k300zT: { url: '/kronshtein-k-300z-trinix/', note: 'Z — кріплення якірної планки' },
+    k300ds: { url: '/kronshtein-k-300lds-trinix/', note: 'L-кронштейн саме під версію (DS)' },
+    k500lK: { url: '/kronshtein-k-500l-kraft/',  note: L_NOTE },
+    k500lT: { url: '/kronshtein-k-500l-trinix/', note: L_NOTE }
+  };
+  var LOCK_LINKS = [
+    { text: 'Кнопки виходу →', url: '/knopky-vykhodu/2368/' },
+    { text: 'Блоки живлення 12 В →', url: PSU12 }
+  ];
+
+  // --- OUKITEL ---
+  var OK = {
+    caseP5000:  { url: '/chokhol-dlia-p5000e/',      note: 'Чохол саме під цю модель' },
+    caseP2001:  { url: '/chokhol-dlia-p2001e-plus/', note: 'Чохол саме під цю модель' },
+    caseBP2000: { url: '/chokhol-dlia-bp2000e/',     note: 'Чохол саме під цю модель' },
+    batB2000:   { url: '/dodatkova-batareia-b2000-oukitel/',  note: 'Додаткова батарея — подвоює ємність' },
+    batB2000L:  { url: '/dodatkova-batareia-b2000l-oukitel/', note: 'Додаткова батарея — +2048 Вт·год' },
+    sol200: { url: '/soniachna-panel-kfp-200spxt60i-dlia-zariadnykh-stantsii-oukitel-bigblue-ecoflow/', note: '200 Вт, XT60i — підключається до входу XT60 станції напряму' },
+    sol100: { url: '/soniachna-panel-kfp-100spxt60i-dlia-zariadnykh-stantsii-oukitel-bigblue-ecoflow/', note: '100 Вт, XT60i — підключається до входу XT60 станції напряму' }
+  };
+
+  // --- Блоки живлення 12 В (адаптери Kraft) ---
+  var PSU = {
+    a1: { url: '/blok-zhyvlennia-krf-1201ps-kraft-12v-1a/', note: '12 В / 1 А' },
+    a2: { url: '/blok-zhyvlennia-krf-1202ps-kraft-12v-2a/', note: '12 В / 2 А' },
+    a3: { url: '/blok-zhyvlennia-krf-1203ps-kraft-12v-3a/', note: '12 В / 3 А' },
+    a5: { url: '/blok-zhyvlennia-krf-1205ps-kraft-12v-5a/', note: '12 В / 5 А' },
+    b5: { url: '/blok-zhyvlennia-krf-1205pb-kraft-12v-5a/', note: '12 В / 5 А, для монтажу в бокс' }
+  };
+
+  function num(s) { var m = String(s || '').replace(',', '.').match(/\d+(\.\d+)?/); return m ? parseFloat(m[0]) : 0; }
+
+  // Правила: перше, що повернуло налаштування, і показується
+  var RULES = [
+    // ---------- Starlink Mini ----------
+    function (t) {
+      if (!/Starlink Mini/i.test(t)) return null;
+      if (/^\s*(перехідник|переходник)/i.test(t) && /Type-C/i.test(t)) return {
+        title: '🔋 Повербанк для Starlink Mini',
+        text: 'Потрібен повербанк із USB-C Power Delivery 20 В від 65 Вт — звичайні на 20–22,5 Вт Mini не запустять. Ці перевірені за характеристиками:',
+        list: [PB.b733, PB.b1012, PB.b815],
+        foot: 'Підключайте перехідник до порту USB-C повербанка (не до вбудованого кабелю). Час роботи орієнтовний — залежить від погоди й навантаження.'
+      };
+      if (/DC\s?\/\s?DC/i.test(t) && !/Type-C/i.test(t)) return {
+        title: '🔌 Живлення від повербанка',
+        text: 'Подовжувач з’єднує Mini з джерелом, що має гніздо DC 5.5×2.1. Щоб живити від повербанка, додайте перехідник Type-C → DC і повербанк з USB-C PD 20 В:',
+        list: [SL_ADAPTER, PB.b733, PB.b1012],
+        foot: 'Перехідник розрахований на 65 Вт — для звичайної роботи Mini цього достатньо.'
+      };
+      // «прикурювач/DC з USB Type-C та LED» не чіпаємо — з опису не зрозуміло, чи USB-C там вхід живлення
+      if (/Type-C\s?\/\s?DC|Type-C Plug|перехідником Type-C/i.test(t) && !/LED/i.test(t)) return {
+        title: '🔋 Повербанк для цього кабелю',
+        text: 'Для живлення Mini від USB-C потрібен повербанк з Power Delivery 20 В: за специфікацією Starlink — від 100 Вт, для звичайної роботи вистачає 65 Вт.',
+        list: [PB.b1012, PB.b815, PB.b733],
+        foot: 'Кабель під’єднуйте до порту USB-C повербанка (не до вбудованого кабелю). Час роботи орієнтовний.'
+      };
+      return null;
+    },
+
+    // ---------- Електромагнітні замки → кронштейни ----------
+    function (t) {
+      if (!/^\s*Замок електромагнітний/i.test(t) || /врізн/i.test(t)) return null;
+      var kraft = /Kraft/i.test(t), list = null;
+      if (/\bTML-300LED\s*\(DS\)/i.test(t)) list = [BR.k300ds];
+      else if (/\b(KRF|TML)-200\b/i.test(t)) list = kraft ? [BR.k200lK, BR.k200lT, BR.k200uT] : [BR.k200lT, BR.k200lK, BR.k200uT];
+      else if (/\b(KRF|TML)-300LED\b/i.test(t)) list = kraft ? [BR.k300lK, BR.k300lT, BR.k300zT] : [BR.k300lT, BR.k300lK, BR.k300zT];
+      else if (/\b(KRF|TML)-500LED\b/i.test(t)) list = kraft ? [BR.k500lK, BR.k500lT] : [BR.k500lT, BR.k500lK];
+      if (!list) return null;
+      return {
+        title: '🔩 Кронштейн для цього замка',
+        text: 'Потрібен, якщо замок або якірну планку не вийде прикрутити прямо до дверей чи коробки. Сумісні з цією моделлю:',
+        list: list, links: LOCK_LINKS,
+        foot: 'Для роботи замка також знадобляться блок живлення 12 В і кнопка виходу або зчитувач.'
+      };
+    },
+
+    // ---------- Зарядні станції OUKITEL ----------
+    function (t, f) {
+      if (!/зарядна станція/i.test(t) || !/OUKITEL/i.test(t)) return null;
+      var list = [];
+      if (/\bP5000E(?! Plus)/i.test(t)) list.push(OK.caseP5000);
+      else if (/\bP2001E(?! PRO)|\bP2400E/i.test(t)) list.push(OK.caseP2001);
+      else if (/\bBP2000E/i.test(t)) list.push(OK.caseBP2000, OK.batB2000);
+      else if (/\bBP3000E/i.test(t)) list.push(OK.batB2000L);
+      // панелі — лише якщо вхід XT60 вказано в описі чи характеристиках станції
+      var xt = /XT-?60/i.test(scDesc() + ' ' + Object.keys(f).map(function (k) { return f[k]; }).join(' '));
+      if (xt) list.push(OK.sol200, OK.sol100);
+      if (!list.length) return null;
+      return {
+        title: '🧳 Підберіть до станції',
+        text: 'Аксесуари саме під цю модель OUKITEL:',   // про XT60 — у підписі панелі (панелей може не бути в наявності)
+        list: list
+      };
+    },
+
+    // ---------- ІЧ-прожектори 12 В → блок живлення ----------
+    function (t, f) {
+      if (!/(ІЧ|інфрачервоний)[- ]прожектор/i.test(t)) return null;
+      if (!/12/.test(scGet(f, /^живлення/))) return null;
+      var a = num(scGet(f, /^струм споживання$/));
+      if (!a) return null;
+      var need = a * 1.25;
+      var list = need <= 1 ? [PSU.a2, PSU.a1] : need <= 2 ? [PSU.a2, PSU.a3] : need <= 3 ? [PSU.a3, PSU.a5] : [PSU.a5, PSU.b5];
+      return {
+        title: '⚡ Блок живлення для прожектора',
+        text: 'Прожектор живиться від 12 В і споживає ' + String(a).replace('.', ',') + ' А — блок живлення беріть із запасом по струму:',
+        list: list, links: [{ text: 'Усі блоки живлення 12 В →', url: PSU12 }],
+        foot: 'Якщо від того самого блока живиться й камера — додайте її струм.'
+      };
+    }
+  ];
+
   var CSS =
-    '#sc-slk{margin:16px 0 0;padding:14px 16px;border:1px solid #f0d58a;border-radius:10px;background:#fffbea;font-size:14px;line-height:1.4}' +
-    '#sc-slk .scs-t{font-weight:700;font-size:15px;margin:0 0 4px}' +
-    '#sc-slk .scs-x{color:#555;margin:0 0 10px;font-size:13px}' +
-    '#sc-slk .scs-l{display:flex;flex-direction:column;gap:8px}' +
-    '#sc-slk a.scs-i{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #e8dcb0;border-radius:8px;background:#fff;color:#1a1a1a;text-decoration:none;transition:border-color .15s}' +
-    '#sc-slk a.scs-i:hover{border-color:#2b7de9}' +
-    '#sc-slk .scs-img{flex:0 0 48px;width:48px;height:48px;object-fit:contain}' +
-    '#sc-slk .scs-in{flex:1;min-width:0}' +
-    '#sc-slk .scs-n{font-size:13px;line-height:1.3;display:block}' +
-    '#sc-slk .scs-o{font-size:12px;color:#7a828c;display:block;margin-top:2px}' +
-    '#sc-slk .scs-p{flex:0 0 auto;font-weight:700;white-space:nowrap}' +
-    '#sc-slk .scs-s{font-size:12px;color:#7a828c;margin:10px 0 0}';
+    '#sc-pick{margin:16px 0 0;padding:14px 16px;border:1px solid #f0d58a;border-radius:10px;background:#fffbea;font-size:14px;line-height:1.4}' +
+    '#sc-pick .scs-t{font-weight:700;font-size:15px;margin:0 0 4px}' +
+    '#sc-pick .scs-x{color:#555;margin:0 0 10px;font-size:13px}' +
+    '#sc-pick .scs-l{display:flex;flex-direction:column;gap:8px}' +
+    '#sc-pick a.scs-i{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #e8dcb0;border-radius:8px;background:#fff;color:#1a1a1a;text-decoration:none;transition:border-color .15s}' +
+    '#sc-pick a.scs-i:hover{border-color:#2b7de9}' +
+    '#sc-pick .scs-img{flex:0 0 48px;width:48px;height:48px;object-fit:contain}' +
+    '#sc-pick .scs-in{flex:1;min-width:0}' +
+    '#sc-pick .scs-n{font-size:13px;line-height:1.3;display:block}' +
+    '#sc-pick .scs-o{font-size:12px;color:#7a828c;display:block;margin-top:2px}' +
+    '#sc-pick .scs-p{flex:0 0 auto;font-weight:700;white-space:nowrap}' +
+    '#sc-pick .scs-k{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:10px}' +
+    '#sc-pick .scs-k a{font-size:13px;color:#2b7de9;text-decoration:none}' +
+    '#sc-pick .scs-k a:hover{text-decoration:underline}' +
+    '#sc-pick .scs-s{font-size:12px;color:#7a828c;margin:10px 0 0}';
 
   var langPrefix = /^\/(ru|en)\//.test(location.pathname) ? '/' + location.pathname.split('/')[1] : '';
 
-  function detect() {
-    var t = ((document.querySelector('h1') || {}).textContent || '').replace(/\s+/g, ' ');
-    if (!/Starlink Mini/i.test(t)) return null;
-    // Перехідник Type-C → DC
-    if (/^\s*(перехідник|переходник)/i.test(t) && /Type-C/i.test(t)) return {   // не «кабель … з перехідником Type-C»
-      title: '🔋 Повербанк для Starlink Mini',
-      text: 'Потрібен повербанк із USB-C Power Delivery 20 В від 65 Вт — звичайні на 20–22,5 Вт Mini не запустять. Ці перевірені за характеристиками:',
-      list: [PB.b733, PB.b1012, PB.b815],
-      foot: 'Підключайте перехідник до порту USB-C повербанка (не до вбудованого кабелю). Час роботи орієнтовний — залежить від погоди й навантаження.'
-    };
-    // Подовжувач DC/DC: потрібен перехідник і джерело
-    if (/DC\s?\/\s?DC/i.test(t) && !/Type-C/i.test(t)) return {
-      title: '🔌 Живлення від повербанка',
-      text: 'Подовжувач з’єднує Mini з джерелом, що має гніздо DC 5.5×2.1. Щоб живити від повербанка, додайте перехідник Type-C → DC і повербанк з USB-C PD 20 В:',
-      list: [ADAPTER, PB.b733, PB.b1012],
-      foot: 'Перехідник розрахований на 65 Вт — для звичайної роботи Mini цього достатньо.'
-    };
-    // Кабелі з USB-C (вже з чипом PD або з перехідником у комплекті).
-    // «прикурювач/DC з USB Type-C та LED» поки не чіпаємо — з опису не зрозуміло, чи USB-C там вхід живлення
-    if (/Type-C\s?\/\s?DC|Type-C Plug|перехідником Type-C/i.test(t) && !/LED/i.test(t)) return {
-      title: '🔋 Повербанк для цього кабелю',
-      text: 'Для живлення Mini від USB-C потрібен повербанк з Power Delivery 20 В: за специфікацією Starlink — від 100 Вт, для звичайної роботи вистачає 65 Вт.',
-      list: [PB.b1012, PB.b815, PB.b733],
-      foot: 'Кабель під’єднуйте до порту USB-C повербанка (не до вбудованого кабелю). Час роботи орієнтовний.'
-    };
-    return null;
-  }
-
   function load(pick) {
     var u = langPrefix + pick.url;
+    if (u.replace(/\/$/, '') === location.pathname.replace(/\/$/, '')) return Promise.resolve(null);
     return scProduct(u).then(function (p) {
       if (!p || !scInStock(p.avail)) return null;
-      return { url: u, name: p.name, price: p.price, img: p.img, note: pick.note };
+      return { url: u, name: p.name, price: p.price, img: p.img, note: pick.note || '' };
     });
   }
 
   function init() {
-    if (document.getElementById('sc-slk')) return;
+    if (document.getElementById('sc-pick')) return;
     var anchor = scAnchor();
     if (!anchor) return;
-    var cfg = detect();
+    var t = ((document.querySelector('h1') || {}).textContent || '').replace(/\s+/g, ' ').trim();
+    var f = null, cfg = null;
+    for (var i = 0; i < RULES.length && !cfg; i++) cfg = RULES[i](t, f || (f = scFeatures()));
     if (!cfg) return;
-    if (!document.getElementById('sc-slk-style')) {
-      var s = document.createElement('style'); s.id = 'sc-slk-style'; s.textContent = CSS; document.head.appendChild(s);
+
+    if (!document.getElementById('sc-pick-style')) {
+      var s = document.createElement('style'); s.id = 'sc-pick-style'; s.textContent = CSS; document.head.appendChild(s);
     }
     var box = document.createElement('div');
-    box.id = 'sc-slk';
-    box.innerHTML = '<div class="scs-t"></div><div class="scs-x"></div><div class="scs-l"></div><div class="scs-s"></div>';
+    box.id = 'sc-pick';
+    box.innerHTML = '<div class="scs-t"></div><div class="scs-x"></div><div class="scs-l"></div>' +
+      (cfg.links ? '<div class="scs-k"></div>' : '') + (cfg.foot ? '<div class="scs-s"></div>' : '');
     box.querySelector('.scs-t').textContent = cfg.title;
     box.querySelector('.scs-x').textContent = cfg.text;
-    box.querySelector('.scs-s').textContent = cfg.foot;
+    if (cfg.foot) box.querySelector('.scs-s').textContent = cfg.foot;
+    if (cfg.links) cfg.links.forEach(function (l) {
+      var a = document.createElement('a'); a.href = langPrefix + l.url; a.textContent = l.text;
+      box.querySelector('.scs-k').appendChild(a);
+    });
     // після плашки довіри / «Знайшли дешевше?» (блоки 14–15): вони підтягуються до «Купити» від'ємним відступом
     // і розраховують, що стоять одразу під ним — між них не вклинюємось
     var after = document.getElementById('sc-cheaper') || document.getElementById('sc-trust') || anchor;
@@ -2637,8 +2748,7 @@ function scAnchor() {
 
     var listEl = box.querySelector('.scs-l');
     scNear(box, function () { Promise.all(cfg.list.map(load)).then(function (items) {
-      items.forEach(function (p) {
-        if (!p) return;
+      items.filter(Boolean).slice(0, MAX).forEach(function (p) {
         var a = document.createElement('a');
         a.className = 'scs-i'; a.href = p.url;
         a.innerHTML = (p.img ? '<img class="scs-img" loading="lazy" alt="">' : '') +
@@ -2649,7 +2759,8 @@ function scAnchor() {
         a.querySelector('.scs-p').textContent = p.price;
         listEl.appendChild(a);
       });
-      if (!listEl.children.length) box.remove();   // нічого немає в наявності — блок не показуємо
+      // нічого немає в наявності: без посилань блок прибираємо, з посиланнями — лишаємо їх
+      if (!listEl.children.length) { if (cfg.links) listEl.remove(); else box.remove(); }
     }); });
   }
 
