@@ -1524,6 +1524,8 @@ function scAnchor() {
  *    На картці хаба / стартового комплекту → сумісні датчики і пристрої
  *    На картці пристрою → з якими хабами працює + хаби в наявності
  *    Дані: таблиця сумісності ajax.systems/ua/tools/devices-compatibility (жовтень 2026)
+ *    Звірено з PDF-вивантаженням таблиці 30.10.2026: усі класи пристроїв збігаються; додано Curtain Outdoor Mini (G), Superior (G/P);
+ *    Fibra і SpeakerPhone не показуємо (Fibra — лише Superior Hub Hybrid, SpeakerPhone — не з Hub 2 (2G))
  *    Класи: B — усі хаби; P — крім Hub (2G); G — лише Hub 2 / Hub 2 Plus / Hub BP;
  *           C — як G, а через ретранслятор лише ReX 2
  * ===================================================================== */
@@ -1546,6 +1548,9 @@ function scAnchor() {
 
   // Пристрої: клас сумісності, посилання (біла / чорна версія); порядок — пріоритет показу на картці хаба
   var DEV = [
+    // Лінійка Superior (Jeweller): G3, HomeSiren, MotionCam і TouchScreen — лише Hub 2 / 2 Plus / BP; решта — усі, крім Hub
+    { k: 'superiorg',  re: /Superior.*(\bG3\b|HomeSiren|MotionCam|TouchScreen)/i, cls: 'G', url: null },
+    { k: 'superior',   re: /Superior/i,                       cls: 'P', url: null },
     { k: 'motioncam',  re: /MotionCam(?! Outdoor)/i,          cls: 'C', name: 'MotionCam',     url: U('/bezdrotovyi-datchyk-rukhu-z-kameroiu-ajax-motioncam-phod-bilyi/', '/bezdrotovyi-datchyk-rukhu-z-kameroiu-ajax-motioncam-phod-chornyi/') },
     { k: 'motion',     re: /MotionProtect(?! (Plus|Curtain|Outdoor))/i, cls: 'B', url: U('/bezdrotovyi-datchyk-rukhu-ajax-motionprotect-bilyi/', '/bezdrotovyi-datchyk-rukhu-ajax-motionprotect-chornyi/') },
     { k: 'door',       re: /DoorProtect(?! Plus)/i,           cls: 'B', url: U('/bezdrotovyi-datchyk-vidchynennia-ajax-doorprotect-bilyi/', '/bezdrotovyi-datchyk-vidchynennia-ajax-doorprotect-chornyi/') },
@@ -1569,6 +1574,7 @@ function scAnchor() {
     { k: 'curtain',    re: /MotionProtect Curtain/i,          cls: 'B', url: U('/bezdrotovyi-datchyk-rukhu-shtora-ajax-motionprotect-curtain-bilyi/', '/bezdrotovyi-datchyk-rukhu-shtora-ajax-motionprotect-curtain-chornyi/') },
     { k: 'motionout',  re: /MotionProtect Outdoor/i,          cls: 'B', url: U('/bezdrotovyi-vulychnyi-datchyk-rukhu-ajax-motionprotect-outdoor-bilyi/') },
     { k: 'dualcurtain', re: /DualCurtain Outdoor/i,           cls: 'P', url: U('/bezdrotovyi-vulychnyi-dvonapravlenyi-datchyk-rukhu-shtora-ajax-dualcurtain-outdoor-bilyi/') },
+    { k: 'curtainmini', re: /Curtain Outdoor Mini/i,          cls: 'G', url: null },
     { k: 'curtainout', re: /(?<!Dual)Curtain Outdoor/i,       cls: 'G', url: U('/datchyk-shtora-ajax-curtain-outdoor-jeweller-white/') },
     { k: 'spacecontrol', re: /SpaceControl(?! S\b)/i,         cls: 'B', url: U('/brelok-ajax-spacecontrol-bilyi/', '/brelok-ajax-spacecontrol-chornyi/') },
     { k: 'button',     re: /\b(Double)?Button\b(?!\/)/i,      cls: 'B', url: U('/tryvozhna-knopka-ajax-button-bila/', '/tryvozhna-knopka-ajax-button-chorna/') },
@@ -1615,7 +1621,7 @@ function scAnchor() {
   function title() { return ((document.querySelector('h1') || {}).textContent || '').replace(/\s+/g, ' ').trim(); }
 
   // Не показуємо на аксесуарах і товарах, яким хаб не потрібен
-  var SKIP = /Smartbracket|DummyBox|муляж|кріпильна|кронштейн|корпус|Case\b|JunctionBox|Holder|тримач|Hood|навіс|PSU|блок живлення|Акумулятор Ajax|Батарея CR|ExternalAntenna|антена|EN54|відеокамера|IP-відео|NVR|відеореєстратор|DoorBell|підписка|передплата|Frame|рамка|Cover|панель|SoloButton|SideButton|CenterButton|Bypass|ocBridge|uartBridge|SpaceControl S\b/i;
+  var SKIP = /Smartbracket|DummyBox|муляж|кріпильна|кронштейн|корпус|Case\b|JunctionBox|Holder|тримач|Hood|навіс|PSU|блок живлення|Акумулятор Ajax|Батарея CR|ExternalAntenna|антена|EN54|відеокамера|IP-відео|NVR|відеореєстратор|DoorBell|підписка|передплата|Frame|рамка|Cover|панель|SoloButton|SideButton|CenterButton|Bypass|ocBridge|uartBridge|SpaceControl S\b|Fibra|SpeakerPhone/i;
 
   function detect() {
     var t = title();
@@ -2548,6 +2554,8 @@ function scAnchor() {
  *     • Starlink Mini: перехідник Type-C → DC і кабелі з USB-C → повербанки Choetech з USB-C PD 20 В;
  *       подовжувачі DC/DC → перехідник + повербанки. 22,5 Вт павербанки не видають 20 В — Mini не запуститься.
  *     • Електромагнітні замки Kraft / Trinix → кронштейни під модель (сумісність — з описів кронштейнів)
+ *     • IP-камери Ajax → кронштейни MountCam (сумісність — ajax.systems: A1/B1 — BulletCam, TurretCam, DomeCam Mini і HL;
+ *       A2/B2 — ще й TurretCam / DomeCam HLVF і Superior HLVF; BulletCam HLVF не сумісна з жодним MountCam)
  *     • Зарядні станції OUKITEL → чохол під модель, дод. батарея; сонячні панелі Kraft (XT60) — якщо в описі станції є XT60
  *     • ІЧ-прожектори 12 В → блок живлення зі струмом ≥ споживання × 1,25
  *     Товари вантажаться, лише коли покупець догортає до блоку (scNear), з кешем на 1 год (scProduct).
@@ -2597,6 +2605,16 @@ function scAnchor() {
     batB2000L:  { url: '/dodatkova-batareia-b2000l-oukitel/', note: 'Додаткова батарея — +2048 Вт·год' },
     sol200: { url: '/soniachna-panel-kfp-200spxt60i-dlia-zariadnykh-stantsii-oukitel-bigblue-ecoflow/', note: '200 Вт, XT60i — підключається до входу XT60 станції напряму' },
     sol100: { url: '/soniachna-panel-kfp-100spxt60i-dlia-zariadnykh-stantsii-oukitel-bigblue-ecoflow/', note: '100 Вт, XT60i — підключається до входу XT60 станції напряму' }
+  };
+
+  // --- Кронштейни Ajax MountCam (у переліку — що є на сайті; A1 і A2 лише білі) ---
+  var MC = {
+    a1w: { url: '/kronshtein-ajax-mountcam-a1-white-dlia-drotovoi-ip-kamery-serii-bulletcam-turretcam-domeca/', note: 'A1 — короткий виніс' },
+    a2w: { url: '/kronshtein-ajax-mountcam-a2-white-dlia-drotovoi-ip-kamery-ajax-serii-bulletcam-turretcam-d/', note: 'A2 — короткий виніс, перехідник під HLVF' },
+    b1b: { url: '/kronshtein-ajax-mountcam-b1-black-dlia-drotovoi-ip-kamery-serii-bulletcam-turretcam-domeca/', note: 'B1 — довгий виніс' },
+    b1w: { url: '/kronshtein-ajax-mountcam-b1-white-dlia-drotovoi-ip-kamery-serii-bulletcam-turretcam-domeca/', note: 'B1 — довгий виніс' },
+    b2b: { url: '/kronshtein-ajax-mountcam-b2-black-dlia-drotovoi-ip-kamery-ajax-serii-bulletcam-turretcam-d/', note: 'B2 — довгий виніс, перехідник під HLVF' },
+    b2w: { url: '/kronshtein-ajax-mountcam-b2-white-dlia-drotovoi-ip-kamery-ajax-serii-bulletcam-turretcam-d/', note: 'B2 — довгий виніс, перехідник під HLVF' }
   };
 
   // --- Блоки живлення 12 В (адаптери Kraft) ---
@@ -2670,6 +2688,24 @@ function scAnchor() {
         title: '🧳 Підберіть до станції',
         text: 'Аксесуари саме під цю модель OUKITEL:',   // про XT60 — у підписі панелі (панелей може не бути в наявності)
         list: list
+      };
+    },
+
+    // ---------- IP-камери Ajax → кронштейни MountCam ----------
+    function (t) {
+      if (!/відеокамера/i.test(t) || !/\bAjax\b/i.test(t)) return null;
+      var m = t.match(/\b(BulletCam|TurretCam|DomeCam)\b/i);
+      if (!m) return null;
+      var vf = /HLVF/i.test(t), black = /\bBlack\b|чорн/i.test(t);
+      if (vf && /BulletCam/i.test(m[1]) && !/Superior/i.test(t)) return null;   // BulletCam HLVF — без MountCam
+      var list = vf ? (black ? [MC.b2b, MC.a2w, MC.b2w] : [MC.a2w, MC.b2w, MC.b2b])
+                    : (black ? [MC.b1b, MC.b2b, MC.a1w, MC.a2w] : [MC.a1w, MC.b1w, MC.a2w, MC.b2w]);
+      return {
+        title: '🔩 Кронштейн для цієї камери',
+        text: vf ? 'Для варіофокальних камер HLVF підходять MountCam A2 і B2 — з перехідником під HLVF. Кабель і роз’єм ховаються всередині кронштейна:'
+                 : 'Кронштейни Ajax MountCam ставлять камеру під 90° до стіни й ховають кабель і роз’єм усередині. Сумісні з цією камерою:',
+        list: list,
+        foot: 'A — компактний, короткий виніс; B — довгий виніс, відводить камеру далі від стіни чи карниза. Кріпляться й на стовп стрічками.'
       };
     },
 
