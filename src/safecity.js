@@ -18,7 +18,7 @@ var SC_CLIENT_BOT = 'SafeCityUA_bot';          // username клієнтсько�
 var SC_PHONE  = '380503941500';     // номер для Viber і WhatsApp (лише цифри, з 380)
 // Сторож (блок 20): URL веб-застосунку Google Apps Script з apps-script/health/Code.gs
 // (https://script.google.com/macros/s/…/exec). Порожньо — сторож нічого не робить і нічого не надсилає.
-var SC_HEALTH_URL = '';
+var SC_HEALTH_URL = 'https://script.google.com/macros/s/AKfycby4kTm_6M4ZBj5-5dQfYopgYbGslziBpnenbS0dR9q1IGwSHSpOhHvJP6C8bD9RxBpBwA/exec';
 // Версія збірки: build.sh підставляє дату й час збірки (UTC) через esbuild --define; без збірки — 'dev'
 var SC_BUILD = typeof __SC_BUILD__ !== 'undefined' ? __SC_BUILD__ : 'dev';
 
