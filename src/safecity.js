@@ -16,11 +16,65 @@
 var SC_TG_BOT = 'clienttext_bot'; // username Telegram-бота БЕЗ @ (підтвердження замовлень)
 var SC_CLIENT_BOT = 'SafeCityUA_bot';          // username клієнтського бота (наявність, менеджер) — для «Знайшли дешевше?»; порожньо = без кнопки Telegram
 var SC_PHONE  = '380503941500';     // номер для Viber і WhatsApp (лише цифри, з 380)
+// Сторож (блок 20): URL веб-застосунку Google Apps Script з apps-script/health/Code.gs
+// (https://script.google.com/macros/s/…/exec). Порожньо — сторож нічого не робить і нічого не надсилає.
+var SC_HEALTH_URL = '';
+// Версія збірки: build.sh підставляє дату й час збірки (UTC) через esbuild --define; без збірки — 'dev'
+var SC_BUILD = typeof __SC_BUILD__ !== 'undefined' ? __SC_BUILD__ : 'dev';
 
 /* ===== Ізоляція блоків =====
  * Кожен блок запускається через scModule, а його обробники (таймери, спостерігачі, idle) — через scSafe:
  * помилка в одному блоці пишеться в консоль і не зупиняє решту скрипту. */
-function scErr(n, e) { try { console.warn('[safecity] блок ' + n + ':', e); } catch (x) {} }
+function scErr(n, e) {
+  try { console.warn('[safecity] блок ' + n + ':', e); } catch (x) {}
+  scHealth('блок ' + n, e);
+}
+
+/* ===== Сторож: звіт про проблему (блок 20) =====
+ * Надсилає на SC_HEALTH_URL: помилку блоку (з scErr) або результат перевірки опорних елементів.
+ * Одна й та сама проблема — не частіше разу на добу з одного браузера (localStorage) і не більше
+ * 5 звітів за перегляд сторінки. Боти не надсилають. Власні помилки сторожа глушаться тут же —
+ * scErr звідси не викликається, тож рекурсії немає. */
+var scHealthSent = {}, scHealthCount = 0;
+function scHealth(kind, e) {
+  try {
+    var url = window.SC_HEALTH_URL_TEST || SC_HEALTH_URL;    // SC_HEALTH_URL_TEST — лише для test/health.html
+    if (!url || scHealthCount >= 5) return;
+    var ua = navigator.userAgent || '';
+    if (/bot|crawl|spider|lighthouse|headless/i.test(ua)) return;
+
+    var msg = e && e.message ? (e.name ? e.name + ': ' : '') + e.message : String(e);
+    var at = String((e && e.stack) || '').match(/([^\/\s(@]+\.js):(\d+):(\d+)/);   // де саме: файл:рядок:колонка
+    if (at) msg += ' @ ' + at[0];
+    msg = msg.slice(0, 300);
+
+    var id = kind + '|' + msg, h = 5381;                       // короткий ключ: djb2-хеш
+    for (var i = 0; i < id.length; i++) h = (h * 33 + id.charCodeAt(i)) | 0;
+    var key = 'sch:' + (h >>> 0).toString(36);
+    if (scHealthSent[key]) return;
+    scHealthSent[key] = 1;
+    try {
+      var last = +localStorage.getItem(key) || 0;
+      if (Date.now() - last < 86400000) return;
+      localStorage.setItem(key, String(Date.now()));
+    } catch (x) {}                                             // localStorage недоступний — лишається ліміт на сторінку
+    scHealthCount++;
+
+    var body = JSON.stringify({
+      block: kind, msg: msg,
+      url: location.origin + location.pathname,
+      device: window.innerWidth < 768 ? 'mobile' : 'desktop',
+      ua: ua.slice(0, 150), build: SC_BUILD
+    });
+    // text/plain — «простий» запит без CORS-preflight; Apps Script читає його з e.postData.contents
+    var ok = false;
+    try { ok = !!(navigator.sendBeacon && navigator.sendBeacon(url, body)); } catch (x) {}
+    if (!ok && window.fetch) {
+      fetch(url, { method: 'POST', mode: 'no-cors', keepalive: true, body: body,
+                   headers: { 'Content-Type': 'text/plain;charset=UTF-8' } }).catch(function () {});
+    }
+  } catch (x) {}
+}
 function scModule(n, fn) { try { fn(); } catch (e) { scErr(n, e); } }
 function scSafe(n, fn) {
   return function () { try { return fn.apply(this, arguments); } catch (e) { scErr(n, e); } };
@@ -2759,3 +2813,37 @@ scModule(19, function () {
 
   scInit(19, init);
 });
+
+
+/* =====================================================================
+ * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
+ *     Хорошоп змінив шаблон — блоки мовчки перестають з'являтися. Раз за перегляд, через ~5 с після
+ *     завантаження (сторінка дорисована), перевіряємо те, без чого блоки не працюють, і надсилаємо звіт
+ *     через scHealth. Без спостерігачів за DOM. Те, що блок підбору не показався, — НЕ проблема
+ *     (на більшості товарів так і має бути). Власні помилки — мовчки, без scErr.
+ * ===================================================================== */
+function scHealthCheck() {
+  try {
+    var miss = [], q = function (s) { return document.querySelector(s); };
+    var path = location.pathname;
+    if (q('[itemtype*="schema.org/Product"]')) {
+      if (!SC_ORDER_SELS.some(function (s) { return q(s); })) miss.push('блок «Купити» (SC_ORDER_SELS)');
+      if (!q('h1')) miss.push('h1');
+      if (!q('[itemprop="availability"]')) miss.push('[itemprop="availability"]');
+      if (miss.length) scHealth('перевірка: картка товару', 'не знайдено: ' + miss.join(', '));
+    } else if (path.indexOf('/checkout') !== -1 && !/checkout.*complete|complete.*order/i.test(path)) {
+      if (!q('#checkout-container')) miss.push('#checkout-container');
+      if (!q('.j-total-sum')) miss.push('.j-total-sum');
+      if (!q('[name="Recipient[delivery_city]"]')) miss.push('поле міста [name="Recipient[delivery_city]"]');
+      if (miss.length) scHealth('перевірка: оформлення', 'не знайдено: ' + miss.join(', '));
+    }
+  } catch (x) {}
+}
+(function () {
+  try {
+    if (!(window.SC_HEALTH_URL_TEST || SC_HEALTH_URL)) return;
+    var run = function () { setTimeout(function () { scIdle(scHealthCheck); }, 5000); };
+    if (document.readyState === 'complete') run();
+    else window.addEventListener('load', run);
+  } catch (x) {}
+})();

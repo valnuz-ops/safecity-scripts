@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SafeCity — тест сторожа</title>
+<meta name="robots" content="noindex">
+<style>
+  body{font:15px/1.45 system-ui,sans-serif;margin:0;padding:16px;color:#1d2733;background:#fff;max-width:900px}
+  h2{font-size:17px;margin:24px 0 8px}
+  .panel{border:1px solid #dbe5ef;border-radius:10px;background:#f6f9fc;padding:12px 14px;margin:12px 0}
+  .panel button{margin:4px 6px 4px 0;padding:7px 12px;border:1px solid #b9cbe0;border-radius:7px;background:#fff;cursor:pointer;font:inherit}
+  .panel button:hover{border-color:#2b7de9}
+  #log{white-space:pre-wrap;font:12.5px/1.4 ui-monospace,monospace;background:#1d2733;color:#d6f5dc;border-radius:8px;padding:10px;min-height:60px;margin:0}
+  .mock{border:1px dashed #cfd8e2;border-radius:10px;padding:12px;margin-top:12px}
+  .note{color:#5f6b78;font-size:13px}
+</style>
+<script>
+  /* Заглушка замість SC_HEALTH_URL: звіти не йдуть у мережу, а пишуться в консоль і на сторінку */
+  window.SC_HEALTH_URL_TEST = 'test://console';
+  window.scTestLog = function (url, body) {
+    var t = new Date().toLocaleTimeString() + '  → ' + url + '\n' + JSON.stringify(JSON.parse(body), null, 2);
+    console.log('[safecity health stub]', JSON.parse(body));
+    var el = document.getElementById('log');
+    if (el) el.textContent = t + '\n\n' + (el.textContent === '(поки порожньо)' ? '' : el.textContent);
+    return true;
+  };
+  try {
+    Object.defineProperty(navigator, 'sendBeacon', { configurable: true, value: function (u, b) { return scTestLog(u, b); } });
+  } catch (e) { navigator.sendBeacon = function (u, b) { return scTestLog(u, b); }; }
+
+  /* ?break=1 — зламати блок 1 (плашка відправки) ще до завантаження скрипту: перевірка справжнього шляху scModule → scErr */
+  if (/[?&]break=1/.test(location.search)) Intl.DateTimeFormat = function () { throw new Error('Тест: зламаний Intl.DateTimeFormat'); };
+</script>
+</head>
+<body>
+<h1>Тест сторожа safecity.js</h1>
+<p class="note">Сторінка підключає зібраний <code>../safecity.js</code>. SC_HEALTH_URL підмінено заглушкою — нічого не надсилається,
+  звіти видно нижче і в консолі (F12). Ліміт «раз на добу» діє і тут — кнопка «Скинути ліміти» прибирає його.
+  Звіти з безголових браузерів і ботів (userAgent з bot/crawl/spider/lighthouse/headless) не надсилаються.</p>
+
+<div class="panel">
+  <b>Помилка в блоці</b><br>
+  Блок <select id="blk"><option>1</option><option>3</option><option selected>9</option><option>10</option><option>19</option></select>
+  <button id="b-mod">Виняток під час запуску (scModule)</button>
+  <button id="b-safe">Виняток в обробнику (scSafe, таймер)</button>
+  <br><a href="?break=1">Перезавантажити зі зламаним блоком 1</a> · <a href="?">без поломки</a>
+</div>
+
+<div class="panel">
+  <b>Опорні елементи картки товару</b> (перевірка запускається сама раз через ~5 с після завантаження)<br>
+  <button data-rm="h1">Видалити h1</button>
+  <button data-rm='[itemprop="availability"]'>Видалити availability</button>
+  <button data-rm=".product__section--order, .product__section--price">Видалити блок «Купити»</button>
+  <button id="b-check">Запустити перевірку зараз</button>
+  <button id="b-reset">Скинути ліміти</button>
+</div>
+
+<h2>Надіслані звіти</h2>
+<pre id="log">(поки порожньо)</pre>
+
+<div class="mock product" itemscope itemtype="http://schema.org/Product">
+  <h1>Тестовий товар: Джерело безперебійного живлення PSU-1203</h1>
+  <div>Артикул: TEST-1</div>
+  <div itemprop="offers" itemscope>
+    <meta itemprop="price" content="1234">
+    <link itemprop="availability" href="http://schema.org/InStock">
+  </div>
+  <div class="product__section--price">1 234 грн</div>
+  <div class="product__section--order"><button type="button" class="j-buy-button-add">Купити</button></div>
+</div>
+
+<script src="../safecity.js" defer></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var n = function () { return +document.getElementById('blk').value; };
+    document.getElementById('b-mod').onclick = function () {
+      scModule(n(), function () { null.test(); });               // справжній TypeError
+    };
+    document.getElementById('b-safe').onclick = function () {
+      setTimeout(scSafe(n(), function () { throw new RangeError('Тест: помилка в обробнику блоку ' + n()); }), 0);
+    };
+    [].forEach.call(document.querySelectorAll('[data-rm]'), function (b) {
+      b.onclick = function () {
+        [].forEach.call(document.querySelectorAll(b.getAttribute('data-rm')), function (el) { el.remove(); });
+        b.textContent += ' ✓';
+      };
+    });
+    document.getElementById('b-check').onclick = function () { scHealthCheck(); };
+    document.getElementById('b-reset').onclick = function () {
+      try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('sch:') === 0) localStorage.removeItem(k); }); } catch (e) {}
+      scHealthSent = {}; scHealthCount = 0;
+      document.getElementById('log').textContent = '(ліміти скинуто)';
+    };
+  });
+</script>
+</body>
+</html>
