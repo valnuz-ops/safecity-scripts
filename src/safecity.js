@@ -17,6 +17,26 @@ var SC_TG_BOT = 'clienttext_bot'; // username Telegram-бота БЕЗ @ (під
 var SC_CLIENT_BOT = 'SafeCityUA_bot';          // username клієнтського бота (наявність, менеджер) — для «Знайшли дешевше?»; порожньо = без кнопки Telegram
 var SC_PHONE  = '380503941500';     // номер для Viber і WhatsApp (лише цифри, з 380)
 
+/* ===== Ізоляція блоків =====
+ * Кожен блок запускається через scModule, а його обробники (таймери, спостерігачі, idle) — через scSafe:
+ * помилка в одному блоці пишеться в консоль і не зупиняє решту скрипту. */
+function scErr(n, e) { try { console.warn('[safecity] блок ' + n + ':', e); } catch (x) {} }
+function scModule(n, fn) { try { fn(); } catch (e) { scErr(n, e); } }
+function scSafe(n, fn) {
+  return function () { try { return fn.apply(this, arguments); } catch (e) { scErr(n, e); } };
+}
+// Після DOMContentLoaded (або одразу, якщо DOM уже готовий — скрипт підключено з defer)
+function scReady(fn) {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+  else fn();
+}
+// Типовий запуск блоку на картці: коли браузер вільний + повтор через 2 с (Хорошоп дорендерює сторінку).
+// Повтор безпечний: кожен init() спершу перевіряє, чи його блок уже є на сторінці.
+function scInit(n, init) {
+  var f = scSafe(n, init);
+  scIdle(function () { f(); setTimeout(f, 2000); });
+}
+
 /* ===== Спільні помічники (швидкість) ===== */
 // Запуск після повного завантаження сторінки, коли браузер вільний — не заважає основному контенту
 function scIdle(fn) {
@@ -32,15 +52,20 @@ function scIdle(fn) {
 function scNear(el, fn, margin) {
   margin = margin || 400;
   var done = false, t = 0, io = null;
-  function go() {
-    if (done) return; done = true;
+  function stop() {
+    done = true;
     window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll);
     if (io) io.disconnect();
+  }
+  function go() {
+    if (done) return;
+    stop();
     fn();
   }
   function check() {
     t = 0;
-    if (done || !el.isConnected) return;
+    if (done) return;
+    if (!el.isConnected) { stop(); return; }          // блок прибрали зі сторінки — слухачі більше не потрібні
     var r = el.getBoundingClientRect();
     if (r.top < window.innerHeight + margin && r.bottom > -margin) go();
   }
@@ -59,7 +84,7 @@ function scNear(el, fn, margin) {
 // (мобільна ≈ ¼ сторінки, десктоп ≈ ½); одночасно не більше 2 завантажень;
 // після «Купити» / відкриття кошика черга чекає 4 с, щоб кошик Хорошопа вантажився першим.
 var scProduct = (function () {
-  var TTL = 3600 * 1000, mem = {}, MAXC = 2, active = 0, queue = [], holdUntil = 0;
+  var TTL = 3600 * 1000, mem = {}, MAXC = 2, active = 0, queue = [], holdUntil = 0, held = 0;
   function read(k) {
     try {
       var v = JSON.parse(localStorage.getItem('scp2:' + k));
@@ -76,7 +101,10 @@ var scProduct = (function () {
   }, true);
   function pump() {
     var wait = holdUntil - Date.now();
-    if (wait > 0) { setTimeout(pump, wait + 50); return; }
+    if (wait > 0) {                                   // один відкладений запуск замість таймера на кожен товар у черзі
+      if (!held) held = setTimeout(function () { held = 0; pump(); }, wait + 50);
+      return;
+    }
     while (active < MAXC && queue.length) { active++; queue.shift()(); }
   }
   function decode(s) {
@@ -93,7 +121,12 @@ var scProduct = (function () {
           if (c.done) return html;
           html += dec.decode(c.value, { stream: true });
           var i = html.indexOf('itemprop="availability"');
-          if (i !== -1 && html.length > i + 200) { try { ctrl && ctrl.abort(); reader.cancel(); } catch (e) {} return html; }
+          if (i !== -1 && html.length > i + 200) {
+            // після abort() cancel() повертає відхилений проміс — гасимо, інакше в консолі
+            // «Uncaught (in promise) BodyStreamBuffer was aborted» на кожен товар
+            try { ctrl && ctrl.abort(); var c = reader.cancel(); if (c && c.catch) c.catch(function () {}); } catch (e) {}
+            return html;
+          }
           return step();
         });
       })();
@@ -117,7 +150,8 @@ var scProduct = (function () {
     if (cached) return (mem[url] = Promise.resolve(cached));
     return (mem[url] = new Promise(function (resolve) {
       queue.push(function () {
-        readHead(url).then(function (html) {
+        // через then: синхронна помилка fetch теж потрапить у catch, і черга не «зависне» з active++
+        Promise.resolve(url).then(readHead).then(function (html) {
           var res = parse(html);
           if (res) write(url, res);
           resolve(res);
@@ -128,8 +162,18 @@ var scProduct = (function () {
   };
 })();
 
-// Характеристики товару: десктопна таблиця або будь-які пари «назва — значення» (мобільна версія)
-function scFeatures() {
+// Характеристики товару: десктопна таблиця або будь-які пари «назва — значення» (мобільна версія).
+// Обхід усього DOM — дорогий, а викликають його 7 блоків поспіль; результат тримаємо 1 с
+// (повторні init через 2 с і після подій рахують заново). Об'єкт лише для читання.
+var scFeatures = (function () {
+  var cache = null, at = 0;
+  return function () {
+    var now = Date.now();
+    if (!cache || now - at > 1000) { cache = scFeaturesRead(); at = now; }
+    return cache;
+  };
+})();
+function scFeaturesRead() {
   var map = {};
   function add(k, v) {
     k = String(k || '').replace(/\s+/g, ' ').trim().toLowerCase().replace(/:$/, '');
@@ -166,23 +210,149 @@ function scDesc() {
   return ((el || {}).textContent || '').replace(/\s+/g, ' ');
 }
 
-// Куди ставити блоки підказок: після блоку з кнопкою «Купити» (десктоп і мобільна версія)
+// Блок з кнопкою «Купити» / ціною (десктоп і мобільна версія) — у порядку пріоритету
+var SC_ORDER_SELS = ['.product__section--order', '.product-card--main .product-card__order-box',
+                     '.product__section--price', '.product-card--main .product-card__price-box'];
+
+// Куди ставити блоки підказок: після блоку з кнопкою «Купити»
 function scAnchor() {
   if (!document.querySelector('[itemtype*="schema.org/Product"]')) return null;
-  var sels = ['.product__section--order', '.product-card--main .product-card__order-box',
-              '.product__section--price', '.product-card--main .product-card__price-box'];
-  for (var i = 0; i < sels.length; i++) {
-    var el = document.querySelector(sels[i]);
+  for (var i = 0; i < SC_ORDER_SELS.length; i++) {
+    var el = document.querySelector(SC_ORDER_SELS[i]);
     if (el && el.parentNode) return el;
   }
   return null;
+}
+
+// Мовний префікс посилань: /ru/…, /en/… або '' для української
+var SC_LANG = /^\/(ru|en)\//.test(location.pathname) ? '/' + location.pathname.split('/')[1] : '';
+
+// Товар у наявності (мітка schema.org на картці): «є» або «закінчується»
+var SC_AVAIL_SEL = '[itemprop="availability"][href*="InStock"], [itemprop="availability"][href*="Limited"]';
+
+// Сирий текст h1 (без обрізання — кожен блок нормалізує по-своєму)
+function scH1() { return (document.querySelector('h1') || {}).textContent || ''; }
+
+// Артикул з тексту сторінки
+function scArt() { return ((document.body.innerText || '').match(/Артикул:?\s*([\w-]+)/) || [])[1] || ''; }
+
+// <style id> один раз на сторінку
+function scStyle(id, css) {
+  if (document.getElementById(id)) return;
+  var s = document.createElement('style');
+  s.id = id; s.textContent = css;
+  document.head.appendChild(s);
+}
+
+// Перше число з рядка, кома як десятковий роздільник: «1,5 А» → 1.5
+function scNum(s) { var m = String(s || '').replace(',', '.').match(/\d+(\.\d+)?/); return m ? parseFloat(m[0]) : 0; }
+
+// Сума з тексту ціни: «2 450,50 грн» → 2450.5
+function scSum(text) {
+  var m = String(text).replace(/[\s ]/g, '').match(/\d+(?:[.,]\d+)?/);
+  return m ? parseFloat(m[0].replace(',', '.')) : 0;
+}
+
+// Форма оформлення замовлення (блоки 10, 11)
+function scCheckout() { return document.getElementById('checkout-container') || document; }
+
+// Текст обраного пункту <select>
+function scOptText(s) { return s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].textContent.trim() : ''; }
+
+/* --- Блоки «підберіть до товару» з картками товарів (2, 3, 9, 19) --- */
+// Товар із переліку підбору (url відносно мови сайту) → дані для картки, або null, якщо ok(p) відхилив
+function scPickLoad(pick, ok) {
+  var u = SC_LANG + pick.url;
+  return scProduct(u).then(function (p) {
+    if (!p || !ok(p)) return null;
+    return { url: u, name: p.name, price: p.price, img: p.img, note: pick.note || '' };
+  });
+}
+function scAvailOk(p) { return scInStock(p.avail); }
+
+// Картка товару <a>: фото, назва, підпис (якщо є клас c.info), ціна. c — імена класів блоку
+function scItem(p, c) {
+  var a = document.createElement('a');
+  a.className = c.a; a.href = p.url;
+  a.innerHTML = (p.img ? '<img class="' + c.img + '" loading="lazy" alt="">' : '') +
+    (c.info ? '<span class="' + c.info + '"><span class="' + c.name + '"></span><span class="' + c.note + '"></span></span>'
+            : '<span class="' + c.name + '"></span>') +
+    '<span class="' + c.price + '"></span>';
+  if (p.img) a.querySelector('img').src = p.img;
+  a.querySelector('.' + c.name).textContent = p.name;
+  if (c.info) a.querySelector('.' + c.note).textContent = p.note;
+  a.querySelector('.' + c.price).textContent = p.price;
+  return a;
+}
+// Класи у стилі БЕМ: sc-psu → sc-psu__title, sc-psu__item, …
+function scBem(b) {
+  var c = {};
+  ['title', 'text', 'list', 'img', 'info', 'name', 'note', 'price'].forEach(function (k) { c[k] = b + '__' + k; });
+  c.a = b + '__item';
+  return c;
+}
+// Спільні стилі жовтого блоку підбору (2, 3, 19); c.links — рядок посилань під картками
+function scPickCss(id, c) {
+  var r = '#' + id;
+  return r + '{margin:16px 0 0;padding:14px 16px;border:1px solid #f0d58a;border-radius:10px;background:#fffbea;font-size:14px;line-height:1.4}' +
+    r + ' .' + c.title + '{font-weight:700;font-size:15px;margin:0 0 4px}' +
+    r + ' .' + c.text + '{color:#555;margin:0 0 10px;font-size:13px}' +
+    r + ' .' + c.list + '{display:flex;flex-direction:column;gap:8px}' +
+    r + ' a.' + c.a + '{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #e8dcb0;border-radius:8px;background:#fff;color:#1a1a1a;text-decoration:none;transition:border-color .15s}' +
+    r + ' a.' + c.a + ':hover{border-color:#2b7de9}' +
+    r + ' .' + c.img + '{flex:0 0 48px;width:48px;height:48px;object-fit:contain}' +
+    r + ' .' + c.info + '{flex:1;min-width:0}' +
+    r + ' .' + c.name + '{font-size:13px;line-height:1.3;display:block}' +
+    r + ' .' + c.note + '{font-size:12px;color:#7a828c;display:block;margin-top:2px}' +
+    r + ' .' + c.price + '{flex:0 0 auto;font-weight:700;white-space:nowrap}' +
+    (c.links ? r + ' .' + c.links + '{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:10px}' +
+               r + ' .' + c.links + ' a{font-size:13px;color:#2b7de9;text-decoration:none}' +
+               r + ' .' + c.links + ' a:hover{text-decoration:underline}' : '');
+}
+
+/* --- Блоки «Підберіть до камери / реєстратора» з посиланнями-фішками (6, 7) --- */
+var SC_KIT_CSS =
+  '.sc-kit{margin:16px 0 0;padding:14px 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fafbfc;font-size:14px;line-height:1.4}' +
+  '.sc-kit__title{font-weight:700;font-size:15px;margin:0 0 10px}' +
+  '.sc-kit__row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 0;border-top:1px dashed #e3e6ea}' +
+  '.sc-kit__row:first-of-type{border-top:0;padding-top:0}' +
+  '.sc-kit__label{flex:0 0 100%;font-weight:600;color:#333}' +
+  '.sc-kit__hint{flex:0 0 100%;font-size:12px;color:#7a828c;margin-top:-2px}' +
+  '.sc-kit a.sc-chip{display:inline-flex;align-items:center;padding:5px 11px;border:1px solid #cfd5dc;border-radius:16px;background:#fff;color:#1a1a1a;text-decoration:none;white-space:nowrap;transition:border-color .15s,background .15s}' +
+  '.sc-kit a.sc-chip:hover{border-color:#2b7de9;background:#f0f6ff}' +
+  '.sc-kit label.sc-poe{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#444;cursor:pointer;margin-left:4px}' +
+  '.sc-kit label.sc-poe input{margin:0}';
+function scKitRow(box, label, hint) {
+  var r = document.createElement('div');
+  r.className = 'sc-kit__row';
+  r.innerHTML = '<div class="sc-kit__label"></div>' + (hint ? '<div class="sc-kit__hint"></div>' : '');
+  r.querySelector('.sc-kit__label').textContent = label;
+  if (hint) r.querySelector('.sc-kit__hint').textContent = hint;
+  box.appendChild(r);
+  return r;
+}
+function scKitChip(r, text, href) {
+  var a = document.createElement('a');
+  a.className = 'sc-chip'; a.href = href; a.textContent = text;
+  r.appendChild(a);
+  return a;
+}
+// Посилання на фільтр Хорошопа: /cat/filter/a=1,2;b=3/ — параметри за алфавітом
+function scFilterUrl(cat, params) {
+  params = params || {};
+  var keys = Object.keys(params).sort();
+  var path = SC_LANG + cat;
+  if (!keys.length) return path;
+  return path + 'filter/' + keys.map(function (k) {
+    return k + '=' + [].concat(params[k]).sort(function (a, b) { return a - b; }).join(',');
+  }).join(';') + '/';
 }
 
 
 /* =====================================================================
  * 1. Плашка відправки на картці товару
  * ===================================================================== */
-(function () {
+scModule(1, function () {
   'use strict';
 
   var CONFIG = {
@@ -203,12 +373,7 @@ function scAnchor() {
     weekendFrom: { day: 5, hour: 15, minute: 0 },
     weekendTo:   { day: 0, hour: 12, minute: 0 },
     weekendMode: 'soft',
-    targetSelectors: [
-      '.product__section--order',
-      '.product-card--main .product-card__order-box',
-      '.product__section--price',
-      '.product-card--main .product-card__price-box'
-    ],
+    targetSelectors: SC_ORDER_SELS,
     insertPosition: 'beforebegin',
     texts: {
       today: 'Відправимо сьогодні з Києва',
@@ -233,12 +398,14 @@ function scAnchor() {
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
 
+  var dtf = null;                     // Intl.DateTimeFormat дорогий у створенні — один на сторінку
   function getNow() {
-    var parts = new Intl.DateTimeFormat('en-GB', {
+    if (!dtf) dtf = new Intl.DateTimeFormat('en-GB', {
       timeZone: CONFIG.timezone,
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false
-    }).formatToParts(new Date());
+    });
+    var parts = dtf.formatToParts(new Date());
     var o = {};
     parts.forEach(function (p) { o[p.type] = p.value; });
     return {
@@ -369,12 +536,14 @@ function scAnchor() {
 
   function render(box) {
     var t = buildText();
-    box.innerHTML =
+    var html =
       '<span class="ship-info__icon" aria-hidden="true">🚚</span> ' +
       '<strong>' + t.main + '</strong>' +
       t.lines.map(function (l) {
         return '<div class="ship-info__sub">' + l + '</div>';
       }).join('');
+    // щохвилинне оновлення: не перемальовуємо без змін (зайві мутації будять спостерігачі блоків 1 і 5)
+    if (box._scHtml !== html) { box.innerHTML = html; box._scHtml = html; }
   }
 
   function isMulti(el) {
@@ -430,16 +599,10 @@ function scAnchor() {
     return /InStock/i.test(v);
   }
 
-  function addStyle() {
-    if (document.getElementById('ship-info-style')) return;
-    var style = document.createElement('style');
-    style.id = 'ship-info-style';
-    style.textContent =
-      '#ship-info{box-sizing:border-box;width:100%;flex:0 0 100%;clear:both;margin:12px 0;padding:10px 14px;border-radius:8px;' +
-      'background:#f1f8f1;border:1px solid #cfe5cf;font-size:15px;line-height:1.4}' +
-      '#ship-info .ship-info__sub{font-size:13px;color:#555;margin-top:2px}';
-    document.head.appendChild(style);
-  }
+  var CSS =
+    '#ship-info{box-sizing:border-box;width:100%;flex:0 0 100%;clear:both;margin:12px 0;padding:10px 14px;border-radius:8px;' +
+    'background:#f1f8f1;border:1px solid #cfe5cf;font-size:15px;line-height:1.4}' +
+    '#ship-info .ship-info__sub{font-size:13px;color:#555;margin-top:2px}';
 
   function removeBox() {
     var box = document.getElementById('ship-info');
@@ -456,7 +619,7 @@ function scAnchor() {
     var target = findTarget();
     if (!target) return;
 
-    addStyle();
+    scStyle('ship-info-style', CSS);
     var box = document.createElement('div');
     box.id = 'ship-info';
     render(box);
@@ -464,34 +627,31 @@ function scAnchor() {
   }
 
   function init() {
-    mount();
+    var safeMount = scSafe(1, mount);
+    safeMount();
 
     var timer;
     new MutationObserver(function () {
       clearTimeout(timer);
-      timer = setTimeout(mount, 200);
+      timer = setTimeout(safeMount, 200);
     }).observe(document.body, { childList: true, subtree: true });
 
-    setInterval(function () {
+    setInterval(scSafe(1, function () {
       if (shouldHide()) { removeBox(); return; }
       var box = document.getElementById('ship-info');
       if (box) render(box);
       else mount();
-    }, 60000);
+    }), 60000);
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-})();
+  scReady(scSafe(1, init));
+});
 
 
 /* =====================================================================
  * 2. Картка ДБЖ для роутера без БП у комплекті → пропонуємо БП 12 В 2/3 А
  * ===================================================================== */
-(function () {
+scModule(2, function () {
   'use strict';
 
   var CFG = {
@@ -502,31 +662,12 @@ function scAnchor() {
     allUrl: '/bloky-zhyvlennia-12-24-48v/filter/presence=1;tipVikonannja=6;vixdnaNapruga=1;vixdniyStrum=8,11/'
   };
 
-  var CSS =
-    '#sc-psu{margin:16px 0 0;padding:14px 16px;border:1px solid #f0d58a;border-radius:10px;background:#fffbea;font-size:14px;line-height:1.4}' +
-    '#sc-psu .sc-psu__title{font-weight:700;font-size:15px;margin:0 0 4px}' +
-    '#sc-psu .sc-psu__text{color:#555;margin:0 0 10px;font-size:13px}' +
-    '#sc-psu .sc-psu__list{display:flex;flex-direction:column;gap:8px}' +
-    '#sc-psu a.sc-psu__item{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #e8dcb0;border-radius:8px;background:#fff;color:#1a1a1a;text-decoration:none;transition:border-color .15s}' +
-    '#sc-psu a.sc-psu__item:hover{border-color:#2b7de9}' +
-    '#sc-psu .sc-psu__img{flex:0 0 48px;width:48px;height:48px;object-fit:contain}' +
-    '#sc-psu .sc-psu__info{flex:1;min-width:0}' +
-    '#sc-psu .sc-psu__name{font-size:13px;line-height:1.3;display:block}' +
-    '#sc-psu .sc-psu__note{font-size:12px;color:#7a828c;display:block;margin-top:2px}' +
-    '#sc-psu .sc-psu__price{flex:0 0 auto;font-weight:700;white-space:nowrap}' +
+  var C = scBem('sc-psu');
+  var CSS = scPickCss('sc-psu', C) +
     '#sc-psu a.sc-psu__all{display:inline-block;margin-top:10px;font-size:13px;color:#2b7de9;text-decoration:none}' +
     '#sc-psu a.sc-psu__all:hover{text-decoration:underline}';
 
-  var langPrefix = /^\/(ru|en)\//.test(location.pathname) ? '/' + location.pathname.split('/')[1] : '';
-
-  function addStyle() {
-    if (document.getElementById('sc-psu-style')) return;
-    var s = document.createElement('style');
-    s.id = 'sc-psu-style';
-    s.textContent = CSS;
-    document.head.appendChild(s);
-  }
-
+  var langPrefix = SC_LANG;
   var features = scFeatures, get = scGet;
 
   function needsPsu() {
@@ -537,7 +678,7 @@ function scAnchor() {
     var vin = get(f, /^вхідна напруга$|^входное напряжение$/);
     if (!/dc|12\s?(в|v)/i.test(vin) || /220|230|240/.test(vin)) return false;
 
-    var title = ((document.querySelector('h1') || {}).textContent || '');
+    var title = scH1();
     if (/з блоком живлення|с блоком питания/i.test(title)) return false;
 
     var desc = scDesc();
@@ -547,12 +688,9 @@ function scAnchor() {
     return true;
   }
 
+  // тут ховаємо лише «немає»; «під замовлення» показуємо (на відміну від блоків 3 і 19)
   function loadProduct(pick) {
-    var u = langPrefix + pick.url;
-    return scProduct(u).then(function (p) {
-      if (!p || /немає|нет в наличии/i.test(p.avail)) return null;
-      return { url: u, name: p.name, price: p.price, img: p.img, note: pick.note };
-    });
+    return scPickLoad(pick, function (p) { return !/немає|нет в наличии/i.test(p.avail); });
   }
 
   function init() {
@@ -560,7 +698,7 @@ function scAnchor() {
     var anchor = scAnchor();
     if (!anchor || !needsPsu()) return;
 
-    addStyle();
+    scStyle('sc-psu-style', CSS);
     var box = document.createElement('div');
     box.id = 'sc-psu';
     box.innerHTML =
@@ -572,32 +710,19 @@ function scAnchor() {
 
     var list = box.querySelector('.sc-psu__list');
     scNear(box, function () { Promise.all(CFG.picks.map(loadProduct)).then(function (items) {
-      items.filter(Boolean).forEach(function (p) {
-        var a = document.createElement('a');
-        a.className = 'sc-psu__item';
-        a.href = p.url;
-        a.innerHTML =
-          (p.img ? '<img class="sc-psu__img" loading="lazy" alt="">' : '') +
-          '<span class="sc-psu__info"><span class="sc-psu__name"></span><span class="sc-psu__note"></span></span>' +
-          '<span class="sc-psu__price"></span>';
-        if (p.img) a.querySelector('img').src = p.img;
-        a.querySelector('.sc-psu__name').textContent = p.name;
-        a.querySelector('.sc-psu__note').textContent = p.note;
-        a.querySelector('.sc-psu__price').textContent = p.price;
-        list.appendChild(a);
-      });
+      items.filter(Boolean).forEach(function (p) { list.appendChild(scItem(p, C)); });
       if (!list.children.length) list.remove();
     }); });
   }
 
-  scIdle(function () { init(); setTimeout(init, 2000); });
-})();
+  scInit(2, init);
+});
 
 
 /* =====================================================================
  * 3. Картки інверторів і ДБЖ 12-24V → підбір АКБ
  * ===================================================================== */
-(function () {
+scModule(3, function () {
   'use strict';
 
   // Кандидати йдуть у порядку пріоритету; показуються перші MAX, що є в наявності.
@@ -650,38 +775,17 @@ function scAnchor() {
     cables:  { text: 'Кабелі для з’єднання АКБ →',  url: '/avtonomne-zhyvlennia/filter/tipPristrou=85/' }
   };
 
-  var CSS =
-    '#sc-akb{margin:16px 0 0;padding:14px 16px;border:1px solid #f0d58a;border-radius:10px;background:#fffbea;font-size:14px;line-height:1.4}' +
-    '#sc-akb .sc-akb__title{font-weight:700;font-size:15px;margin:0 0 4px}' +
-    '#sc-akb .sc-akb__text{color:#555;margin:0 0 10px;font-size:13px}' +
-    '#sc-akb .sc-akb__list{display:flex;flex-direction:column;gap:8px}' +
-    '#sc-akb a.sc-akb__item{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #e8dcb0;border-radius:8px;background:#fff;color:#1a1a1a;text-decoration:none;transition:border-color .15s}' +
-    '#sc-akb a.sc-akb__item:hover{border-color:#2b7de9}' +
-    '#sc-akb .sc-akb__img{flex:0 0 48px;width:48px;height:48px;object-fit:contain}' +
-    '#sc-akb .sc-akb__info{flex:1;min-width:0}' +
-    '#sc-akb .sc-akb__name{font-size:13px;line-height:1.3;display:block}' +
-    '#sc-akb .sc-akb__note{font-size:12px;color:#7a828c;display:block;margin-top:2px}' +
-    '#sc-akb .sc-akb__price{flex:0 0 auto;font-weight:700;white-space:nowrap}' +
-    '#sc-akb .sc-akb__links{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:10px}' +
-    '#sc-akb .sc-akb__links a{font-size:13px;color:#2b7de9;text-decoration:none}' +
-    '#sc-akb .sc-akb__links a:hover{text-decoration:underline}';
+  var C = scBem('sc-akb');
+  C.links = 'sc-akb__links';
+  var CSS = scPickCss('sc-akb', C);
 
-  var langPrefix = /^\/(ru|en)\//.test(location.pathname) ? '/' + location.pathname.split('/')[1] : '';
-
-  function addStyle() {
-    if (document.getElementById('sc-akb-style')) return;
-    var s = document.createElement('style');
-    s.id = 'sc-akb-style';
-    s.textContent = CSS;
-    document.head.appendChild(s);
-  }
-
+  var langPrefix = SC_LANG;
   var features = scFeatures, get = scGet;
 
   function detect() {
     var f = features();
     var type = get(f, /^тип (пристрою|устройства)$/);
-    var title = ((document.querySelector('h1') || {}).textContent || '');
+    var title = scH1();
     var desc = scDesc();
 
     // --- Інвертор ---
@@ -740,13 +844,7 @@ function scAnchor() {
     return null;
   }
 
-  function loadProduct(pick) {
-    var u = langPrefix + pick.url;
-    return scProduct(u).then(function (p) {
-      if (!p || !scInStock(p.avail)) return null;
-      return { url: u, name: p.name, price: p.price, img: p.img, note: pick.note || '' };
-    });
-  }
+  function loadProduct(pick) { return scPickLoad(pick, scAvailOk); }
 
   // Завантажуємо кандидатів по 3 і зупиняємось, щойно набрали MAX у наявності
   function pickInStock(list, cb) {
@@ -768,7 +866,7 @@ function scAnchor() {
     var cfg = detect();
     if (!cfg) return;
 
-    addStyle();
+    scStyle('sc-akb-style', CSS);
     var box = document.createElement('div');
     box.id = 'sc-akb';
     box.innerHTML = '<div class="sc-akb__title"></div><div class="sc-akb__text"></div><div class="sc-akb__list"></div><div class="sc-akb__links"></div>';
@@ -783,18 +881,7 @@ function scAnchor() {
 
     var listEl = box.querySelector('.sc-akb__list');
     scNear(box, function () { pickInStock(cfg.list, function (items) {
-      items.forEach(function (p) {
-        var a = document.createElement('a');
-        a.className = 'sc-akb__item'; a.href = p.url;
-        a.innerHTML = (p.img ? '<img class="sc-akb__img" loading="lazy" alt="">' : '') +
-          '<span class="sc-akb__info"><span class="sc-akb__name"></span><span class="sc-akb__note"></span></span>' +
-          '<span class="sc-akb__price"></span>';
-        if (p.img) a.querySelector('img').src = p.img;
-        a.querySelector('.sc-akb__name').textContent = p.name;
-        a.querySelector('.sc-akb__note').textContent = p.note;
-        a.querySelector('.sc-akb__price').textContent = p.price;
-        listEl.appendChild(a);
-      });
+      items.forEach(function (p) { listEl.appendChild(scItem(p, C)); });
       if (!listEl.children.length) listEl.remove();
       // Для калькулятора автономності (блок 8): ті самі сумісні АКБ у наявності
       if (cfg.slot !== undefined) {
@@ -804,14 +891,14 @@ function scAnchor() {
     }); });
   }
 
-  scIdle(function () { init(); setTimeout(init, 2000); });
-})();
+  scInit(3, init);
+});
 
 
 /* =====================================================================
  * 4. Сторінка «Ваше замовлення отримано» → кнопка підтвердження в Telegram
  * ===================================================================== */
-(function () {
+scModule(4, function () {
   'use strict';
   if (!/checkout.*complete|complete.*order/i.test(location.pathname)) return;
 
@@ -874,20 +961,24 @@ function scAnchor() {
 
   function start() {
     if (inject()) return;
-    var obs = new MutationObserver(function () { if (inject()) obs.disconnect(); });
+    // inject() читає body.innerText (перерахунок макета) — не частіше ніж раз на 100 мс, а не на кожну мутацію
+    var t = 0, done = false;
+    var obs = new MutationObserver(function () {
+      if (t || done) return;
+      t = setTimeout(scSafe(4, function () { t = 0; if (!done && inject()) { done = true; obs.disconnect(); } }), 100);
+    });
     obs.observe(document.body, { childList: true, subtree: true });
-    setTimeout(function () { obs.disconnect(); }, 60000);
+    setTimeout(function () { done = true; obs.disconnect(); }, 60000);
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-  else start();
-})();
+  scReady(scSafe(4, start));
+});
 
 
 /* =====================================================================
  * 5. Кошик і оформлення → прогрес до безкоштовної доставки (від 3000 грн)
  * ===================================================================== */
-(function () {
+scModule(5, function () {
   'use strict';
 
   /* ================= НАСТРОЙКИ ================= */
@@ -914,29 +1005,20 @@ function scAnchor() {
   };
   /* ============================================== */
 
-  function parseSum(text) {
-    var m = String(text).replace(/[\s\u00a0]/g, '').match(/\d+(?:[.,]\d+)?/);
-    return m ? parseFloat(m[0].replace(',', '.')) : 0;
-  }
+  var parseSum = scSum;
 
   function fmt(n) {
     return Math.ceil(n).toLocaleString('uk-UA');
   }
 
-  function addStyle() {
-    if (document.getElementById('free-ship-style')) return;
-    var c = CONFIG.colors;
-    var style = document.createElement('style');
-    style.id = 'free-ship-style';
-    style.textContent =
-      '#free-ship{box-sizing:border-box;margin:12px 0;padding:10px 14px;border-radius:8px;' +
-      'background:' + c.bg + ';border:1px solid ' + c.border + ';font-size:15px;line-height:1.4}' +
-      '#free-ship .free-ship__track{height:8px;margin-top:8px;border-radius:4px;' +
-      'background:' + c.track + ';overflow:hidden}' +
-      '#free-ship .free-ship__bar{height:100%;border-radius:4px;background:' + c.bar + ';' +
-      'transition:width .3s ease}';
-    document.head.appendChild(style);
-  }
+  var c = CONFIG.colors;
+  var CSS =
+    '#free-ship{box-sizing:border-box;margin:12px 0;padding:10px 14px;border-radius:8px;' +
+    'background:' + c.bg + ';border:1px solid ' + c.border + ';font-size:15px;line-height:1.4}' +
+    '#free-ship .free-ship__track{height:8px;margin-top:8px;border-radius:4px;' +
+    'background:' + c.track + ';overflow:hidden}' +
+    '#free-ship .free-ship__bar{height:100%;border-radius:4px;background:' + c.bar + ';' +
+    'transition:width .3s ease}';
 
   function findAnchor(cart) {
     for (var i = 0; i < CONFIG.insertBeforeSelectors.length; i++) {
@@ -965,7 +1047,7 @@ function scAnchor() {
     var anchor = findAnchor(cart) || totalEl;
     if (!anchor || !anchor.parentNode) return;
 
-    addStyle();
+    scStyle('free-ship-style', CSS);
     if (!box) {
       box = document.createElement('div');
       box.id = 'free-ship';
@@ -988,29 +1070,26 @@ function scAnchor() {
   }
 
   function init() {
-    update();
+    var safeUpdate = scSafe(5, update);
+    safeUpdate();
 
     // Корзина перерисовывается через AJAX (иногда целиком), поэтому следим за всей страницей.
     // update() ничего не меняет, если текст блока не изменился - зацикливания нет.
     var timer;
     new MutationObserver(function () {
       clearTimeout(timer);
-      timer = setTimeout(update, 150);
+      timer = setTimeout(safeUpdate, 150);
     }).observe(document.body, { childList: true, subtree: true, characterData: true });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-})();
+  scReady(scSafe(5, init));
+});
 
 
 /* =====================================================================
  * 6. Картка відеокамери → «Підберіть до цієї камери» (реєстратори TVT)
  * ===================================================================== */
-(function () {
+scModule(6, function () {
   'use strict';
 
   var CFG = {
@@ -1029,37 +1108,7 @@ function scAnchor() {
     storage: '/nakopychuvachi/2297/', sd: 151
   };
 
-  var CSS =
-    '.sc-kit{margin:16px 0 0;padding:14px 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fafbfc;font-size:14px;line-height:1.4}' +
-    '.sc-kit__title{font-weight:700;font-size:15px;margin:0 0 10px}' +
-    '.sc-kit__row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 0;border-top:1px dashed #e3e6ea}' +
-    '.sc-kit__row:first-of-type{border-top:0;padding-top:0}' +
-    '.sc-kit__label{flex:0 0 100%;font-weight:600;color:#333}' +
-    '.sc-kit__hint{flex:0 0 100%;font-size:12px;color:#7a828c;margin-top:-2px}' +
-    '.sc-kit a.sc-chip{display:inline-flex;align-items:center;padding:5px 11px;border:1px solid #cfd5dc;border-radius:16px;background:#fff;color:#1a1a1a;text-decoration:none;white-space:nowrap;transition:border-color .15s,background .15s}' +
-    '.sc-kit a.sc-chip:hover{border-color:#2b7de9;background:#f0f6ff}' +
-    '.sc-kit label.sc-poe{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#444;cursor:pointer;margin-left:4px}' +
-    '.sc-kit label.sc-poe input{margin:0}';
-
-  var langPrefix = /^\/(ru|en)\//.test(location.pathname) ? '/' + location.pathname.split('/')[1] : '';
-
-  function addStyle() {
-    if (document.getElementById('sc-kit-style')) return;
-    var s = document.createElement('style');
-    s.id = 'sc-kit-style'; s.textContent = CSS;
-    document.head.appendChild(s);
-  }
-
-  // Хорошоп: /cat/filter/a=1,2;b=3/ — параметри за алфавітом
-  function url(cat, params) {
-    params = params || {};
-    var keys = Object.keys(params).sort();
-    var path = langPrefix + cat;
-    if (!keys.length) return path;
-    return path + 'filter/' + keys.map(function (k) {
-      return k + '=' + [].concat(params[k]).sort(function (a, b) { return a - b; }).join(',');
-    }).join(';') + '/';
-  }
+  var url = scFilterUrl;   // Хорошоп: /cat/filter/a=1,2;b=3/ — параметри за алфавітом
 
   function init() {
     if (document.getElementById('sc-cam')) return;
@@ -1070,7 +1119,7 @@ function scAnchor() {
     var type = scGet(f, /^тип (пристрою|устройства)$/);
     if (!/відеокамер|видеокамер/i.test(type) || /web/i.test(type)) return;
 
-    var title    = ((document.querySelector('h1') || {}).textContent || '');
+    var title    = scH1();
     var isAnalog = /hdtvi|hdcvi|ahd|mhd|аналог/i.test(type);
     var poe      = /так|да|yes/i.test(scGet(f, /^poe$/));
     var power    = scGet(f, /^(живлення|питание)$/);
@@ -1078,26 +1127,13 @@ function scAnchor() {
     var hasSD    = /sd|карт/i.test(scGet(f, /^карта пам/));
     var isAjax   = /ajax/i.test(title);
 
-    addStyle();
+    scStyle('sc-kit-style', SC_KIT_CSS);
     var box = document.createElement('div');
     box.id = 'sc-cam'; box.className = 'sc-kit';
     box.innerHTML = '<div class="sc-kit__title">Підберіть до цієї камери</div>';
 
-    function row(label, hint) {
-      var r = document.createElement('div');
-      r.className = 'sc-kit__row';
-      r.innerHTML = '<div class="sc-kit__label"></div>' + (hint ? '<div class="sc-kit__hint"></div>' : '');
-      r.querySelector('.sc-kit__label').textContent = label;
-      if (hint) r.querySelector('.sc-kit__hint').textContent = hint;
-      box.appendChild(r);
-      return r;
-    }
-    function chip(r, text, href) {
-      var a = document.createElement('a');
-      a.className = 'sc-chip'; a.href = href; a.textContent = text;
-      r.appendChild(a);
-      return a;
-    }
+    function row(label, hint) { return scKitRow(box, label, hint); }
+    var chip = scKitChip;
 
     // 1. Відеореєстратор
     if (isAnalog) {
@@ -1158,14 +1194,14 @@ function scAnchor() {
     anchor.parentNode.insertBefore(box, anchor.nextSibling);
   }
 
-  scIdle(function () { init(); setTimeout(init, 2000); });
-})();
+  scInit(6, init);
+});
 
 
 /* =====================================================================
  * 7. Картка відеореєстратора → «Підберіть до цього реєстратора» (камери TVT)
  * ===================================================================== */
-(function () {
+scModule(7, function () {
   'use strict';
 
   var CFG = {
@@ -1179,35 +1215,8 @@ function scAnchor() {
     connectors: '/kabeli-i-roziemy/'
   };
 
-  var langPrefix = /^\/(ru|en)\//.test(location.pathname) ? '/' + location.pathname.split('/')[1] : '';
-
-  // Стилі спільні з блоком 6 (.sc-kit)
-  var CSS =
-    '.sc-kit{margin:16px 0 0;padding:14px 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fafbfc;font-size:14px;line-height:1.4}' +
-    '.sc-kit__title{font-weight:700;font-size:15px;margin:0 0 10px}' +
-    '.sc-kit__row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 0;border-top:1px dashed #e3e6ea}' +
-    '.sc-kit__row:first-of-type{border-top:0;padding-top:0}' +
-    '.sc-kit__label{flex:0 0 100%;font-weight:600;color:#333}' +
-    '.sc-kit__hint{flex:0 0 100%;font-size:12px;color:#7a828c;margin-top:-2px}' +
-    '.sc-kit a.sc-chip{display:inline-flex;align-items:center;padding:5px 11px;border:1px solid #cfd5dc;border-radius:16px;background:#fff;color:#1a1a1a;text-decoration:none;white-space:nowrap;transition:border-color .15s,background .15s}' +
-    '.sc-kit a.sc-chip:hover{border-color:#2b7de9;background:#f0f6ff}';
-
-  function addStyle() {
-    if (document.getElementById('sc-kit-style')) return;
-    var s = document.createElement('style');
-    s.id = 'sc-kit-style'; s.textContent = CSS;
-    document.head.appendChild(s);
-  }
-
-  function url(cat, params) {
-    params = params || {};
-    var keys = Object.keys(params).sort();
-    var path = langPrefix + cat;
-    if (!keys.length) return path;
-    return path + 'filter/' + keys.map(function (k) {
-      return k + '=' + [].concat(params[k]).sort(function (a, b) { return a - b; }).join(',');
-    }).join(';') + '/';
-  }
+  var url = scFilterUrl;   // стилі й рядки — спільні з блоком 6 (.sc-kit)
+  // без заміни коми (на відміну від scNum) — як і було: «5,0 Мп» → 5
   function num(s) { var m = String(s).match(/\d+(\.\d+)?/); return m ? parseFloat(m[0]) : 0; }
 
   function init() {
@@ -1216,7 +1225,7 @@ function scAnchor() {
     if (!anchor) return;
 
     var f = scFeatures();
-    var title = ((document.querySelector('h1') || {}).textContent || '').trim();
+    var title = scH1().trim();
     var type = scGet(f, /^тип (пристрою|устройства)$/) || title;   // у кількох карток характеристики не заповнені
     if (!/реєстратор|регистратор/i.test(type) || /нагрудн|автомоб|кабель|живлення/i.test(type)) return;
 
@@ -1230,25 +1239,13 @@ function scAnchor() {
 
     if (!isAjax && !isIP && !ipCh) return;   // аналогові без IP-каналів — камер TVT для них немає
 
-    addStyle();
+    scStyle('sc-kit-style', SC_KIT_CSS);
     var box = document.createElement('div');
     box.id = 'sc-nvr'; box.className = 'sc-kit';
     box.innerHTML = '<div class="sc-kit__title">Підберіть до цього реєстратора</div>';
 
-    function row(label, hint) {
-      var r = document.createElement('div');
-      r.className = 'sc-kit__row';
-      r.innerHTML = '<div class="sc-kit__label"></div>' + (hint ? '<div class="sc-kit__hint"></div>' : '');
-      r.querySelector('.sc-kit__label').textContent = label;
-      if (hint) r.querySelector('.sc-kit__hint').textContent = hint;
-      box.appendChild(r);
-      return r;
-    }
-    function chip(r, text, href) {
-      var a = document.createElement('a');
-      a.className = 'sc-chip'; a.href = href; a.textContent = text;
-      r.appendChild(a);
-    }
+    function row(label, hint) { return scKitRow(box, label, hint); }
+    var chip = scKitChip;
 
     // 1. Камери
     if (isAjax) {
@@ -1288,8 +1285,8 @@ function scAnchor() {
     anchor.parentNode.insertBefore(box, anchor.nextSibling);
   }
 
-  scIdle(function () { init(); setTimeout(init, 2000); });
-})();
+  scInit(7, init);
+});
 
 
 /* =====================================================================
@@ -1297,7 +1294,7 @@ function scAnchor() {
  *    Коефіцієнти — як у текстах описів:
  *    станції ×0.85, системи накопичення ×0.9×0.9 = 0.81, ДБЖ 12 В — А·год ÷ А без втрат
  * ===================================================================== */
-(function () {
+scModule(8, function () {
   'use strict';
 
   var DEV_AC = [
@@ -1349,13 +1346,13 @@ function scAnchor() {
     '#sc-calc .scc-msg{flex:1 1 100%;font-size:13px;margin-top:4px}' +
     '#sc-calc .scc-f{font-size:12px;color:#7a828c;margin:10px 0 0}';
 
-  function num(s) { var m = String(s || '').replace(',', '.').match(/\d+(\.\d+)?/); return m ? parseFloat(m[0]) : 0; }
+  var num = scNum;
   function watts(s) { var v = num(s); return /к(Вт|ВА)/i.test(s) ? v * 1000 : v; }
 
   function detect() {
     var f = scFeatures(), get = scGet;
     var type = get(f, /^тип (пристрою|устройства)$/);
-    var title = ((document.querySelector('h1') || {}).textContent || '');
+    var title = scH1();
 
     if (/зарядна станція|зарядная станция/i.test(type)) {
       var wh = num(get(f, /^ємність$|^емкость$/));
@@ -1498,6 +1495,7 @@ function scAnchor() {
     return out;
   }
 
+  var waiting = false;
   function init() {
     if (document.getElementById('sc-calc')) return;
     if (!document.querySelector('[itemtype*="schema.org/Product"]')) return;
@@ -1505,18 +1503,20 @@ function scAnchor() {
     if (!cfg) return;
     if (cfg.mode === 'ah') {
       var bats = batteries();
-      if (!bats) { document.addEventListener('sc-akb', init, { once: true }); return; }
+      if (!bats) {
+        // АКБ від блоку 3 ще не підвантажені — чекаємо його подію (один слухач, хоч init і викликається двічі)
+        if (!waiting) { waiting = true; document.addEventListener('sc-akb', scSafe(8, function () { waiting = false; init(); }), { once: true }); }
+        return;
+      }
       if (!bats.length) return;
       cfg.bats = bats;
     }
-    if (!document.getElementById('sc-calc-style')) {
-      var s = document.createElement('style'); s.id = 'sc-calc-style'; s.textContent = CSS; document.head.appendChild(s);
-    }
+    scStyle('sc-calc-style', CSS);
     place(build(cfg, cfg.bats || []));
   }
 
-  scIdle(function () { init(); setTimeout(init, 2000); });
-})();
+  scInit(8, init);
+});
 
 
 /* =====================================================================
@@ -1529,7 +1529,7 @@ function scAnchor() {
  *    Класи: B — усі хаби; P — крім Hub (2G); G — лише Hub 2 / Hub 2 Plus / Hub BP;
  *           C — як G, а через ретранслятор лише ReX 2
  * ===================================================================== */
-(function () {
+scModule(9, function () {
   'use strict';
 
   var MAX = 8;
@@ -1575,7 +1575,8 @@ function scAnchor() {
     { k: 'motionout',  re: /MotionProtect Outdoor/i,          cls: 'B', url: U('/bezdrotovyi-vulychnyi-datchyk-rukhu-ajax-motionprotect-outdoor-bilyi/') },
     { k: 'dualcurtain', re: /DualCurtain Outdoor/i,           cls: 'P', url: U('/bezdrotovyi-vulychnyi-dvonapravlenyi-datchyk-rukhu-shtora-ajax-dualcurtain-outdoor-bilyi/') },
     { k: 'curtainmini', re: /Curtain Outdoor Mini/i,          cls: 'G', url: null },
-    { k: 'curtainout', re: /(?<!Dual)Curtain Outdoor/i,       cls: 'G', url: U('/datchyk-shtora-ajax-curtain-outdoor-jeweller-white/') },
+    // без lookbehind (?<!Dual): у Safari < 16.4 він ламав увесь скрипт; «DualCurtain Outdoor» уже перехоплено правилом вище
+    { k: 'curtainout', re: /Curtain Outdoor/i,                cls: 'G', url: U('/datchyk-shtora-ajax-curtain-outdoor-jeweller-white/') },
     { k: 'spacecontrol', re: /SpaceControl(?! S\b)/i,         cls: 'B', url: U('/brelok-ajax-spacecontrol-bilyi/', '/brelok-ajax-spacecontrol-chornyi/') },
     { k: 'button',     re: /\b(Double)?Button\b(?!\/)/i,      cls: 'B', url: U('/tryvozhna-knopka-ajax-button-bila/', '/tryvozhna-knopka-ajax-button-chorna/') },
     { k: 'lifequality', re: /LifeQuality/i,                   cls: 'C', url: U('/datchyk-yakosti-povitria-ajax-lifequality-bilyi/', '/datchyk-yakosti-povitria-ajax-lifequality-chornyi/') },
@@ -1615,10 +1616,11 @@ function scAnchor() {
     '#sc-ajax .sca-n{flex:1;min-width:0;font-size:13px;line-height:1.3}' +
     '#sc-ajax .sca-p{flex:0 0 auto;font-weight:700;white-space:nowrap}' +
     '#sc-ajax .sca-s{font-size:12px;color:#7a828c;margin:10px 0 0}';
+  var C = { a: 'sca-i', img: 'sca-img', name: 'sca-n', price: 'sca-p' };   // картка без підпису
 
-  var langPrefix = /^\/(ru|en)\//.test(location.pathname) ? '/' + location.pathname.split('/')[1] : '';
+  var langPrefix = SC_LANG;
 
-  function title() { return ((document.querySelector('h1') || {}).textContent || '').replace(/\s+/g, ' ').trim(); }
+  function title() { return scH1().replace(/\s+/g, ' ').trim(); }
 
   // Не показуємо на аксесуарах і товарах, яким хаб не потрібен
   var SKIP = /Smartbracket|DummyBox|муляж|кріпильна|кронштейн|корпус|Case\b|JunctionBox|Holder|тримач|Hood|навіс|PSU|блок живлення|Акумулятор Ajax|Батарея CR|ExternalAntenna|антена|EN54|відеокамера|IP-відео|NVR|відеореєстратор|DoorBell|підписка|передплата|Frame|рамка|Cover|панель|SoloButton|SideButton|CenterButton|Bypass|ocBridge|uartBridge|SpaceControl S\b|Fibra|SpeakerPhone/i;
@@ -1718,13 +1720,7 @@ function scAnchor() {
     scNear(box, function () { pickInStock(items, dark, function (found) {
       found.forEach(function (p) {
         if (p.url.replace(/\/$/, '') === location.pathname.replace(/\/$/, '')) return;
-        var a = document.createElement('a');
-        a.className = 'sca-i'; a.href = p.url;
-        a.innerHTML = (p.img ? '<img class="sca-img" loading="lazy" alt="">' : '') + '<span class="sca-n"></span><span class="sca-p"></span>';
-        if (p.img) a.querySelector('img').src = p.img;
-        a.querySelector('.sca-n').textContent = p.name;
-        a.querySelector('.sca-p').textContent = p.price;
-        listEl.appendChild(a);
+        listEl.appendChild(scItem(p, C));
       });
       if (!listEl.children.length) listEl.remove();
     }); });
@@ -1737,21 +1733,19 @@ function scAnchor() {
     if (!anchor) return;
     var cfg = detect();
     if (!cfg) return;
-    if (!document.getElementById('sc-ajax-style')) {
-      var s = document.createElement('style'); s.id = 'sc-ajax-style'; s.textContent = CSS; document.head.appendChild(s);
-    }
+    scStyle('sc-ajax-style', CSS);
     anchor.parentNode.insertBefore(build(cfg), anchor.nextSibling);
   }
 
-  scIdle(function () { init(); setTimeout(init, 2000); });
-})();
+  scInit(9, init);
+});
 
 
 /* =====================================================================
  * 10. Оформлення замовлення: АКБ → вантажне відділення, підказки до оплати,
  *     термін відправки (як у плашці на картці, блок 1)
  * ===================================================================== */
-(function () {
+scModule(10, function () {
   'use strict';
   if (location.pathname.indexOf('/checkout') === -1) return;
 
@@ -1774,8 +1768,7 @@ function scAnchor() {
   };
   function orderSum() {
     var t = document.querySelector('#checkout-container .j-total-sum, .order-summary .j-total-sum, .j-total-sum');
-    var m = t && String(t.textContent).replace(/[\s\u00a0]/g, '').match(/\d+(?:[.,]\d+)?/);
-    return m ? parseFloat(m[0].replace(',', '.')) : 0;
+    return t ? scSum(t.textContent) : 0;
   }
   function codFee() { var s = orderSum(); return s > 0 ? Math.round(s * COD.pct + COD.fix) : 0; }
 
@@ -1801,13 +1794,20 @@ function scAnchor() {
     if (!text) { if (n) n.remove(); return; }
     if (n.getAttribute('data-t') !== text) { n.textContent = text; n.setAttribute('data-t', text); }
   }
-  function form() { return document.getElementById('checkout-container') || document; }
+  var form = scCheckout;
   function sel(q) { return form().querySelector(q); }
   function shown(s) {                          // select прихований плагіном — дивимося на його обгортку
     var box = s && s.parentElement;
     return !!(box && box.offsetParent !== null);
   }
-  function optText(s) { return s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].textContent.trim() : ''; }
+  var optText = scOptText;
+  // Видима кнопка «Оформити / Підтвердити» і її рядок форми (мобільна версія)
+  function submitRow() {
+    var btn = [].filter.call(document.querySelectorAll('#checkout-container button'), function (x) {
+      return x.offsetParent !== null && /оформити|підтвердити/i.test(x.textContent);
+    })[0];
+    return btn && (btn.closest('.form-item') || btn);
+  }
 
   function cartItems() {
     var out = [];
@@ -1894,13 +1894,7 @@ function scAnchor() {
   function shipNote() {
     var old = document.getElementById('sc-co-ship');
     // десктоп: .checkout-footer; мобільна: блок з кнопкою «Оформити замовлення»
-    var foot = document.querySelector('#checkout-container .checkout-footer');
-    if (!foot) {
-      var btn = [].filter.call(document.querySelectorAll('#checkout-container button'), function (x) {
-        return x.offsetParent !== null && /оформити|підтвердити/i.test(x.textContent);
-      })[0];
-      foot = btn && (btn.closest('.form-item') || btn);
-    }
+    var foot = document.querySelector('#checkout-container .checkout-footer') || submitRow();
     if (!stockOk || typeof window.scShipText !== 'function' || !foot) return setText(old, '');
     var t = window.scShipText();
     var html = '🚚 <strong>' + t.main + '</strong>' + t.lines.map(function (l) { return '<div class="sub">' + l + '</div>'; }).join('');
@@ -1916,11 +1910,7 @@ function scAnchor() {
   /* ---- 5. Мобільна: підсумок над кнопкою «Оформити» (кошик на мобільній — аж під кнопкою) ---- */
   function totalNote() {
     var old = document.getElementById('sc-co-total');
-    var ship = document.getElementById('sc-co-ship');
-    var btn = [].filter.call(document.querySelectorAll('#checkout-container button'), function (x) {
-      return x.offsetParent !== null && /оформити|підтвердити/i.test(x.textContent);
-    })[0];
-    var foot = btn && (btn.closest('.form-item') || btn);
+    var foot = submitRow();
     var sum = orderSum();
     if (window.innerWidth >= 768 || !foot || !sum || document.querySelector('#checkout-container .checkout-footer')) { if (old) old.remove(); return; }
     var dlv = window.scDlvPrice || 0;
@@ -1951,23 +1941,20 @@ function scAnchor() {
   }
 
   function start() {
-    if (!document.getElementById('sc-co-style')) {
-      var s = document.createElement('style'); s.id = 'sc-co-style'; s.textContent = CSS; document.head.appendChild(s);
-    }
+    scStyle('sc-co-style', CSS);
     tick();
     // Поля оформлення — плагін selectboxit, події change ненадійні; перевіряємо стан щосекунди
     setInterval(tick, 1000);
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-  else start();
-})();
+  scReady(scSafe(10, start));
+});
 
 
 /* =====================================================================
  * 11. Оформлення замовлення → орієнтовна вартість доставки Новою поштою з Києва
  *     Тарифи «Посилки до 30 кг» (між відділеннями, за кожне місце), жовтень 2026
  * ===================================================================== */
-(function () {
+scModule(11, function () {
   'use strict';
   if (location.pathname.indexOf('/checkout') === -1) return;
 
@@ -1999,7 +1986,10 @@ function scAnchor() {
       var c = JSON.parse(localStorage.getItem('scw:' + url));
       if (c && Date.now() - c.t < 7 * 86400000) return (wMem[url] = Promise.resolve(c.kg));
     } catch (e) {}
-    return (wMem[url] = fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.text(); }).then(function (html) {
+    return (wMem[url] = fetch(url, { credentials: 'same-origin' }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);       // 404/500 не кешуємо на 7 днів — вага за замовчуванням лише цього разу
+      return r.text();
+    }).then(function (html) {
       var d = new DOMParser().parseFromString(html, 'text/html'), kg = 0;
       [].some.call(d.querySelectorAll('tr'), function (tr) {
         if (tr.children.length === 2 && /^\s*вага\s*$/i.test(tr.children[0].textContent)) { kg = parseKg(tr.children[1].textContent); return kg > 0; }
@@ -2010,8 +2000,7 @@ function scAnchor() {
     }).catch(function () { return 0; }));
   }
 
-  function form() { return document.getElementById('checkout-container') || document; }
-  function optText(s) { return s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].textContent.trim() : ''; }
+  var form = scCheckout, optText = scOptText;
   function cityText() {
     var c = form().querySelector('[name="Recipient[delivery_city]"]');
     if (!c) return '';
@@ -2026,8 +2015,7 @@ function scAnchor() {
   }
   function orderSum() {
     var t = document.querySelector('.j-total-sum');
-    var m = t && String(t.textContent).replace(/[\s ]/g, '').match(/\d+(?:[.,]\d+)?/);
-    return m ? parseFloat(m[0].replace(',', '.')) : 0;
+    return t ? scSum(t.textContent) : 0;
   }
   function tier(table, kg) { for (var i = 0; i < table.length; i++) if (kg <= table[i][0]) return table[i][1]; return 0; }
 
@@ -2094,15 +2082,13 @@ function scAnchor() {
   }
 
   function start() {
-    if (!document.getElementById('sc-co-dlv-style')) {
-      var s = document.createElement('style'); s.id = 'sc-co-dlv-style'; s.textContent = CSS; document.head.appendChild(s);
-    }
-    tick();
-    setInterval(tick, 1000);
+    scStyle('sc-co-dlv-style', CSS);
+    var t = scSafe(11, tick);
+    t();
+    setInterval(t, 1000);
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-  else start();
-})();
+  scReady(scSafe(11, start));
+});
 
 
 /* =====================================================================
@@ -2110,7 +2096,7 @@ function scAnchor() {
  *     Лише на сторінці «Ваше замовлення отримано», з реальним номером, e-mail і датою.
  *     Без e-mail Google опитування не надсилає — тоді нічого не показуємо.
  * ===================================================================== */
-(function () {
+scModule(12, function () {
   'use strict';
   var MERCHANT_ID = 5698392861;
   var onComplete = /checkout.*complete|complete.*order/i.test(location.pathname);
@@ -2163,14 +2149,14 @@ function scAnchor() {
     if (data() || tries++ > 40) return start();
     setTimeout(wait, 500);
   })();
-})();
+});
 
 
 /* =====================================================================
  * 13. Мобільна картка → закріплена внизу панель «ціна + Купити»
  *     Видно, поки основної кнопки «Купити» немає на екрані (ще не догорнули або вже прогорнули)
  * ===================================================================== */
-(function () {
+scModule(13, function () {
   'use strict';
 
   var CSS =
@@ -2184,54 +2170,63 @@ function scAnchor() {
     '#sc-sticky button{flex:0 0 auto;min-width:130px;height:44px;margin:0}' +
     'body.sc-sticky-pad{padding-bottom:72px}';
 
+  var BUY = '.product-card__buy-button button, button.j-buy-button-add[data-skin="mobile"]';
+
   function init() {
     if (document.getElementById('sc-sticky')) return;
-    var buy = document.querySelector('.product-card__buy-button button, button.j-buy-button-add[data-skin="mobile"]');
+    var buy = document.querySelector(BUY);
     if (!buy || window.innerWidth >= 768) return;                 // лише мобільна версія
-    if (!document.querySelector('[itemprop="availability"][href*="InStock"], [itemprop="availability"][href*="Limited"]')) return;
+    if (!document.querySelector(SC_AVAIL_SEL)) return;
     var priceMeta = document.querySelector('[itemprop="offers"] [itemprop="price"], .product-card__price [itemprop="price"]');
     var pn = priceMeta ? parseFloat(priceMeta.getAttribute('content')) : 0;
     if (!pn) return;
 
-    var s = document.createElement('style'); s.textContent = CSS; document.head.appendChild(s);
+    scStyle('sc-sticky-style', CSS);
     var bar = document.createElement('div');
     bar.id = 'sc-sticky';
     bar.innerHTML = '<span class="scs-i"><span class="scs-n"></span><span class="scs-p"></span></span>' +
       '<button type="button" class="btn btn--primary"></button>';
-    bar.querySelector('.scs-n').textContent = ((document.querySelector('h1') || {}).textContent || '').trim();
+    bar.querySelector('.scs-n').textContent = scH1().trim();
     bar.querySelector('.scs-p').textContent = Math.round(pn).toLocaleString('uk-UA') + ' грн';
     var btn = bar.querySelector('button');
+    // Хорошоп може перемалювати кнопку після «Купити» — тоді беремо нову, інакше клік іде у від'єднаний елемент,
+    // а панель за нульовими координатами старої кнопки більше не з'являється
+    function cur() {
+      if (!buy.isConnected) { var b = document.querySelector(BUY); if (b) buy = b; }
+      return buy;
+    }
     function sync() {                                             // «Купити» / «В кошику» — як в основній кнопці
-      var t = (buy.textContent || '').replace(/\s+/g, ' ').trim() || 'Купити';
+      var t = (cur().textContent || '').replace(/\s+/g, ' ').trim() || 'Купити';
       if (btn.textContent !== t) btn.textContent = t;
     }
     sync();
-    btn.addEventListener('click', function () { buy.click(); setTimeout(sync, 1500); });
+    btn.addEventListener('click', function () { cur().click(); setTimeout(scSafe(13, sync), 1500); });
     document.body.appendChild(bar);
     document.body.classList.add('sc-sticky-pad');
 
     var ticking = false;
     function check() {                                            // показуємо, поки основної кнопки не видно (вище або нижче екрана)
       ticking = false;
-      var r = buy.getBoundingClientRect();
+      var r = cur().getBoundingClientRect();
       var hidden = r.bottom < 0 || r.top > window.innerHeight - 8;
       if (bar.classList.contains('on') !== hidden) { bar.classList.toggle('on', hidden); if (hidden) sync(); }
     }
+    var safeCheck = scSafe(13, check);
     window.addEventListener('scroll', function () {
-      if (!ticking) { ticking = true; setTimeout(check, 60); }   // не rAF: у фонових вкладках він «засинає»
+      if (!ticking) { ticking = true; setTimeout(safeCheck, 60); }   // не rAF: у фонових вкладках він «засинає»
     }, { passive: true });
     check();
   }
 
-  scIdle(init);
-})();
+  scIdle(scSafe(13, init));
+});
 
 
 /* =====================================================================
  * 14. Картка товару → «Знайшли дешевше? Напишіть нам»
  *     Telegram-бот (start=cheaper_<артикул>), Viber і WhatsApp з готовим текстом
  * ===================================================================== */
-(function () {
+scModule(14, function () {
   'use strict';
 
   var CSS =
@@ -2246,15 +2241,15 @@ function scAnchor() {
     if (document.getElementById('sc-cheaper')) return;
     var anchor = scAnchor();
     if (!anchor) return;
-    if (!document.querySelector('[itemprop="availability"][href*="InStock"], [itemprop="availability"][href*="Limited"]')) return;
-    var name = ((document.querySelector('h1') || {}).textContent || '').replace(/\s+/g, ' ').trim();
-    var art = ((document.body.innerText || '').match(/Артикул:?\s*([\w-]+)/) || [])[1] || '';
+    if (!document.querySelector(SC_AVAIL_SEL)) return;
+    var name = scH1().replace(/\s+/g, ' ').trim();
     if (!name) return;
+    var art = scArt();
     var url = location.origin + location.pathname;
     var msg = 'Добрий день! Знайшов дешевше: ' + name + (art ? ' (арт. ' + art + ')' : '') + '\n' + url +
               '\nПосилання на іншу пропозицію: ';
 
-    var s = document.createElement('style'); s.textContent = CSS; document.head.appendChild(s);
+    scStyle('sc-cheaper-style', CSS);
     var box = document.createElement('div');
     box.id = 'sc-cheaper';
     box.innerHTML =
@@ -2285,15 +2280,15 @@ function scAnchor() {
     if (mb > 16) box.style.marginTop = (10 - mb) + 'px';
   }
 
-  scIdle(function () { init(); setTimeout(init, 2000); });
-})();
+  scInit(14, init);
+});
 
 
 /* =====================================================================
  * 15. Картка товару → плашка довіри під «Купити» (картки як у TRINITI):
  *     Оплата при отриманні · Гарантія N місяців (з характеристик товару) · Повернення 14 днів
  * ===================================================================== */
-(function () {
+scModule(15, function () {
   'use strict';
 
   var GREEN = '#38ab87';
@@ -2340,10 +2335,8 @@ function scAnchor() {
     if (w) items.push({ i: 'warranty', t: 'Гарантія', v: months(w) });
     items.push({ i: 'ret', t: 'Повернення', v: '14 днів', href: '/obmin-ta-povernennya/' });
 
-    if (!document.getElementById('sc-trust-style')) {
-      var s = document.createElement('style'); s.id = 'sc-trust-style'; s.textContent = CSS; document.head.appendChild(s);
-    }
-    var lang = /^\/ru\//.test(location.pathname) ? '/ru' : '';
+    scStyle('sc-trust-style', CSS);
+    var lang = /^\/ru\//.test(location.pathname) ? '/ru' : '';   // лише /ru: сторінок оплати/повернення англійською немає
     var ul = document.createElement('ul');
     ul.id = 'sc-trust';
     ul.style.setProperty('--n', items.length);
@@ -2377,8 +2370,8 @@ function scAnchor() {
     if (ul.offsetWidth / items.length >= 150) ul.className = 'wide';
   }
 
-  scIdle(function () { init(); setTimeout(init, 2000); });
-})();
+  scInit(15, init);
+});
 
 
 /* =====================================================================
@@ -2386,7 +2379,7 @@ function scAnchor() {
  *     Клієнтський бот (start=stock_<артикул>) підписує клієнта і сам пише йому,
  *     щойно товар з'явиться у фіді TRINITI; менеджеру — сповіщення про попит.
  * ===================================================================== */
-(function () {
+scModule(16, function () {
   'use strict';
 
   var CSS =
@@ -2405,13 +2398,10 @@ function scAnchor() {
     var av = document.querySelector('[itemprop="availability"]');
     var href = av ? av.getAttribute('href') || av.getAttribute('content') || '' : '';
     if (!/OutOfStock|SoldOut|Discontinued/i.test(href)) return;   // лише «Немає в наявності»
-    var art = ((document.body.innerText || '').match(/Артикул:?\s*([\w-]+)/) || [])[1] || '';
-    art = art.replace(/[^\w-]/g, '').slice(0, 50);
+    var art = scArt().replace(/[^\w-]/g, '').slice(0, 50);
     if (!art) return;
 
-    if (!document.getElementById('sc-stock-style')) {
-      var s = document.createElement('style'); s.id = 'sc-stock-style'; s.textContent = CSS; document.head.appendChild(s);
-    }
+    scStyle('sc-stock-style', CSS);
     var a = document.createElement('a');
     a.id = 'sc-stock';
     a.href = 'https://t.me/' + SC_CLIENT_BOT + '?start=stock_' + art;
@@ -2430,8 +2420,8 @@ function scAnchor() {
     }
   }
 
-  scIdle(function () { init(); setTimeout(init, 2000); });
-})();
+  scInit(16, init);
+});
 
 
 /* =====================================================================
@@ -2439,7 +2429,7 @@ function scAnchor() {
  *     • назва товару дрібніше (довгі назви на 5–6 рядків)
  *     • вибір модифікації з одним-єдиним варіантом (напр. «Колір: Білий») ховаємо
  * ===================================================================== */
-(function () {
+scModule(17, function () {
   'use strict';
 
   var CSS =
@@ -2460,16 +2450,13 @@ function scAnchor() {
 
   function init() {
     if (!document.querySelector('[itemtype*="schema.org/Product"]')) return;
-    if (!document.getElementById('sc-head-style')) {
-      var s = document.createElement('style'); s.id = 'sc-head-style'; s.textContent = CSS; document.head.appendChild(s);
-    }
+    scStyle('sc-head-style', CSS);
     hideSingle();
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
-  window.addEventListener('load', hideSingle);
-})();
+  scReady(scSafe(17, init));
+  window.addEventListener('load', scSafe(17, hideSingle));
+});
 
 
 /* =====================================================================
@@ -2477,7 +2464,7 @@ function scAnchor() {
  *     Той самий банер і та сама кнопка «Погодитися» (згода зберігається Хорошопом),
  *     змінюємо лише вигляд: без затемнення, сторінку можна гортати одразу.
  * ===================================================================== */
-(function () {
+scModule(18, function () {
   'use strict';
   var SHORT = 'Ми використовуємо cookie для роботи сайту та статистики. ';
 
@@ -2511,10 +2498,7 @@ function scAnchor() {
     if (a) { a.textContent = 'Детальніше'; p.appendChild(a); }
     p.setAttribute('data-sc', '1');
   }
-  function style() {
-    if (document.getElementById('sc-cookie-style')) return;
-    var s = document.createElement('style'); s.id = 'sc-cookie-style'; s.textContent = CSS; document.head.appendChild(s);
-  }
+  function style() { scStyle('sc-cookie-style', CSS); }
 
   function apply() {
     var panel = document.getElementById('cookies-panel');
@@ -2537,14 +2521,14 @@ function scAnchor() {
     if (visible(m) && !otherModal() && !m.contains(e.target)) e.stopPropagation();
   }, { passive: true });
 
-  function start() {
-    if (apply() && !timer) timer = setInterval(apply, 500);          // Хорошоп може знову заблокувати прокрутку
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-  else start();
+  var safeApply = scSafe(18, apply);
+  var start = scSafe(18, function () {
+    if (apply() && !timer) timer = setInterval(safeApply, 500);      // Хорошоп може знову заблокувати прокрутку
+  });
+  scReady(start);
   window.addEventListener('load', start);
   setTimeout(start, 1500);
-})();
+});
 
 
 /* =====================================================================
@@ -2560,7 +2544,7 @@ function scAnchor() {
  *     • ІЧ-прожектори 12 В → блок живлення зі струмом ≥ споживання × 1,25
  *     Товари вантажаться, лише коли покупець догортає до блоку (scNear), з кешем на 1 год (scProduct).
  * ===================================================================== */
-(function () {
+scModule(19, function () {
   'use strict';
 
   var MAX = 3;
@@ -2626,7 +2610,7 @@ function scAnchor() {
     b5: { url: '/blok-zhyvlennia-krf-1205pb-kraft-12v-5a/', note: '12 В / 5 А, для монтажу в бокс' }
   };
 
-  function num(s) { var m = String(s || '').replace(',', '.').match(/\d+(\.\d+)?/); return m ? parseFloat(m[0]) : 0; }
+  var num = scNum;
 
   // Правила: перше, що повернуло налаштування, і показується
   var RULES = [
@@ -2726,46 +2710,29 @@ function scAnchor() {
     }
   ];
 
-  var CSS =
-    '#sc-pick{margin:16px 0 0;padding:14px 16px;border:1px solid #f0d58a;border-radius:10px;background:#fffbea;font-size:14px;line-height:1.4}' +
-    '#sc-pick .scs-t{font-weight:700;font-size:15px;margin:0 0 4px}' +
-    '#sc-pick .scs-x{color:#555;margin:0 0 10px;font-size:13px}' +
-    '#sc-pick .scs-l{display:flex;flex-direction:column;gap:8px}' +
-    '#sc-pick a.scs-i{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #e8dcb0;border-radius:8px;background:#fff;color:#1a1a1a;text-decoration:none;transition:border-color .15s}' +
-    '#sc-pick a.scs-i:hover{border-color:#2b7de9}' +
-    '#sc-pick .scs-img{flex:0 0 48px;width:48px;height:48px;object-fit:contain}' +
-    '#sc-pick .scs-in{flex:1;min-width:0}' +
-    '#sc-pick .scs-n{font-size:13px;line-height:1.3;display:block}' +
-    '#sc-pick .scs-o{font-size:12px;color:#7a828c;display:block;margin-top:2px}' +
-    '#sc-pick .scs-p{flex:0 0 auto;font-weight:700;white-space:nowrap}' +
-    '#sc-pick .scs-k{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:10px}' +
-    '#sc-pick .scs-k a{font-size:13px;color:#2b7de9;text-decoration:none}' +
-    '#sc-pick .scs-k a:hover{text-decoration:underline}' +
+  var C = { title: 'scs-t', text: 'scs-x', list: 'scs-l', a: 'scs-i', img: 'scs-img', info: 'scs-in',
+            name: 'scs-n', note: 'scs-o', price: 'scs-p', links: 'scs-k' };
+  var CSS = scPickCss('sc-pick', C) +
     '#sc-pick .scs-s{font-size:12px;color:#7a828c;margin:10px 0 0}';
 
-  var langPrefix = /^\/(ru|en)\//.test(location.pathname) ? '/' + location.pathname.split('/')[1] : '';
+  var langPrefix = SC_LANG;
 
   function load(pick) {
     var u = langPrefix + pick.url;
-    if (u.replace(/\/$/, '') === location.pathname.replace(/\/$/, '')) return Promise.resolve(null);
-    return scProduct(u).then(function (p) {
-      if (!p || !scInStock(p.avail)) return null;
-      return { url: u, name: p.name, price: p.price, img: p.img, note: pick.note || '' };
-    });
+    if (u.replace(/\/$/, '') === location.pathname.replace(/\/$/, '')) return Promise.resolve(null);   // не радимо сам товар
+    return scPickLoad(pick, scAvailOk);
   }
 
   function init() {
     if (document.getElementById('sc-pick')) return;
     var anchor = scAnchor();
     if (!anchor) return;
-    var t = ((document.querySelector('h1') || {}).textContent || '').replace(/\s+/g, ' ').trim();
+    var t = scH1().replace(/\s+/g, ' ').trim();
     var f = null, cfg = null;
     for (var i = 0; i < RULES.length && !cfg; i++) cfg = RULES[i](t, f || (f = scFeatures()));
     if (!cfg) return;
 
-    if (!document.getElementById('sc-pick-style')) {
-      var s = document.createElement('style'); s.id = 'sc-pick-style'; s.textContent = CSS; document.head.appendChild(s);
-    }
+    scStyle('sc-pick-style', CSS);
     var box = document.createElement('div');
     box.id = 'sc-pick';
     box.innerHTML = '<div class="scs-t"></div><div class="scs-x"></div><div class="scs-l"></div>' +
@@ -2784,21 +2751,11 @@ function scAnchor() {
 
     var listEl = box.querySelector('.scs-l');
     scNear(box, function () { Promise.all(cfg.list.map(load)).then(function (items) {
-      items.filter(Boolean).slice(0, MAX).forEach(function (p) {
-        var a = document.createElement('a');
-        a.className = 'scs-i'; a.href = p.url;
-        a.innerHTML = (p.img ? '<img class="scs-img" loading="lazy" alt="">' : '') +
-          '<span class="scs-in"><span class="scs-n"></span><span class="scs-o"></span></span><span class="scs-p"></span>';
-        if (p.img) a.querySelector('img').src = p.img;
-        a.querySelector('.scs-n').textContent = p.name;
-        a.querySelector('.scs-o').textContent = p.note;
-        a.querySelector('.scs-p').textContent = p.price;
-        listEl.appendChild(a);
-      });
+      items.filter(Boolean).slice(0, MAX).forEach(function (p) { listEl.appendChild(scItem(p, C)); });
       // нічого немає в наявності: без посилань блок прибираємо, з посиланнями — лишаємо їх
       if (!listEl.children.length) { if (cfg.links) listEl.remove(); else box.remove(); }
     }); });
   }
 
-  scIdle(function () { init(); setTimeout(init, 2000); });
-})();
+  scInit(19, init);
+});
