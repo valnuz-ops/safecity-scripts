@@ -3072,7 +3072,7 @@ scModule(24, function () {
       if (!a || !/для відображення/.test(t.textContent)) return;          // зареєстрований — не чіпаємо
       t.setAttribute('data-sc-disc', '1');
       t.textContent = '';
-      t.appendChild(document.createTextNode('Накопичувальна знижка: від 5 000 грн покупок — 2%, від 15 000 — 4%, від 40 000 — 6%. '));
+      t.appendChild(document.createTextNode('Знижка постійним клієнтам: коли сума ваших виконаних замовлень досягне 5 000 грн — 2% на наступні покупки, 15 000 грн — 4%, 40 000 грн — 6%. '));
       t.appendChild(a);
       t.appendChild(document.createTextNode(', щоб побачити свою'));
     });
