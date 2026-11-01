@@ -19,6 +19,8 @@ var SC_PHONE  = '380503941500';     // номер для Viber і WhatsApp (ли
 // Сторож (блок 20): URL веб-застосунку Google Apps Script з apps-script/health/Code.gs
 // (https://script.google.com/macros/s/…/exec). Порожньо — сторож нічого не робить і нічого не надсилає.
 var SC_HEALTH_URL = 'https://script.google.com/macros/s/AKfycby4kTm_6M4ZBj5-5dQfYopgYbGslziBpnenbS0dR9q1IGwSHSpOhHvJP6C8bD9RxBpBwA/exec';
+// TikTok Pixel (блок 21): ID пікселя з TikTok Events Manager. Порожньо — блок нічого не робить.
+var SC_TT_PIXEL = 'DBJI7JJC77U4J2JQPOCG';
 // Версія збірки: build.sh підставляє дату й час збірки (UTC) через esbuild --define; без збірки — 'dev'
 var SC_BUILD = typeof __SC_BUILD__ !== 'undefined' ? __SC_BUILD__ : 'dev';
 
@@ -2812,6 +2814,80 @@ scModule(19, function () {
   }
 
   scInit(19, init);
+});
+
+
+/* =====================================================================
+ * 21. TikTok Pixel → ретаргетинг за каталогом
+ *     Базовий код пікселя + події e-commerce з dataLayer Хорошопа (ті самі, що бачить GA4):
+ *       view_item → ViewContent, add_to_cart → AddToCart,
+ *       begin_checkout → InitiateCheckout, purchase → CompletePayment.
+ *     content_id = item_id Хорошопа — той самий id товару, що у фіді (Merchant / каталог TikTok),
+ *     інакше TikTok не знає, який товар показувати. Події, що вже лежать у dataLayer до запуску
+ *     (скрипт підключено з defer), обробляються одразу; нові — через обгортку dataLayer.push.
+ *     Покупку з тим самим номером замовлення не надсилаємо вдруге (оновлення сторінки «Дякуємо»).
+ * ===================================================================== */
+scModule(21, function () {
+  'use strict';
+  if (!SC_TT_PIXEL || window.scTtOn) return;
+  window.scTtOn = 1;
+
+  /* Базовий код TikTok Pixel (як у Events Manager), ID — з SC_TT_PIXEL */
+  !function (w, d, t) {
+    w.TiktokAnalyticsObject = t; var ttq = w[t] = w[t] || [];
+    ttq.methods = ['page', 'track', 'identify', 'instances', 'debug', 'on', 'off', 'once', 'ready', 'alias', 'group',
+                   'enableCookie', 'disableCookie', 'holdConsent', 'revokeConsent', 'grantConsent'];
+    ttq.setAndDefer = function (t, e) { t[e] = function () { t.push([e].concat(Array.prototype.slice.call(arguments, 0))); }; };
+    for (var i = 0; i < ttq.methods.length; i++) ttq.setAndDefer(ttq, ttq.methods[i]);
+    ttq.instance = function (t) { for (var e = ttq._i[t] || [], n = 0; n < ttq.methods.length; n++) ttq.setAndDefer(e, ttq.methods[n]); return e; };
+    ttq.load = function (e, n) {
+      var r = 'https://analytics.tiktok.com/i18n/pixel/events.js', o = n && n.partner;
+      ttq._i = ttq._i || {}; ttq._i[e] = []; ttq._i[e]._u = r; ttq._t = ttq._t || {}; ttq._t[e] = +new Date;
+      ttq._o = ttq._o || {}; ttq._o[e] = n || {};
+      n = d.createElement('script'); n.type = 'text/javascript'; n.async = !0; n.src = r + '?sdkid=' + e + '&lib=' + t;
+      e = d.getElementsByTagName('script')[0]; e.parentNode.insertBefore(n, e);
+    };
+    ttq.load(SC_TT_PIXEL);
+    ttq.page();
+  }(window, document, 'ttq');
+
+  var MAP = { view_item: 'ViewContent', add_to_cart: 'AddToCart', begin_checkout: 'InitiateCheckout', purchase: 'CompletePayment' };
+
+  function send(e) {
+    if (!e || typeof e !== 'object' || !MAP[e.event]) return;
+    var name = MAP[e.event], ec = e.ecommerce || {}, items = ec.items || [];
+    if (!items.length) return;
+    var contents = items.map(function (it) {
+      return { content_id: String(it.item_id), content_type: 'product', content_name: it.item_name,
+               quantity: +it.quantity || 1, price: +it.price || 0 };
+    });
+    var value = +ec.value || contents.reduce(function (s, c) { return s + c.price * c.quantity; }, 0);
+    var opt;
+    if (name === 'CompletePayment') {
+      var tid = ec.transaction_id ? String(ec.transaction_id) : '';
+      if (tid) {
+        try {
+          if (localStorage.getItem('sc_tt_order_' + tid)) return;
+          localStorage.setItem('sc_tt_order_' + tid, '1');
+        } catch (x) {}
+        opt = { event_id: 'order_' + tid };
+      }
+    }
+    window.ttq.track(name, {
+      contents: contents, content_type: 'product', value: Math.round(value * 100) / 100,
+      currency: ec.currency || items[0].currency || 'UAH'
+    }, opt);
+  }
+
+  var dl = window.dataLayer = window.dataLayer || [];
+  var safeSend = scSafe(21, send);
+  for (var i = 0; i < dl.length; i++) safeSend(dl[i]);
+  var push = dl.push;
+  dl.push = function () {
+    var r = push.apply(dl, arguments);
+    for (var j = 0; j < arguments.length; j++) safeSend(arguments[j]);
+    return r;
+  };
 });
 
 
