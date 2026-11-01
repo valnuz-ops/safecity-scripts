@@ -3060,6 +3060,25 @@ scModule(22, function () {
  *     зниклі з наявності — зникають. Вміст div (статичні картки) лишається, якщо нічого не знайшли
  *     або сторінка не завантажилась — його ж бачать пошуковики.
  * ===================================================================== */
+// ===== 24. Накопичувальна знижка в картці товару: показуємо умови замість голого «Увійти для відображення…» =====
+// Умови ті самі, що в банері сайту (2% / 4% / 6%). Посилання «Увійти» лишаємо — для зареєстрованих Хорошоп сам показує їхню знижку.
+scModule(24, function () {
+  'use strict';
+  function run() {
+    [].forEach.call(document.querySelectorAll('.product-card__discount .user-discount__text'), function (t) {
+      if (t.getAttribute('data-sc-disc')) return;
+      var a = t.querySelector('a[href="#auth"]');
+      if (!a || !/для відображення/.test(t.textContent)) return;          // зареєстрований — не чіпаємо
+      t.setAttribute('data-sc-disc', '1');
+      t.textContent = '';
+      t.appendChild(document.createTextNode('Накопичувальна знижка: від 5 000 грн покупок — 2%, від 15 000 — 4%, від 40 000 — 6%. '));
+      t.appendChild(a);
+      t.appendChild(document.createTextNode(', щоб побачити свою'));
+    });
+  }
+  scReady(scSafe(24, run));
+});
+
 scModule(23, function () {
   'use strict';
 
