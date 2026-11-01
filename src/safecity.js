@@ -454,13 +454,49 @@ scModule(1, function () {
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
 
+  // Старі браузери (вбудований браузер TikTok, старі iOS/Android) не знають
+  // 'Europe/Kyiv' (перейменовано з 'Europe/Kiev' у 2022 р.) і кидають RangeError.
+  // Тому пробуємо по черзі: Kyiv → Kiev → ручний розрахунок київського часу.
+  var TZ_ALIASES = { 'Europe/Kyiv': 'Europe/Kiev', 'Europe/Kiev': 'Europe/Kyiv' };
+  function makeDtf(tz) {
+    try {
+      var f = new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false
+      });
+      if (typeof f.formatToParts !== 'function') return null;
+      f.formatToParts(new Date());
+      return f;
+    } catch (e) { return null; }
+  }
+
+  // Ручний київський час: UTC+2, літній UTC+3 (остання неділя березня 01:00 UTC
+  // → остання неділя жовтня 01:00 UTC, як у ЄС)
+  function lastSundayUTC(y, month) {
+    var d = new Date(Date.UTC(y, month + 1, 0, 1, 0));
+    d.setUTCDate(d.getUTCDate() - d.getUTCDay());
+    return d.getTime();
+  }
+  function kyivManualNow() {
+    var t = Date.now(), y = new Date(t).getUTCFullYear();
+    var dst = t >= lastSundayUTC(y, 2) && t < lastSundayUTC(y, 9);
+    var k = new Date(t + (dst ? 3 : 2) * 3600000);
+    return {
+      y: k.getUTCFullYear(), m: k.getUTCMonth() + 1, d: k.getUTCDate(),
+      h: k.getUTCHours(), min: k.getUTCMinutes(),
+      dow: k.getUTCDay()
+    };
+  }
+
   var dtf = null;                     // Intl.DateTimeFormat дорогий у створенні — один на сторінку
+  var dtfFailed = false;
   function getNow() {
-    if (!dtf) dtf = new Intl.DateTimeFormat('en-GB', {
-      timeZone: CONFIG.timezone,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false
-    });
+    if (!dtf && !dtfFailed) {
+      dtf = makeDtf(CONFIG.timezone) || (TZ_ALIASES[CONFIG.timezone] && makeDtf(TZ_ALIASES[CONFIG.timezone]));
+      if (!dtf) dtfFailed = true;
+    }
+    if (!dtf) return kyivManualNow();
     var parts = dtf.formatToParts(new Date());
     var o = {};
     parts.forEach(function (p) { o[p.type] = p.value; });
