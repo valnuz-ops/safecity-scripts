@@ -3085,7 +3085,7 @@ scModule(23, function () {
       return {
         url: a ? a.getAttribute('href') : '',
         name: a ? (a.getAttribute('title') || a.textContent).trim() : '',
-        img: img ? (img.getAttribute('data-src') || img.getAttribute('src') || '') : '',
+        img: img ? (img.getAttribute('data-src') || img.getAttribute('src') || '').replace(/\/\d+x\d+l\d+nn0\//, '/310x310l85nn0/') : '',   // 160×160 → 310×310
         avail: av ? av.textContent.replace(/\s+/g, ' ').trim() : '',
         price: pr ? pr.textContent.replace(/\s+/g, ' ').trim() : ''
       };
