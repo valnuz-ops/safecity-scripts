@@ -3052,6 +3052,93 @@ scModule(22, function () {
 
 
 /* =====================================================================
+ * 23. «Живі» картки товарів у статтях блогу
+ *     <div data-sc-products="/hdmi-kabeli-v-nayavnosti/" data-match="оптичн" data-limit="8">…</div>
+ *     Беремо сторінку розділу чи пресету фільтра Хорошопа (звичайні сторінки фільтра /filter/… не
+ *     підходять — Хорошоп віддає на fetch заглушку-перевірку), показуємо лише товари в наявності,
+ *     data-match — регулярний вираз по назві (без урахування регістру). Нові товари з'являються самі,
+ *     зниклі з наявності — зникають. Вміст div (статичні картки) лишається, якщо нічого не знайшли
+ *     або сторінка не завантажилась — його ж бачать пошуковики.
+ * ===================================================================== */
+scModule(23, function () {
+  'use strict';
+
+  var CSS =
+    '.sc-live{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 28px}' +
+    '.sc-live__item{flex:1 1 160px;max-width:220px;border:1px solid #e3e8ef;border-radius:10px;padding:12px;text-align:center;text-decoration:none!important;color:#1c2430;display:flex;flex-direction:column;align-items:center;background:#fff;transition:border-color .15s}' +
+    '.sc-live__item:hover{border-color:#1f6fd1}' +
+    '.sc-live__img{width:100%;max-width:160px;height:160px;object-fit:contain}' +
+    '.sc-live__name{margin:8px 0 4px;font-weight:bold;font-size:14px;line-height:1.3;color:#1f6fd1}' +
+    '.sc-live__price{margin-top:auto;font-weight:bold;font-size:15px;color:#1c2430}' +
+    '.sc-live__av{font-size:12px;color:#2e9e4f;margin-top:2px}';
+
+  function cards(html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    return [].filter.call(doc.querySelectorAll('.j-catalog-card'), function (c) {
+      return !c.parentElement.closest('.j-catalog-card');
+    }).map(function (c) {
+      var a = c.querySelector('.catalogCard-title a') || c.querySelector('a[href]');
+      var img = c.querySelector('img');
+      var av = c.querySelector('[class*="availability"]');
+      var pr = c.querySelector('.catalogCard-price');
+      return {
+        url: a ? a.getAttribute('href') : '',
+        name: a ? (a.getAttribute('title') || a.textContent).trim() : '',
+        img: img ? (img.getAttribute('data-src') || img.getAttribute('src') || '') : '',
+        avail: av ? av.textContent.replace(/\s+/g, ' ').trim() : '',
+        price: pr ? pr.textContent.replace(/\s+/g, ' ').trim() : ''
+      };
+    });
+  }
+
+  function render(box, list) {
+    var wrap = document.createElement('div');
+    wrap.className = 'sc-live';
+    list.forEach(function (p) {
+      var a = document.createElement('a');
+      a.className = 'sc-live__item'; a.href = p.url;
+      a.innerHTML = (p.img ? '<img class="sc-live__img" loading="lazy" alt="">' : '') +
+        '<span class="sc-live__name"></span><span class="sc-live__price"></span><span class="sc-live__av">В наявності</span>';
+      if (p.img) { var im = a.querySelector('img'); im.src = p.img; im.alt = p.name; }
+      a.querySelector('.sc-live__name').textContent = p.name;
+      a.querySelector('.sc-live__price').textContent = p.price;
+      wrap.appendChild(a);
+    });
+    box.innerHTML = '';
+    box.appendChild(wrap);
+  }
+
+  function load(box) {
+    if (box.getAttribute('data-sc-ready')) return;
+    box.setAttribute('data-sc-ready', '1');
+    var src = box.getAttribute('data-sc-products') || '';
+    if (!/^\/[\w\-\/.]*$/.test(src) || /\/filter\//.test(src)) return;     // лише власні сторінки, без /filter/
+    var re = null;
+    try { re = box.getAttribute('data-match') ? new RegExp(box.getAttribute('data-match'), 'i') : null; } catch (e) {}
+    var limit = parseInt(box.getAttribute('data-limit'), 10) || 8;
+    fetch(SC_LANG + src, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.text() : ''; })
+      .then(scSafe(23, function (html) {
+        if (!html) return;
+        var list = cards(html).filter(function (p) {
+          return p.url && p.name && scInStock(p.avail) && (!re || re.test(p.name));
+        }).slice(0, limit);
+        if (!list.length) return;                                            // лишаємо статичні картки
+        scStyle('sc-live-style', CSS);
+        render(box, list);
+      }))['catch'](function () {});
+  }
+
+  function init() {
+    var boxes = document.querySelectorAll('[data-sc-products]');
+    if (!boxes.length) return;
+    [].forEach.call(boxes, function (b) { scNear(b, scSafe(23, function () { load(b); })); });   // вантажимо, коли читач догортав
+  }
+
+  scIdle(scSafe(23, init));
+});
+
+
+/* =====================================================================
  * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
  *     Хорошоп змінив шаблон — блоки мовчки перестають з'являтися. Раз за перегляд, через ~5 с після
  *     завантаження (сторінка дорисована), перевіряємо те, без чого блоки не працюють, і надсилаємо звіт
