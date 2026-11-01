@@ -3077,10 +3077,11 @@ scModule(23, function () {
     return [].filter.call(doc.querySelectorAll('.j-catalog-card'), function (c) {
       return !c.parentElement.closest('.j-catalog-card');
     }).map(function (c) {
-      var a = c.querySelector('.catalogCard-title a') || c.querySelector('a[href]');
+      // дві верстки карток Хорошопа: catalogCard-* (більшість розділів) і catalog-card__* (шаблон «Альтернативна енергетика»)
+      var a = c.querySelector('.catalogCard-title a, .catalog-card__title a') || c.querySelector('a[href]');
       var img = c.querySelector('img');
-      var av = c.querySelector('[class*="availability"]');
-      var pr = c.querySelector('.catalogCard-price');
+      var av = c.querySelector('[class*="availability"], .catalog-card__presence');
+      var pr = c.querySelector('.catalogCard-price, .catalog-card__price');
       return {
         url: a ? a.getAttribute('href') : '',
         name: a ? (a.getAttribute('title') || a.textContent).trim() : '',
