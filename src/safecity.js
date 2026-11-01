@@ -2984,7 +2984,7 @@ scModule(22, function () {
 
     box.className = (box.className ? box.className + ' ' : '') + 'sc-calc';
     box.innerHTML = '';
-    box.appendChild(el('div', { 'class': 'sc-calc__t' }, '🔋 Калькулятор: скільки пропрацює ДБЖ'));
+    box.appendChild(el('div', { 'class': 'sc-calc__t' }, '🔋 Калькулятор: скільки пропрацює від ' + (box.getAttribute('data-mini') === '1' ? 'батареї' : 'ДБЖ')));
 
     var r1 = el('div', { 'class': 'sc-calc__row' });
     r1.appendChild(el('span', { 'class': 'sc-calc__lbl' }, 'Ємність'));
