@@ -2928,6 +2928,125 @@ scModule(21, function () {
 
 
 /* =====================================================================
+ * 22. Калькулятор «Скільки пропрацює ДБЖ» — у статтях блогу й текстах категорій
+ *     Вмикається лише там, де в тексті є <div data-sc-calc="runtime"></div> (вставляється в
+ *     редакторі Хорошопа). Необов'язкові атрибути: data-wh="64" — ємність за замовчуванням (Вт·год),
+ *     data-w="14" — навантаження за замовчуванням (Вт). Те, що лежить усередині div (формула
+ *     текстом), бачать пошуковики й люди без JS — скрипт замінює це на калькулятор.
+ *     Формула та сама, що в статтях: Вт·год × 0,85 ÷ Вт.
+ * ===================================================================== */
+scModule(22, function () {
+  'use strict';
+
+  var K = 0.85;                                      // орієнтовні втрати на перетворення, як у статтях
+  var CHIPS = [                                      // швидке додавання навантаження (Вт), орієнтири зі статей
+    ['Роутер', 8], ['ONT / ONU', 6], ['IP-камера', 6.5], ['Starlink Mini', 40]
+  ];
+  var CSS =
+    '.sc-calc{border:1px solid #d6e2f2;border-radius:12px;padding:18px 20px;margin:0 0 28px;background:#f7faff;font-size:15px;line-height:1.45}' +
+    '.sc-calc__t{font-weight:bold;font-size:18px;margin:0 0 12px}' +
+    '.sc-calc__row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px}' +
+    '.sc-calc__lbl{min-width:150px;font-weight:bold}' +
+    '.sc-calc input,.sc-calc select{height:38px;border:1px solid #c5d3e6;border-radius:8px;padding:0 10px;font-size:15px;background:#fff;color:#1c2430}' +
+    '.sc-calc input{width:110px}' +
+    '.sc-calc__chip{border:1px solid #1f6fd1;color:#1f6fd1;background:#fff;border-radius:16px;padding:4px 12px;font-size:14px;cursor:pointer}' +
+    '.sc-calc__chip:hover{background:#eaf2fd}' +
+    '.sc-calc__reset{color:#5b6675;font-size:14px;text-decoration:underline;cursor:pointer;background:none;border:0;padding:4px}' +
+    '.sc-calc__res{margin:14px 0 6px;padding:12px 14px;border-radius:10px;background:#fff;border-left:4px solid #2e9e4f}' +
+    '.sc-calc__h{font-size:24px;font-weight:bold;color:#1c2430}' +
+    '.sc-calc__f{color:#5b6675;font-size:14px;margin-top:4px}' +
+    '.sc-calc__note{color:#5b6675;font-size:13px;margin:6px 0 0}' +
+    '@media (max-width:600px){.sc-calc{padding:14px}.sc-calc__lbl{min-width:100%}}';
+
+  function el(tag, attrs, html) {
+    var e = document.createElement(tag);
+    for (var k in attrs) if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]);
+    if (html != null) e.innerHTML = html;
+    return e;
+  }
+  function num(v) { var n = parseFloat(String(v || '').replace(',', '.')); return isFinite(n) && n > 0 ? n : 0; }
+  function fmt(n) { return (Math.round(n * 10) / 10).toString().replace('.', ','); }
+  function hm(h) {
+    var t = Math.round(h * 60), hh = Math.floor(t / 60), mm = t % 60;
+    if (hh >= 48) return '≈ ' + fmt(h / 24) + ' доби (' + hh + ' год)';
+    return '≈ ' + (hh ? hh + ' год ' : '') + (mm || !hh ? mm + ' хв' : '');
+  }
+
+  function build(box) {
+    if (box.getAttribute('data-sc-ready')) return;
+    box.setAttribute('data-sc-ready', '1');
+    var wh0 = num(box.getAttribute('data-wh')) || 64, w0 = num(box.getAttribute('data-w')) || 14;
+
+    box.className = (box.className ? box.className + ' ' : '') + 'sc-calc';
+    box.innerHTML = '';
+    box.appendChild(el('div', { 'class': 'sc-calc__t' }, '🔋 Калькулятор: скільки пропрацює ДБЖ'));
+
+    var r1 = el('div', { 'class': 'sc-calc__row' });
+    r1.appendChild(el('span', { 'class': 'sc-calc__lbl' }, 'Ємність'));
+    var cap = el('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', value: String(wh0), 'aria-label': 'Ємність' });
+    var unit = el('select', { 'aria-label': 'Одиниці ємності' },
+      '<option value="wh">Вт·год</option><option value="mah">мА·год</option><option value="ah">А·год</option>');
+    var chem = el('select', { 'aria-label': 'Тип акумулятора' },
+      '<option value="3.2">LiFePO4 (3,2 В на елемент)</option><option value="3.7">Li-ion (3,7 В на елемент)</option>');
+    var volt = el('select', { 'aria-label': 'Напруга батареї' },
+      '<option value="12.8">12,8 В (LiFePO4 «12 В»)</option><option value="12">12 В (свинцевий AGM / GEL)</option>' +
+      '<option value="25.6">25,6 В</option><option value="51.2">51,2 В</option>');
+    r1.appendChild(cap); r1.appendChild(unit); r1.appendChild(chem); r1.appendChild(volt);
+    box.appendChild(r1);
+
+    var r2 = el('div', { 'class': 'sc-calc__row' });
+    r2.appendChild(el('span', { 'class': 'sc-calc__lbl' }, 'Навантаження, Вт'));
+    var load = el('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', value: String(w0), 'aria-label': 'Навантаження, Вт' });
+    r2.appendChild(load);
+    box.appendChild(r2);
+
+    var r3 = el('div', { 'class': 'sc-calc__row' });
+    r3.appendChild(el('span', { 'class': 'sc-calc__lbl' }, 'Додати'));
+    CHIPS.forEach(function (c) {
+      var b = el('button', { type: 'button', 'class': 'sc-calc__chip' }, '+ ' + c[0] + ' ' + fmt(c[1]) + ' Вт');
+      b.addEventListener('click', scSafe(22, function () { load.value = fmt(num(load.value) + c[1]).replace(',', '.'); calc(); }));
+      r3.appendChild(b);
+    });
+    var rs = el('button', { type: 'button', 'class': 'sc-calc__reset' }, 'обнулити');
+    rs.addEventListener('click', scSafe(22, function () { load.value = ''; load.focus(); calc(); }));
+    r3.appendChild(rs);
+    box.appendChild(r3);
+
+    var res = el('div', { 'class': 'sc-calc__res', 'aria-live': 'polite' });
+    box.appendChild(res);
+    box.appendChild(el('p', { 'class': 'sc-calc__note' },
+      'Розрахунок орієнтовний: енергоємність × 0,85 ÷ навантаження. Точне споживання — у паспорті пристроїв; ' +
+      'сумарна потужність не має перевищувати максимальну вихідну потужність ДБЖ. Старий акумулятор і мороз зменшують час роботи.'));
+
+    function calc() {
+      var u = unit.value, c = num(cap.value), w = num(load.value), wh = 0, how = '';
+      chem.style.display = u === 'mah' ? '' : 'none';
+      volt.style.display = u === 'ah' ? '' : 'none';
+      if (u === 'wh') wh = c;
+      else if (u === 'mah') { wh = c * parseFloat(chem.value) / 1000; how = fmt(c) + ' мА·год × ' + fmt(parseFloat(chem.value)) + ' В = ' + fmt(wh) + ' Вт·год; '; }
+      else { wh = c * parseFloat(volt.value); how = fmt(c) + ' А·год × ' + fmt(parseFloat(volt.value)) + ' В = ' + fmt(wh) + ' Вт·год; '; }
+      if (!wh || !w) { res.innerHTML = '<div class="sc-calc__f">Вкажіть ємність і навантаження.</div>'; return; }
+      var h = wh * K / w;
+      res.innerHTML = '<div class="sc-calc__h">' + hm(h) + '</div>' +
+        '<div class="sc-calc__f">' + how + fmt(wh) + ' Вт·год × 0,85 ÷ ' + fmt(w) + ' Вт = ' + fmt(h) + ' год</div>';
+    }
+    [cap, load].forEach(function (i) { i.addEventListener('input', scSafe(22, calc)); });
+    [unit, chem, volt].forEach(function (s) { s.addEventListener('change', scSafe(22, calc)); });
+    calc();
+  }
+
+  function init() {
+    var boxes = document.querySelectorAll('[data-sc-calc="runtime"]');
+    if (!boxes.length) return;
+    scStyle('sc-calc-style', CSS);
+    [].forEach.call(boxes, function (b) { scSafe(22, build)(b); });
+  }
+
+  scReady(scSafe(22, init));
+});
+
+
+/* =====================================================================
  * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
  *     Хорошоп змінив шаблон — блоки мовчки перестають з'являтися. Раз за перегляд, через ~5 с після
  *     завантаження (сторінка дорисована), перевіряємо те, без чого блоки не працюють, і надсилаємо звіт
