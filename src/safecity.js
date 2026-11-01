@@ -2931,7 +2931,8 @@ scModule(21, function () {
  * 22. Калькулятор «Скільки пропрацює ДБЖ» — у статтях блогу й текстах категорій
  *     Вмикається лише там, де в тексті є <div data-sc-calc="runtime"></div> (вставляється в
  *     редакторі Хорошопа). Необов'язкові атрибути: data-wh="64" — ємність за замовчуванням (Вт·год),
- *     data-w="14" — навантаження за замовчуванням (Вт). Те, що лежить усередині div (формула
+ *     data-w="14" — навантаження за замовчуванням (Вт), data-mini="1" — показати кнопку «Starlink Mini».
+ *     Те, що лежить усередині div (формула
  *     текстом), бачать пошуковики й люди без JS — скрипт замінює це на калькулятор.
  *     Формула та сама, що в статтях: Вт·год × 0,85 ÷ Вт.
  * ===================================================================== */
@@ -2940,8 +2941,11 @@ scModule(22, function () {
 
   var K = 0.85;                                      // орієнтовні втрати на перетворення, як у статтях
   var CHIPS = [                                      // швидке додавання навантаження (Вт), орієнтири зі статей
-    ['Роутер', 8], ['ONT / ONU', 6], ['IP-камера', 6.5], ['Starlink Mini', 40]
+    ['Роутер', 8], ['ONT / ONU', 6], ['IP-камера', 6.5]
   ];
+  // Starlink Mini (до 60 Вт, у середньому 25–40 Вт) міні-ДБЖ для роутерів не тягнуть, тому кнопку
+  // показуємо лише там, де в div є data-mini="1" (зарядні станції, повербанки, статті про Starlink)
+  var MINI = ['Starlink Mini', 40];
   var CSS =
     '.sc-calc{border:1px solid #d6e2f2;border-radius:12px;padding:18px 20px;margin:0 0 28px;background:#f7faff;font-size:15px;line-height:1.45}' +
     '.sc-calc__t{font-weight:bold;font-size:18px;margin:0 0 12px}' +
@@ -3003,7 +3007,7 @@ scModule(22, function () {
 
     var r3 = el('div', { 'class': 'sc-calc__row' });
     r3.appendChild(el('span', { 'class': 'sc-calc__lbl' }, 'Додати'));
-    CHIPS.forEach(function (c) {
+    (box.getAttribute('data-mini') === '1' ? CHIPS.concat([MINI]) : CHIPS).forEach(function (c) {
       var b = el('button', { type: 'button', 'class': 'sc-calc__chip' }, '+ ' + c[0] + ' ' + fmt(c[1]) + ' Вт');
       b.addEventListener('click', scSafe(22, function () { load.value = fmt(num(load.value) + c[1]).replace(',', '.'); calc(); }));
       r3.appendChild(b);
