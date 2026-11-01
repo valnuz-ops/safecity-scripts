@@ -2948,7 +2948,8 @@ scModule(22, function () {
     '.sc-calc__row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px}' +
     '.sc-calc__lbl{min-width:150px;font-weight:bold}' +
     '.sc-calc input,.sc-calc select{height:38px;border:1px solid #c5d3e6;border-radius:8px;padding:0 10px;font-size:15px;background:#fff;color:#1c2430}' +
-    '.sc-calc input{width:110px}' +
+    '.sc-calc input{width:110px!important;max-width:110px}' +
+    '.sc-calc select{width:auto!important;max-width:100%;flex:0 1 auto;display:inline-block}' +   // тема розтягує select на всю ширину
     '.sc-calc__chip{border:1px solid #1f6fd1;color:#1f6fd1;background:#fff;border-radius:16px;padding:4px 12px;font-size:14px;cursor:pointer}' +
     '.sc-calc__chip:hover{background:#eaf2fd}' +
     '.sc-calc__reset{color:#5b6675;font-size:14px;text-decoration:underline;cursor:pointer;background:none;border:0;padding:4px}' +
