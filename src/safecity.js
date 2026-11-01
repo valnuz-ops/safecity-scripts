@@ -3064,8 +3064,9 @@ scModule(22, function () {
 // Умови ті самі, що в банері сайту (2% / 4% / 6%). Посилання «Увійти» лишаємо — для зареєстрованих Хорошоп сам показує їхню знижку.
 scModule(24, function () {
   'use strict';
+  var CSS = '.user-discount__text a[href="#auth"]{color:#1f6fd1!important;text-decoration:underline!important;font-weight:bold}';
   function run() {
-    [].forEach.call(document.querySelectorAll('.product-card__discount .user-discount__text'), function (t) {
+    [].forEach.call(document.querySelectorAll('.user-discount__text'), function (t) {
       if (t.getAttribute('data-sc-disc')) return;
       var a = t.querySelector('a[href="#auth"]');
       if (!a || !/для відображення/.test(t.textContent)) return;          // зареєстрований — не чіпаємо
@@ -3076,7 +3077,16 @@ scModule(24, function () {
       t.appendChild(document.createTextNode(', щоб побачити свою'));
     });
   }
-  scReady(scSafe(24, run));
+  scStyle('sc-disc-style', CSS);
+  var go = scSafe(24, run);
+  scReady(go);
+  window.addEventListener('load', go);
+  // Хорошоп може перемалювати блок пізніше (модифікації, вхід) — слідкуємо 15 с
+  try {
+    var mo = new MutationObserver(function () { go(); });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+    setTimeout(function () { mo.disconnect(); }, 15000);
+  } catch (e) {}
 });
 
 scModule(23, function () {
