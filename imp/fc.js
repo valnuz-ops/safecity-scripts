@@ -1,4 +1,19 @@
-const FC_SITE='';const FC_MIN_FILL=0.3;const FC_IGNORE_FILTERS=['Ціна, грн','Наявність'];const FC_ALLOWED_COMMA=['DC 5.5/2.1, USB-C','Від короткого замикання, перевантаження'];const FC_NOT_DUPLICATES=[['2.5 мм²','25 мм²'],['802.3af/at','802.3af/at/bt']];// ---------- Категорії з меню сайту ----------
+const FC_SITE='';const FC_MIN_FILL=0.3;const FC_IGNORE_FILTERS = ['Ціна, грн', 'Наявність'];
+// Склейки, які власник прийняв як нормальні (значення описує кілька речей одночасно)
+const FC_ALLOWED_COMMA = [
+  'DC 5.5/2.1, USB-C',
+  'DC 5.5/2.1, RJ45',
+  'Від короткого замикання, перевантаження',
+  'Датчик диму, тепла та чадного газу',
+  'Так, регульований кут фіксації'
+];
+// Пари, які автоматично схожі, але це різні значення
+const FC_NOT_DUPLICATES = [
+  ['2.5 мм²', '25 мм²'],
+  ['802.3af/at', '802.3af/at/bt']
+];
+
+// ---------- Категорії з меню сайту ----------
 function fcCategories_() {
   const html = window.__home;
   const a = html.indexOf('productsMenu'), b = html.lastIndexOf('productsMenu');
@@ -66,14 +81,17 @@ function fcCheckPage_(url, page) {
         out.push(fcIssue_(cat, s.name, 'дубль: «' + seen[k] + '» і «' + v.label + '»', url));
       } else seen[k] = v.label;
     });
-    // склейки
+    // склейки: значення через кому, частина якого — окреме значення цього ж фільтра («LED, ІЧ» при наявних «LED» і «ІЧ»)
+    const labels = {};
+    vals.forEach(v => labels[v.label.toLowerCase()] = 1);
     vals.forEach(v => {
-      if (/, /.test(v.label) && FC_ALLOWED_COMMA.indexOf(v.label) < 0 && s.name !== 'Бренд') {
+      if (!/, /.test(v.label) || FC_ALLOWED_COMMA.indexOf(v.label) >= 0 || s.name === 'Бренд') return;
+      if (v.label.split(/,\s*/).some(x => labels[x.toLowerCase()])) {
         out.push(fcIssue_(cat, s.name, 'склейка через кому: «' + v.label + '» (' + v.count + ')', url));
       }
     });
-    // одне значення
-    if (vals.length === 1 && vals[0].label !== 'Так' && page.total > 1) {
+    // одне значення (Бренд з одним брендом не рахуємо — його Хорошоп показує в усіх розділах)
+    if (vals.length === 1 && vals[0].label !== 'Так' && s.name !== 'Бренд' && page.total > 1) {
       out.push(fcIssue_(cat, s.name, 'лише одне значення «' + vals[0].label + '» — фільтр нічого не відсікає', url));
     }
     // мала заповненість
