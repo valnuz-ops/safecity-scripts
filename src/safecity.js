@@ -3068,7 +3068,10 @@ scModule(24, function () {
     // десктоп: прибрати зайвий відступ під блоком знижки (прихований блок однієї модифікації має margin 40px; ціна — 25px)
     '.product__section--modifications:has(.sc-mod-one){margin-bottom:0!important}' +
     '.product__section--price:has(.product__block--user-discount){margin-bottom:6px!important}' +
-    '.product__block--user-discount{margin-top:8px!important}';
+    '.product__block--user-discount{margin-top:8px!important}' +
+    '.product__block--user-discount .user-discount{align-items:center}' +
+    '.product__block--user-discount .user-discount__icon{flex:0 0 auto}' +
+    '.product__block--user-discount .user-discount__text{padding-left:18px!important}';
   function run() {
     [].forEach.call(document.querySelectorAll('.user-discount__text'), function (t) {
       if (t.getAttribute('data-sc-disc')) return;
