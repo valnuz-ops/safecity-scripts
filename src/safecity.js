@@ -3064,11 +3064,15 @@ scModule(22, function () {
 // Умови ті самі, що в банері сайту (2% / 4% / 6%). Посилання «Увійти» лишаємо — для зареєстрованих Хорошоп сам показує їхню знижку.
 scModule(24, function () {
   'use strict';
-  var CSS = '.user-discount__text a[href="#auth"]{color:#1f6fd1!important;text-decoration:underline!important;font-weight:bold}';
+  var CSS = '.user-discount__text a[href="#auth"],.user-discount__text a[data-modal="#sign-in"]{color:#1f6fd1!important;text-decoration:underline!important;font-weight:bold}' +
+    // десктоп: прибрати зайвий відступ під блоком знижки (прихований блок однієї модифікації має margin 40px; ціна — 25px)
+    '.product__section--modifications:has(.sc-mod-one){margin-bottom:0!important}' +
+    '.product__section--price:has(.product__block--user-discount){margin-bottom:6px!important}' +
+    '.product__block--user-discount{margin-top:8px!important}';
   function run() {
     [].forEach.call(document.querySelectorAll('.user-discount__text'), function (t) {
       if (t.getAttribute('data-sc-disc')) return;
-      var a = t.querySelector('a[href="#auth"]');
+      var a = t.querySelector('a[href="#auth"], a[data-modal="#sign-in"]');   // мобільна / десктопна версія
       if (!a || !/для відображення/.test(t.textContent)) return;          // зареєстрований — не чіпаємо
       t.setAttribute('data-sc-disc', '1');
       t.textContent = '';
