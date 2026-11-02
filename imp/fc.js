@@ -35,7 +35,7 @@ function fcParse_(html) {
     const values = [];
     const vr = /filter-title j-filter-title">([\s\S]*?)<\/span>[\s\S]*?filter-count">(\d+)</g;
     let v;
-    const chunk = p.split(/class="filter-section/)[0];
+    const chunk = p.split(/class="filter-section[ "]/)[0];
     while ((v = vr.exec(chunk))) values.push({ label: fcText_(v[1]), count: +v[2] });
     if (values.length) sections.push({ type: 'list', name: name, values: values });
   });
