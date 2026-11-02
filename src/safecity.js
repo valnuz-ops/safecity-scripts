@@ -3122,6 +3122,13 @@ scModule(24, function () {
 });
 
 // ===== 26. Фільтри каталогу (десктоп): довгі назви фільтрів — по лівому краю, а не по центру =====
+scModule(27, function () {
+  'use strict';
+  // повна назва товару в картці каталогу (до 5 рядків замість 3) — щоб було видно довжину, модель тощо
+  scStyle('sc-cardtitle-style',
+    '.catalogCard-title{height:auto!important;max-height:90px!important;display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:5!important}');
+});
+
 scModule(26, function () {
   'use strict';
   scStyle('sc-filter-style',
