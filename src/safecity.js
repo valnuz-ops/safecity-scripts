@@ -3076,16 +3076,38 @@ scModule(24, function () {
       t.appendChild(a);
       t.appendChild(document.createTextNode(', щоб побачити свою'));
     });
+    // Кошик / оформлення: кнопка «Увійти для відображення накопичувальної знижки» (вся кнопка — посилання на вхід)
+    [].forEach.call(document.querySelectorAll('a[href="#login"], a[href="#auth"]'), function (a) {
+      if (a.getAttribute('data-sc-disc') || !/накопичувальної знижки/.test(a.textContent)) return;
+      a.setAttribute('data-sc-disc', '1');
+      a.classList.add('sc-disc-btn');
+      a.textContent = '';
+      var s1 = document.createElement('span');
+      s1.className = 'sc-disc-btn__t';
+      s1.textContent = 'Знижка постійним клієнтам 2–6% від суми виконаних замовлень.';
+      var s2 = document.createElement('span');
+      s2.className = 'sc-disc-btn__l';
+      s2.textContent = 'Увійдіть, щоб побачити свою →';
+      a.appendChild(s1);
+      a.appendChild(s2);
+    });
   }
-  scStyle('sc-disc-style', CSS);
+  scStyle('sc-disc-style', CSS +
+    '.sc-disc-btn{display:block!important;white-space:normal!important;height:auto!important;line-height:1.35!important;padding:8px 10px!important;text-align:center!important;border:1px dashed #9cc8a8!important;border-radius:8px!important;background:#f4fbf6!important}' +
+    '.sc-disc-btn__t{display:block;color:#1c2430;font-size:13px;font-weight:normal}' +
+    '.sc-disc-btn__l{display:block;color:#1f6fd1;font-weight:bold;text-decoration:underline;font-size:13px;margin-top:2px}');
   var go = scSafe(24, run);
   scReady(go);
   window.addEventListener('load', go);
-  // Хорошоп може перемалювати блок пізніше (модифікації, вхід) — слідкуємо 15 с
+  // Хорошоп перемальовує блоки пізніше (модифікації, вхід, кошик відкривається AJAX) — слідкуємо постійно, з паузою
   try {
-    var mo = new MutationObserver(function () { go(); });
+    var pend = false;
+    var mo = new MutationObserver(function () {
+      if (pend) return;
+      pend = true;
+      setTimeout(function () { pend = false; go(); }, 300);
+    });
     mo.observe(document.documentElement, { childList: true, subtree: true });
-    setTimeout(function () { mo.disconnect(); }, 15000);
   } catch (e) {}
 });
 
