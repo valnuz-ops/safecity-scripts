@@ -3121,6 +3121,13 @@ scModule(24, function () {
   } catch (e) {}
 });
 
+// ===== 26. Фільтри каталогу (десктоп): довгі назви фільтрів — по лівому краю, а не по центру =====
+scModule(26, function () {
+  'use strict';
+  scStyle('sc-filter-style',
+    '.filter-section-trigger{text-align:left!important}');
+});
+
 scModule(23, function () {
   'use strict';
 
