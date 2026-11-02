@@ -3102,7 +3102,10 @@ scModule(24, function () {
   scStyle('sc-disc-style', CSS +
     '.sc-disc-btn{display:block!important;width:100%!important;cursor:pointer;white-space:normal!important;height:auto!important;line-height:1.35!important;padding:8px 10px!important;text-align:center!important;border:1px dashed #9cc8a8!important;border-radius:8px!important;background:#f4fbf6!important}' +
     '.sc-disc-btn__t{display:block;color:#1c2430;font-size:13px;font-weight:normal}' +
-    '.sc-disc-btn__l{display:block;color:#1f6fd1;font-weight:bold;text-decoration:underline;font-size:13px;margin-top:2px}');
+    '.sc-disc-btn__l{display:block;color:#1f6fd1;font-weight:bold;text-decoration:underline;font-size:13px;margin-top:2px}' +
+    // десктопний кошик: блок на всю ширину, текст по лівому краю (як «Є купон зі знижкою?»)
+    '.cart-discount-l:has(.sc-disc-btn){width:100%!important;max-width:none!important;float:none!important}' +
+    '.cart-discount .sc-disc-btn{text-align:left!important;padding:10px 14px!important}');
   var go = scSafe(24, run);
   scReady(go);
   window.addEventListener('load', go);
