@@ -3081,7 +3081,7 @@ scModule(24, function () {
       t.appendChild(document.createTextNode(', щоб побачити свою'));
     });
     // Кошик / оформлення: кнопка «Увійти для відображення накопичувальної знижки» (вся кнопка — посилання на вхід)
-    [].forEach.call(document.querySelectorAll('a[href="#login"], a[href="#auth"]'), function (a) {
+    [].forEach.call(document.querySelectorAll('a[href="#login"], a[href="#auth"], button[onclick*="sign-in"]'), function (a) {
       if (a.getAttribute('data-sc-disc') || !/накопичувальної знижки/.test(a.textContent)) return;
       a.setAttribute('data-sc-disc', '1');
       a.classList.add('sc-disc-btn');
@@ -3097,7 +3097,7 @@ scModule(24, function () {
     });
   }
   scStyle('sc-disc-style', CSS +
-    '.sc-disc-btn{display:block!important;white-space:normal!important;height:auto!important;line-height:1.35!important;padding:8px 10px!important;text-align:center!important;border:1px dashed #9cc8a8!important;border-radius:8px!important;background:#f4fbf6!important}' +
+    '.sc-disc-btn{display:block!important;width:100%!important;cursor:pointer;white-space:normal!important;height:auto!important;line-height:1.35!important;padding:8px 10px!important;text-align:center!important;border:1px dashed #9cc8a8!important;border-radius:8px!important;background:#f4fbf6!important}' +
     '.sc-disc-btn__t{display:block;color:#1c2430;font-size:13px;font-weight:normal}' +
     '.sc-disc-btn__l{display:block;color:#1f6fd1;font-weight:bold;text-decoration:underline;font-size:13px;margin-top:2px}');
   var go = scSafe(24, run);
