@@ -3126,7 +3126,9 @@ scModule(27, function () {
   'use strict';
   // повна назва товару в картці каталогу (до 5 рядків замість 3) — щоб було видно довжину, модель тощо
   scStyle('sc-cardtitle-style',
-    '.catalogCard-title{height:auto!important;max-height:90px!important;display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:5!important}');
+    '.catalogCard-title{height:auto!important;max-height:90px!important;display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:5!important}' +
+    // мобільна версія (?v=mobile): картки вужчі — до 6 рядків
+    '.catalog-card__title{height:auto!important;max-height:none!important;display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:6!important}');
 });
 
 scModule(26, function () {
