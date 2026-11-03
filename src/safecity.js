@@ -3169,6 +3169,57 @@ scModule(28, function () {
     P + '.catalog-card__title{font-size:13px!important;line-height:1.25!important;text-align:center!important;margin-top:8px!important;-webkit-line-clamp:3!important}');
 });
 
+scModule(29, function () {
+  'use strict';
+  // «Відгуки про магазин» на головній (десктоп): 4 відгуки в ряд замість 3 і найдокладніші — першими.
+  // Слайди лише переставляємо в DOM (без копіювання), тож обробники Хорошопа на картках лишаються.
+  var box = document.querySelector('.top-reviews');
+  if (!box) return;
+  scStyle('sc-reviews-style',
+    '@media (min-width:1000px){.top-reviews__item{width:25%!important}.top-reviews .review-item{min-height:0!important}}');
+  var tries = 0;
+  var run = scSafe(29, function () {
+    var el = box.querySelector('.swiper-container-initialized');
+    var sw = el && el.swiper;
+    if (!sw) { if (++tries < 20) setTimeout(run, 500); return; }
+    if (sw.params.loop) return;                                  // у режимі loop слайди-дублікати — не чіпаємо
+    var len = function (s) {
+      var t = s.querySelector('[class*="review-item__text"]') || s;
+      return (t.textContent || '').trim().length;
+    };
+    var slides = [].slice.call(sw.slides);
+    slides.sort(function (a, b) { return len(b) - len(a); });
+    slides.forEach(function (s) { sw.wrapperEl.appendChild(s); });
+    sw.params.slidesPerGroup = 4;
+    if (sw.params.breakpoints) Object.keys(sw.params.breakpoints).forEach(function (k) {
+      if (sw.params.breakpoints[k].slidesPerGroup) sw.params.breakpoints[k].slidesPerGroup = 4;
+    });
+    sw.update();
+    sw.slideTo(0, 0);
+  });
+  scReady(function () { setTimeout(run, 300); });
+});
+
+scModule(30, function () {
+  'use strict';
+  // Мобільна версія: телефони у футері — великі зелені кнопки з іконкою, номер з пробілами
+  if (!document.querySelector('script[src*="/bundles/mobile/"]')) return;
+  scStyle('sc-mfooter-style',
+    '.footer .phones--inline{display:flex!important;flex-direction:column!important;gap:10px!important;padding:0 16px!important;margin-bottom:16px!important}' +
+    '.footer .phones--inline .phones__item{margin:0!important;width:100%!important}' +
+    '.footer .phones__link{display:flex!important;align-items:center;justify-content:center;gap:10px;height:50px;border-radius:12px;background:#2E9E4F;color:#fff!important;font-size:18px!important;font-weight:700!important;letter-spacing:.02em;text-decoration:none!important}' +
+    '.footer .phones__link svg{width:20px;height:20px;flex:none}');
+  var ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>';
+  scReady(scSafe(30, function () {
+    [].forEach.call(document.querySelectorAll('.footer .phones__link'), function (a) {
+      if (a.querySelector('svg')) return;
+      var d = a.textContent.replace(/\D/g, '');
+      if (d.length === 12) a.textContent = '+38 ' + d.slice(2, 5) + ' ' + d.slice(5, 8) + ' ' + d.slice(8, 10) + ' ' + d.slice(10);
+      a.insertAdjacentHTML('afterbegin', ICON);
+    });
+  }));
+});
+
 scModule(23, function () {
   'use strict';
 
