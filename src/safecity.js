@@ -3189,7 +3189,7 @@ scModule(33, function () {
   // cookie-смуга (модуль 18) на мобільній: відступ знизу, щоб не перекривала кнопки й липку панель «Купити»
   scStyle('sc33-cookie',
     'body.sc-cookie-bar{padding-bottom:var(--sc-cookie-h,0px)!important}' +
-    // липка панель «В кошику» на картці (модуль 14) — над смугою, а не під нею
+    // липка панель «В кошику» на картці (модуль 13) — над смугою, а не під нею
     'body.sc-cookie-bar #sc-sticky{bottom:var(--sc-cookie-h,0px)!important}' +
     'body.sc-cookie-bar.sc-sticky-pad{padding-bottom:calc(var(--sc-cookie-h,0px) + 72px)!important}');
   function cookieH() {
