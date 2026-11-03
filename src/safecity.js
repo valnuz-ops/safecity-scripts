@@ -3114,15 +3114,16 @@ scModule(24, function () {
     '.sc-disc-btn{display:block!important;width:100%!important;cursor:pointer;white-space:normal!important;height:auto!important;line-height:1.35!important;padding:8px 10px!important;text-align:center!important;border:1px dashed #9cc8a8!important;border-radius:8px!important;background:#f4fbf6!important}' +
     '.sc-disc-btn__t{display:block;color:#1c2430;font-size:13px;font-weight:normal}' +
     '.sc-disc-btn__l{display:block;color:#1f6fd1;font-weight:bold;text-decoration:underline;font-size:13px;margin-top:2px}' +
-    // десктопний кошик: блок за шириною тексту, по лівому краю (як «Є купон зі знижкою?»)
+    // десктопний кошик: блок на всю ширину, краї — як у смуги «До безкоштовної доставки»
     '.cart-discount-l:has(.sc-disc-btn){width:auto!important;max-width:none!important;float:none!important}' +
-    '.cart-items td[data-sc-disc]{padding-left:15px!important;padding-right:15px!important}' +
+    '.cart-items td[data-sc-disc]{padding-left:1px!important;padding-right:1px!important}' +
+    '.cart-items td[data-sc-disc] .j-coupon-add{margin-left:15px!important}' +
     // «Рекомендуємо придбати» в кошику: картки однакової висоти, ціна й «До кошика» на одній лінії
     '.cart-recommended .productsSlider-wrapper{align-items:stretch!important}' +
     '.cart-recommended .productsSlider-i{display:flex!important;flex-direction:column!important;height:auto!important}' +
     '.cart-recommended .productsSlider-i>a{flex:1 1 auto}' +
     '.cart-recommended .productsSlider-order{margin-top:6px}' +
-    '.cart-discount .sc-disc-btn{display:inline-block!important;width:auto!important;max-width:100%!important;text-align:left!important;padding:10px 14px!important}');
+    '.cart-discount .sc-disc-btn{display:block!important;width:100%!important;box-sizing:border-box!important;max-width:none!important;text-align:left!important;padding:10px 14px!important;border-radius:8px!important}');
   var go = scSafe(24, run);
   scReady(go);
   window.addEventListener('load', go);
