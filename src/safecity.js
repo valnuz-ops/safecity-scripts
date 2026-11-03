@@ -3200,6 +3200,13 @@ scModule(29, function () {
   scReady(function () { setTimeout(run, 300); });
 });
 
+scModule(31, function () {
+  'use strict';
+  // Шапка (десктоп): кошик у тон новій палітрі — темний замість сіро-синього #3F4F67 з теми
+  scStyle('sc-header-style',
+    '.basket__icon .icon{fill:#1E1F1E!important}.basket__title,.basket__value{color:#1E1F1E!important}');
+});
+
 scModule(30, function () {
   'use strict';
   // Мобільна версія: телефони у футері — великі зелені кнопки з іконкою, номер з пробілами
