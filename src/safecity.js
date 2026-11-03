@@ -3210,6 +3210,8 @@ scModule(32, function () {
     '.footer .footer__contacts-item-link.j-phone-item{font-size:17px!important;font-weight:700!important;color:#1E1F1E!important;letter-spacing:.01em}' +
     '.footer .footer__contacts-item-link.j-phone-item:hover{color:#2E9E4F!important}' +
     '.footer .footer__contacts .icon,.footer .footer__address .icon{fill:#2E9E4F!important;opacity:1!important}' +
+    // месенджери — у фірмових кольорах (впізнаваніше), решта іконок — зелені
+    '.footer .footer__contacts .icon--viber{fill:#7360F2!important}.footer .footer__contacts .icon--whatsapp{fill:#25D366!important}.footer .footer__contacts .icon--telegram{fill:#229ED9!important}' +
     '.footer .footer__link:hover,.footer .footer__menu a:hover{color:#2E9E4F!important}' +
     '.footer .footer__mobile-version{display:none!important}' +
     '.footer .footer__development{opacity:.45;transition:opacity .15s}.footer .footer__development:hover{opacity:1}' +
