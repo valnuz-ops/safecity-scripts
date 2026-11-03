@@ -3189,22 +3189,18 @@ scModule(33, function () {
   // cookie-смуга (модуль 18) на мобільній: відступ знизу, щоб не перекривала кнопки й липку панель «Купити»
   scStyle('sc33-cookie',
     'body.sc-cookie-bar{padding-bottom:var(--sc-cookie-h,0px)!important}' +
-    'body.sc-cookie-bar .sc33-lift{bottom:var(--sc-cookie-h,0px)!important}');
+    // липка панель «В кошику» на картці (модуль 14) — над смугою, а не під нею
+    'body.sc-cookie-bar #sc-sticky{bottom:var(--sc-cookie-h,0px)!important}' +
+    'body.sc-cookie-bar.sc-sticky-pad{padding-bottom:calc(var(--sc-cookie-h,0px) + 72px)!important}');
   function cookieH() {
     var m = document.getElementById('cookies-modal');
     var box = m && m.classList.contains('is-visible') && m.querySelector('.modal__box');
     var h = box ? Math.round(box.getBoundingClientRect().height) : 0;
-    document.documentElement.style.setProperty('--sc-cookie-h', h + 'px');
-    if (!h || !mobile || h === cookieH.last) return;
+    if (h === cookieH.last) return;
     cookieH.last = h;
-    // липкі панелі внизу екрана (кнопка «Купити» на картці тощо) — піднімаємо над смугою
-    [].forEach.call(document.querySelectorAll('body *'), function (e) {
-      if (e.classList.contains('sc33-lift') || m.contains(e) || e.closest('.sc33-lift')) return;
-      var cs = getComputedStyle(e);
-      if ((cs.position === 'fixed' || cs.position === 'sticky') && cs.bottom === '0px' && e.getClientRects().length && e.offsetHeight < 160) e.classList.add('sc33-lift');
-    });
+    document.documentElement.style.setProperty('--sc-cookie-h', h + 'px');
   }
-  scReady(scSafe(33, function () { cookieH(); setInterval(cookieH, 1500); }));
+  scReady(scSafe(33, function () { cookieH(); setInterval(cookieH, 1000); }));
 
   if (!checkout) return;
 
@@ -3218,8 +3214,8 @@ scModule(33, function () {
     (mobile
       ? // мобільна: обидві вкладки поміщаються; без великих кнопок-телефонів у футері
         '.page--checkout .tabs__nav-wrap{display:flex!important}' +
-        '.page--checkout .tabs__nav-wrap .tabs__item{flex:1 1 0!important;min-width:0;text-align:center;padding-left:4px!important;padding-right:4px!important}' +
-        '.page--checkout .tabs__nav-wrap .tabs__item-text{font-size:15px!important;white-space:nowrap}' +
+        '.page--checkout .tabs__nav-wrap .tabs__item{flex:1 1 0!important;min-width:0;text-align:center;padding-left:2px!important;padding-right:2px!important}' +
+        '.page--checkout .tabs__nav-wrap .tabs__item-text{font-size:14px!important;letter-spacing:-.01em;white-space:nowrap}' +
         '.page--checkout .footer .phones--inline{display:none!important}'
       : // десктоп: вкладки в один рядок, підсумок липкий, футера немає
         '.checkout-tabs-i{white-space:nowrap}.checkout-tabs-text br{display:none}' +
