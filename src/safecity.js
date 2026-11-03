@@ -3252,6 +3252,8 @@ scModule(33, function () {
     if (st !== 'picked' && s.value !== st) { s.setAttribute('data-sc33', 'picked'); st = 'picked'; }
     var t = whText(s), box = t && (t.closest('.selectboxit-container') || t.closest('.select') || t);
     if (st === 'picked') {
+      // вибрали те саме значення — плагін текст не оновлює, повертаємо назву відділення самі
+      if (t && /^Оберіть (відділення|поштомат)$/.test(t.textContent) && s.selectedIndex >= 0) t.textContent = s.options[s.selectedIndex].textContent;
       if (box) box.classList.remove('sc33-empty', 'sc33-err');
       var msg = document.getElementById('sc33-wh-msg'); if (msg) msg.remove();
       return;
@@ -3273,11 +3275,9 @@ scModule(33, function () {
     }
   }, true);
   // кнопка «Оформити» без вибраного відділення — не відправляємо, показуємо поле
-  document.addEventListener('click', function (e) {
-    var b = e.target.closest && e.target.closest('#checkout-container .j-submit, #checkout-container button[type="submit"]');
-    if (!b) return;
+  function guard(e, form) {
     var s = whSelect();
-    if (!s || !b.closest('form') || !b.closest('form').contains(s) || s.getAttribute('data-sc33') === 'picked') return;
+    if (!s || !form || !form.contains(s) || s.getAttribute('data-sc33') === 'picked') return;
     e.preventDefault(); e.stopImmediatePropagation();
     var t = whText(s), box = t && (t.closest('.selectboxit-container') || t.closest('.select') || t);
     if (box) {
@@ -3289,7 +3289,12 @@ scModule(33, function () {
       }
       box.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#checkout-container .j-submit, #checkout-container button[type="submit"]');
+    if (b) guard(e, b.closest('form'));
   }, true);
+  document.addEventListener('submit', function (e) { guard(e, e.target); }, true);   // Enter у полі форми
 
   function tick() {
     var s = whSelect(); if (s) mark(s);
