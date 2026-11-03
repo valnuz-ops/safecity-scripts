@@ -3220,7 +3220,8 @@ scModule(32, function () {
     '.footer .sc-fphone svg{position:absolute!important;left:-24px!important;top:50%!important;transform:translateY(-50%)!important;width:16px;height:16px;margin:0!important;fill:#2E9E4F!important}' +
     // у файлі логотипа 200×100 багато порожнього поля зверху й знизу — обрізаємо, щоб не було дірки під лого
     '.footer .footer__logo{height:58px!important;overflow:hidden;margin-bottom:18px!important}.footer .footer__logo-img{margin-top:-21px!important}' +
-    '.footer .footer__development{opacity:.45;transition:opacity .15s}.footer .footer__development:hover{opacity:1}' +
+    // плашка «Створено з Хорошоп» прихована за рішенням власника (03.11.2026); повернути — видалити цей рядок
+    '.footer .footer__development{display:none!important}' +
     '.sc-fsched{font-size:13px;line-height:1.45;color:#4A4F4C;margin:4px 0 8px}' +
     '.sc-fsched b{color:#1E1F1E;font-weight:600}' +
     '.footer .footer__address .sc-faddr-t{display:block;color:#1E1F1E;font-weight:600;margin-top:10px}' +
