@@ -3209,7 +3209,7 @@ scModule(32, function () {
   scStyle('sc-dfooter-style',
     '.footer .footer__contacts-item-link.j-phone-item{font-size:17px!important;font-weight:700!important;color:#1E1F1E!important;letter-spacing:.01em}' +
     '.footer .footer__contacts-item-link.j-phone-item:hover{color:#2E9E4F!important}' +
-    '.footer .footer__contacts .icon{fill:#2E9E4F!important}' +
+    '.footer .footer__contacts .icon,.footer .footer__address .icon{fill:#2E9E4F!important;opacity:1!important}' +
     '.footer .footer__link:hover,.footer .footer__menu a:hover{color:#2E9E4F!important}' +
     '.footer .footer__mobile-version{display:none!important}' +
     '.footer .footer__development{opacity:.45;transition:opacity .15s}.footer .footer__development:hover{opacity:1}' +
@@ -3235,13 +3235,20 @@ scModule(32, function () {
       if (lines.length) {
         var box = document.createElement('div');
         box.className = 'sc-fsched';
-        for (var i = 0; i < lines.length; i += 2) {
+        // рядки виду «Пн–Пт: 09:00–20:00» (або «Пн–Пт:» і «09:00–20:00» окремо) → «<b>Пн–Пт:</b> 09:00–20:00»
+        var rows = [];
+        lines.forEach(function (s) {
+          if (/:$/.test(s) || !rows.length || /^(Пн|Вт|Ср|Чт|Пт|Сб|Нд)/.test(s)) rows.push(s);
+          else rows[rows.length - 1] += ' ' + s;
+        });
+        rows.forEach(function (s) {
+          var k = s.indexOf(':');
           var row = document.createElement('div');
-          var b = document.createElement('b'); b.textContent = lines[i] + ' ';
+          var b = document.createElement('b'); b.textContent = k > 0 ? s.slice(0, k + 1) + ' ' : '';
           row.appendChild(b);
-          row.appendChild(document.createTextNode(lines[i + 1] || ''));
+          row.appendChild(document.createTextNode(k > 0 ? s.slice(k + 1).trim() : s));
           box.appendChild(row);
-        }
+        });
         var last = phones[phones.length - 1].closest('.footer__contacts-item');
         last.parentNode.insertBefore(box, last.nextSibling);
       }
