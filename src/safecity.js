@@ -3326,6 +3326,9 @@ scModule(30, function () {
     '.footer .phones__link svg{width:20px;height:20px;flex:none}');
   var ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>';
   scReady(scSafe(30, function () {
+    // плашка «Створено з Хорошоп» (у неї inline display:flex !important — CSS не перекриє, тому через style)
+    var dev = document.querySelector('.footer .footer__bottom');
+    if (dev && dev.querySelector('a[href*="horoshop"]')) dev.style.setProperty('display', 'none', 'important');
     [].forEach.call(document.querySelectorAll('.footer .phones__link'), function (a) {
       if (a.querySelector('svg')) return;
       var d = a.textContent.replace(/\D/g, '');
