@@ -1196,7 +1196,7 @@ scModule(6, function () {
     psu: '/bloky-zhyvlennia-12-24-48v/', psu12: 1,
     utp: '/kabel-vyta-para/2348/',
     coax: '/koaksialnyi-kabel/',
-    connectors: '/kabeli-i-roziemy/',
+    connectors: '/patch-kordy/2378/',
     storage: '/nakopychuvachi/2297/', sd: 151
   };
 
@@ -1304,7 +1304,7 @@ scModule(7, function () {
     res: [['4 Мп', 4, [3, 5]], ['5–6 Мп', 6, [1, 7, 9, 14]], ['8 Мп', 8, [2, 13]]],
     switches: '/poe-prystroi/2364/',
     utp: '/kabel-vyta-para/2348/',
-    connectors: '/kabeli-i-roziemy/'
+    connectors: '/patch-kordy/2378/'
   };
 
   var url = scFilterUrl;   // стилі й рядки — спільні з блоком 6 (.sc-kit)
