@@ -3214,6 +3214,8 @@ scModule(32, function () {
     '.footer .footer__contacts .icon--viber{fill:#7360F2!important}.footer .footer__contacts .icon--whatsapp{fill:#25D366!important}.footer .footer__contacts .icon--telegram{fill:#229ED9!important}' +
     '.footer .footer__link:hover,.footer .footer__menu a:hover{color:#2E9E4F!important}' +
     '.footer .footer__mobile-version{display:none!important}' +
+    // у файлі логотипа 200×100 багато порожнього поля зверху й знизу — обрізаємо, щоб не було дірки під лого
+    '.footer .footer__logo{height:58px!important;overflow:hidden;margin-bottom:18px!important}.footer .footer__logo-img{margin-top:-21px!important}' +
     '.footer .footer__development{opacity:.45;transition:opacity .15s}.footer .footer__development:hover{opacity:1}' +
     '.sc-fsched{font-size:13px;line-height:1.45;color:#4A4F4C;margin:4px 0 8px}' +
     '.sc-fsched b{color:#1E1F1E;font-weight:600}' +
@@ -3225,6 +3227,10 @@ scModule(32, function () {
     '.sc-fpay-note{font-size:12px;color:#4A4F4C;margin-top:4px}');
 
   scReady(scSafe(32, function () {
+    // «Мапа проїзду» — прибираємо: самовивозу немає
+    [].forEach.call(document.querySelectorAll('.footer .footer__address ~ a, .footer .footer__contacts a.footer__link'), function (a) {
+      if (/Мапа проїзду/i.test(a.textContent || '')) a.style.display = 'none';
+    });
     // Графік роботи — береться з шапки, щоб не дублювати текст у двох місцях
     var phones = document.querySelectorAll('.footer .footer__contacts-item-link.j-phone-item');
     if (phones.length && !document.querySelector('.sc-fsched')) {
