@@ -3098,6 +3098,17 @@ scModule(24, function () {
       a.appendChild(s1);
       a.appendChild(s2);
     });
+    // Десктопний кошик: рядок знижки/купона стоїть під колонкою назви (перша клітинка — порожня під фото).
+    // Прибираємо порожню клітинку, щоб блок починався від лівого краю, як смуга «До безкоштовної доставки».
+    [].forEach.call(document.querySelectorAll('.cart-items .cart-discount'), function (box) {
+      var td = box.closest('td');
+      if (!td || td.getAttribute('data-sc-disc')) return;
+      var prev = td.previousElementSibling;
+      if (!prev || !prev.classList.contains('__image') || prev.textContent.trim()) return;
+      td.setAttribute('data-sc-disc', '1');
+      prev.style.display = 'none';
+      td.colSpan = td.colSpan + 1;
+    });
   }
   scStyle('sc-disc-style', CSS +
     '.sc-disc-btn{display:block!important;width:100%!important;cursor:pointer;white-space:normal!important;height:auto!important;line-height:1.35!important;padding:8px 10px!important;text-align:center!important;border:1px dashed #9cc8a8!important;border-radius:8px!important;background:#f4fbf6!important}' +
@@ -3105,6 +3116,7 @@ scModule(24, function () {
     '.sc-disc-btn__l{display:block;color:#1f6fd1;font-weight:bold;text-decoration:underline;font-size:13px;margin-top:2px}' +
     // десктопний кошик: блок за шириною тексту, по лівому краю (як «Є купон зі знижкою?»)
     '.cart-discount-l:has(.sc-disc-btn){width:auto!important;max-width:none!important;float:none!important}' +
+    '.cart-items td[data-sc-disc]{padding-left:15px!important;padding-right:15px!important}' +
     '.cart-discount .sc-disc-btn{display:inline-block!important;width:auto!important;max-width:100%!important;text-align:left!important;padding:10px 14px!important}');
   var go = scSafe(24, run);
   scReady(go);
