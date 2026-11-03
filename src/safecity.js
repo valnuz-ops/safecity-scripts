@@ -3176,7 +3176,13 @@ scModule(29, function () {
   var box = document.querySelector('.top-reviews');
   if (!box) return;
   scStyle('sc-reviews-style',
-    '@media (min-width:1000px){.top-reviews__item{width:25%!important}.top-reviews .review-item{min-height:0!important}}');
+    '@media (min-width:1000px){.top-reviews__item{width:25%!important}.top-reviews .review-item{min-height:0!important}' +
+    // картки однієї висоти; ім'я / зірки / дата завжди трьома рядками (довге ім'я не зсуває зірки)
+    '.top-reviews .swiper-wrapper,.top-reviews__carousel-wrapper{align-items:stretch!important}' +
+    '.top-reviews__item{height:auto!important;display:flex!important}.top-reviews .review-item{height:auto!important;flex:1 1 auto;box-sizing:border-box}' +
+    '.top-reviews .review-item__author{float:none!important;display:block!important}' +
+    '.top-reviews .review-item__name{display:block!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.top-reviews .review-item__rating{display:flex!important;margin:3px 0 2px 0!important}.top-reviews .review-item__date{margin-left:0!important}}');
   var tries = 0;
   var run = scSafe(29, function () {
     var el = box.querySelector('.swiper-container-initialized');
