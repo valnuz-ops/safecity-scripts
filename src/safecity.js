@@ -3226,9 +3226,11 @@ scModule(32, function () {
     // Графік роботи — береться з шапки, щоб не дублювати текст у двох місцях
     var phones = document.querySelectorAll('.footer .footer__contacts-item-link.j-phone-item');
     if (phones.length && !document.querySelector('.sc-fsched')) {
+      // найменший елемент шапки, де є і «Пн–Пт», і «Сб» (увесь графік, без заголовка «Графік роботи»)
       var src = [].filter.call(document.querySelectorAll('header *'), function (e) {
-        return e.children.length < 6 && /Пн[–-]Пт/.test(e.textContent || '');
-      }).pop();
+        var s = e.textContent || '';
+        return /Пн[–-]Пт/.test(s) && /Сб/.test(s) && !/Графік/.test(s);
+      }).sort(function (a, b) { return a.textContent.length - b.textContent.length; })[0];
       var lines = src ? src.innerText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean) : [];
       if (lines.length) {
         var box = document.createElement('div');
