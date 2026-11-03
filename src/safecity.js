@@ -3214,6 +3214,10 @@ scModule(32, function () {
     '.footer .footer__contacts .icon--viber{fill:#7360F2!important}.footer .footer__contacts .icon--whatsapp{fill:#25D366!important}.footer .footer__contacts .icon--telegram{fill:#229ED9!important}' +
     '.footer .footer__link:hover,.footer .footer__menu a:hover{color:#2E9E4F!important}' +
     '.footer .footer__mobile-version{display:none!important}' +
+    // іконка телефону — біля кожного номера, як у месенджерів (замість однієї на групу)
+    '.footer .footer__contacts-group > svg.icon--phone{display:none!important}' +
+    '.footer .sc-fphone{position:relative}' +
+    '.footer .sc-fphone svg{position:absolute!important;left:-24px!important;top:50%!important;transform:translateY(-50%)!important;width:16px;height:16px;margin:0!important;fill:#2E9E4F!important}' +
     // у файлі логотипа 200×100 багато порожнього поля зверху й знизу — обрізаємо, щоб не було дірки під лого
     '.footer .footer__logo{height:58px!important;overflow:hidden;margin-bottom:18px!important}.footer .footer__logo-img{margin-top:-21px!important}' +
     '.footer .footer__development{opacity:.45;transition:opacity .15s}.footer .footer__development:hover{opacity:1}' +
@@ -3227,6 +3231,15 @@ scModule(32, function () {
     '.sc-fpay-note{font-size:12px;color:#4A4F4C;margin-top:4px}');
 
   scReady(scSafe(32, function () {
+    // іконка телефону до кожного номера
+    var grp = document.querySelector('.footer .footer__contacts-group');
+    var ico = grp && grp.querySelector(':scope > svg.icon--phone');
+    if (ico) [].forEach.call(document.querySelectorAll('.footer .footer__contacts-item-link.j-phone-item'), function (a) {
+      var it = a.closest('.footer__contacts-item');
+      if (!it || it.classList.contains('sc-fphone')) return;
+      it.classList.add('sc-fphone');
+      it.insertBefore(ico.cloneNode(true), a);
+    });
     // «Мапа проїзду» — прибираємо: самовивозу немає
     [].forEach.call(document.querySelectorAll('.footer .footer__address ~ a, .footer .footer__contacts a.footer__link'), function (a) {
       if (/Мапа проїзду/i.test(a.textContent || '')) a.style.display = 'none';
