@@ -3300,16 +3300,19 @@ scModule(32, function () {
       }
     }
 
-    // Оплата: способи текстом над логотипом «Покупка частинами» monobank
+    // Оплата: способи текстом. Якщо є блок «Покупка частинами» monobank — над ним,
+    // інакше (частини вимкнено в Хорошопі, блок зникає) — під логотипом і копірайтом
     var pay = document.querySelector('.footer .footer__payment');
-    if (pay && !document.querySelector('.sc-fpay')) {
+    var anchor = pay || document.querySelector('.footer .footer__copyright') || document.querySelector('.footer .footer__logo');
+    if (anchor && !document.querySelector('.sc-fpay')) {
       var ul = document.createElement('ul');
       ul.className = 'sc-fpay';
       ['Оплата при отриманні', 'Карткою онлайн: Visa, Mastercard, Apple Pay, Google Pay', 'Безготівково для юросіб і ФОП'].forEach(function (s) {
         var li = document.createElement('li'); li.textContent = s; ul.appendChild(li);
       });
-      pay.parentNode.insertBefore(ul, pay);
-      if (pay.querySelector('a[href*="chast.monobank"]')) {
+      if (pay) pay.parentNode.insertBefore(ul, pay);
+      else anchor.parentNode.insertBefore(ul, anchor.nextSibling);
+      if (pay && pay.querySelector('a[href*="chast.monobank"]')) {
         var n = document.createElement('div'); n.className = 'sc-fpay-note'; n.textContent = 'Покупка частинами від monobank';
         pay.parentNode.insertBefore(n, pay.nextSibling);
       }
