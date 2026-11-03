@@ -3241,6 +3241,9 @@ scModule(32, function () {
       it.classList.add('sc-fphone');
       it.insertBefore(ico.cloneNode(true), a);
     });
+    // плашка «Створено з Хорошоп»: у неї inline display:flex !important — CSS не перекриє, ховаємо через style
+    var dv = document.querySelector('.footer .footer__development');
+    if (dv) dv.style.setProperty('display', 'none', 'important');
     // «Мапа проїзду» — прибираємо: самовивозу немає
     [].forEach.call(document.querySelectorAll('.footer .footer__address ~ a, .footer .footer__contacts a.footer__link'), function (a) {
       if (/Мапа проїзду/i.test(a.textContent || '')) a.style.display = 'none';
