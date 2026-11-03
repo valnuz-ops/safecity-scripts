@@ -1192,7 +1192,7 @@ scModule(6, function () {
     // [кількість каналів, ID значення фільтра «Кількість каналів IP»]
     channels:     [[4, 5], [8, 1], [16, 2], [32, 4]],
     channelsAjax: [[8, 1], [16, 2]],
-    switches: '/poe-prystroi/2364/',
+    switches: '/komutatory/',
     psu: '/bloky-zhyvlennia-12-24-48v/', psu12: 1,
     utp: '/kabel-vyta-para/2348/',
     coax: '/koaksialnyi-kabel/',
@@ -1302,7 +1302,7 @@ scModule(7, function () {
     ipCam: 50, ptz: 68,
     // групи роздільної здатності камер: [назва, макс. Мп, ID значень фільтра]
     res: [['4 Мп', 4, [3, 5]], ['5–6 Мп', 6, [1, 7, 9, 14]], ['8 Мп', 8, [2, 13]]],
-    switches: '/poe-prystroi/2364/',
+    switches: '/komutatory/',
     utp: '/kabel-vyta-para/2348/',
     connectors: '/patch-kordy/2378/'
   };
