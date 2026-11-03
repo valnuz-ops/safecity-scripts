@@ -3117,6 +3117,11 @@ scModule(24, function () {
     // десктопний кошик: блок за шириною тексту, по лівому краю (як «Є купон зі знижкою?»)
     '.cart-discount-l:has(.sc-disc-btn){width:auto!important;max-width:none!important;float:none!important}' +
     '.cart-items td[data-sc-disc]{padding-left:15px!important;padding-right:15px!important}' +
+    // «Рекомендуємо придбати» в кошику: картки однакової висоти, ціна й «До кошика» на одній лінії
+    '.cart-recommended .productsSlider-wrapper{align-items:stretch!important}' +
+    '.cart-recommended .productsSlider-i{display:flex!important;flex-direction:column!important;height:auto!important}' +
+    '.cart-recommended .productsSlider-i>a{flex:1 1 auto}' +
+    '.cart-recommended .productsSlider-order{margin-top:6px}' +
     '.cart-discount .sc-disc-btn{display:inline-block!important;width:auto!important;max-width:100%!important;text-align:left!important;padding:10px 14px!important}');
   var go = scSafe(24, run);
   scReady(go);
