@@ -3200,6 +3200,83 @@ scModule(29, function () {
   scReady(function () { setTimeout(run, 300); });
 });
 
+scModule(32, function () {
+  'use strict';
+  // Футер (десктоп): телефони виділені, під ними графік роботи (з шапки), іконки контактів одного кольору,
+  // адреса двома підписаними рядками, способи оплати текстом, без «Мобільна версія», плашка Хорошопа блідіша
+  if (document.querySelector('script[src*="/bundles/mobile/"]')) return;
+  if (!document.querySelector('.footer__contacts')) return;
+  scStyle('sc-dfooter-style',
+    '.footer .footer__contacts-item-link.j-phone-item{font-size:17px!important;font-weight:700!important;color:#1E1F1E!important;letter-spacing:.01em}' +
+    '.footer .footer__contacts-item-link.j-phone-item:hover{color:#2E9E4F!important}' +
+    '.footer .footer__contacts .icon{fill:#2E9E4F!important}' +
+    '.footer .footer__link:hover,.footer .footer__menu a:hover{color:#2E9E4F!important}' +
+    '.footer .footer__mobile-version{display:none!important}' +
+    '.footer .footer__development{opacity:.45;transition:opacity .15s}.footer .footer__development:hover{opacity:1}' +
+    '.sc-fsched{font-size:13px;line-height:1.45;color:#4A4F4C;margin:4px 0 8px}' +
+    '.sc-fsched b{color:#1E1F1E;font-weight:600}' +
+    '.footer .footer__address .sc-faddr-t{display:block;color:#1E1F1E;font-weight:600;margin-top:10px}' +
+    '.footer .footer__address .sc-faddr-t:first-child{margin-top:0}' +
+    '.sc-fpay{list-style:none;margin:6px 0 10px;padding:0;font-size:13px;line-height:1.5;color:#4A4F4C}' +
+    '.sc-fpay li{position:relative;padding-left:14px}' +
+    '.sc-fpay li:before{content:"";position:absolute;left:0;top:.6em;width:6px;height:6px;border-radius:50%;background:#2E9E4F}' +
+    '.sc-fpay-note{font-size:12px;color:#4A4F4C;margin-top:4px}');
+
+  scReady(scSafe(32, function () {
+    // Графік роботи — береться з шапки, щоб не дублювати текст у двох місцях
+    var phones = document.querySelectorAll('.footer .footer__contacts-item-link.j-phone-item');
+    if (phones.length && !document.querySelector('.sc-fsched')) {
+      var src = [].filter.call(document.querySelectorAll('header *'), function (e) {
+        return e.children.length < 6 && /Пн[–-]Пт/.test(e.textContent || '');
+      }).pop();
+      var lines = src ? src.innerText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean) : [];
+      if (lines.length) {
+        var box = document.createElement('div');
+        box.className = 'sc-fsched';
+        for (var i = 0; i < lines.length; i += 2) {
+          var row = document.createElement('div');
+          var b = document.createElement('b'); b.textContent = lines[i] + ' ';
+          row.appendChild(b);
+          row.appendChild(document.createTextNode(lines[i + 1] || ''));
+          box.appendChild(row);
+        }
+        var last = phones[phones.length - 1].closest('.footer__contacts-item');
+        last.parentNode.insertBefore(box, last.nextSibling);
+      }
+    }
+
+    // Адреса: «Відправлення замовлень: …  Юридична адреса: …» → два підписані рядки
+    var addr = document.querySelector('.footer .footer__address');
+    if (addr && !addr.querySelector('.sc-faddr-t')) {
+      var t = addr.textContent.replace(/\s+/g, ' ').trim();
+      var parts = t.split(/(Відправлення замовлень:|Юридична адреса:)/).map(function (s) { return s.trim(); }).filter(Boolean);
+      if (parts.length >= 4) {
+        addr.textContent = '';
+        for (var j = 0; j + 1 < parts.length; j += 2) {
+          var h = document.createElement('span'); h.className = 'sc-faddr-t'; h.textContent = parts[j].replace(':', '');
+          addr.appendChild(h);
+          addr.appendChild(document.createTextNode(parts[j + 1].replace(/\.$/, '').replace(/,(\S)/g, ', $1')));
+        }
+      }
+    }
+
+    // Оплата: способи текстом над логотипом «Покупка частинами» monobank
+    var pay = document.querySelector('.footer .footer__payment');
+    if (pay && !document.querySelector('.sc-fpay')) {
+      var ul = document.createElement('ul');
+      ul.className = 'sc-fpay';
+      ['Оплата при отриманні', 'Карткою онлайн: Visa, Mastercard, Apple Pay, Google Pay', 'Безготівково для юросіб і ФОП'].forEach(function (s) {
+        var li = document.createElement('li'); li.textContent = s; ul.appendChild(li);
+      });
+      pay.parentNode.insertBefore(ul, pay);
+      if (pay.querySelector('a[href*="chast.monobank"]')) {
+        var n = document.createElement('div'); n.className = 'sc-fpay-note'; n.textContent = 'Покупка частинами від monobank';
+        pay.parentNode.insertBefore(n, pay.nextSibling);
+      }
+    }
+  }));
+});
+
 scModule(31, function () {
   'use strict';
   // Шапка (десктоп): кошик у тон новій палітрі — темний замість сіро-синього #3F4F67 з теми
