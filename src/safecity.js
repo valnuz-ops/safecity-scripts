@@ -3155,6 +3155,20 @@ scModule(26, function () {
     '.filter-section-trigger{text-align:left!important}');
 });
 
+scModule(28, function () {
+  'use strict';
+  // «Популярні категорії» на головній (мобільна версія): однакова ширина карток і квадрат під фото,
+  // щоб картинки різних пропорцій не робили картки різного розміру, а підписи не «стрибали»
+  var P = '.popular-categories ';
+  scStyle('sc-popcat-style',
+    P + '.carousel__item{width:96px!important;flex:0 0 96px!important}' +
+    P + '.catalog-card{width:100%!important;max-width:96px!important}' +
+    P + '.catalog-card__image{width:80px!important;height:80px!important;margin:0 auto!important}' +
+    P + '.catalog-card__image .image,' + P + '.catalog-card__image .image__box{width:100%!important;height:100%!important;padding:0!important}' +
+    P + '.catalog-card__image img{width:100%!important;height:100%!important;object-fit:contain!important;position:static!important}' +
+    P + '.catalog-card__title{font-size:13px!important;line-height:1.25!important;text-align:center!important;margin-top:8px!important;-webkit-line-clamp:3!important}');
+});
+
 scModule(23, function () {
   'use strict';
 
