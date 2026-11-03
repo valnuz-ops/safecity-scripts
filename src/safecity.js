@@ -3202,6 +3202,11 @@ scModule(33, function () {
   }
   scReady(scSafe(33, function () { cookieH(); setInterval(cookieH, 1000); }));
 
+  // значки переваг на картці (модуль «Оплата · Гарантія · Повернення») — в палітрі сайту замість синього й помаранчевого
+  scStyle('sc33-trust',
+    '#sc-trust svg [fill="#f59e0b"],#sc-trust svg [fill="#3b82f6"]{fill:#2E9E4F}' +
+    '#sc-trust svg[stroke="#38ab87"]{stroke:#2E9E4F}#sc-trust .sct-v{color:#2E9E4F!important}');
+
   if (!checkout) return;
 
   scStyle('sc33-style',
