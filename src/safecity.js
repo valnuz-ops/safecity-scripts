@@ -3169,6 +3169,137 @@ scModule(28, function () {
     P + '.catalog-card__title{font-size:13px!important;line-height:1.25!important;text-align:center!important;margin-top:8px!important;-webkit-line-clamp:3!important}');
 });
 
+/* =====================================================================
+ * 33. Оформлення замовлення — візуальні правки (03.11.2026)
+ *     • «Відділення» не вибране заздалегідь: замість №1 — «Оберіть відділення», без вибору
+ *       кнопка «Оформити» не відправляє форму (підсвічуємо поле). Значення в select НЕ чіпаємо.
+ *     • підпис у полі пошуку відділень; вкладки в один рядок; підказки в кольорах сайту;
+ *     • десктоп: колонка «Ваше замовлення» липка, без футера на сторінці оформлення;
+ *     • мобільна: без великих кнопок-телефонів у футері оформлення; cookie-смуга не закриває кнопки.
+ *     ВІДКАТ: SC33_OFF = true (або ?sc33=0 у адресі — лише для перегляду «як було»).
+ * ===================================================================== */
+scModule(33, function () {
+  'use strict';
+  var SC33_OFF = false;
+  if (SC33_OFF || /[?&]sc33=0/.test(location.search)) return;
+
+  var mobile = !!document.querySelector('script[src*="/bundles/mobile/"]');
+  var checkout = location.pathname.indexOf('/checkout') !== -1 && !/checkout.*complete|complete.*order/i.test(location.pathname);
+
+  // cookie-смуга (модуль 18) на мобільній: відступ знизу, щоб не перекривала кнопки й липку панель «Купити»
+  scStyle('sc33-cookie',
+    'body.sc-cookie-bar{padding-bottom:var(--sc-cookie-h,0px)!important}' +
+    'body.sc-cookie-bar .sc33-lift{bottom:var(--sc-cookie-h,0px)!important}');
+  function cookieH() {
+    var m = document.getElementById('cookies-modal');
+    var box = m && m.classList.contains('is-visible') && m.querySelector('.modal__box');
+    var h = box ? Math.round(box.getBoundingClientRect().height) : 0;
+    document.documentElement.style.setProperty('--sc-cookie-h', h + 'px');
+    if (!h || !mobile || h === cookieH.last) return;
+    cookieH.last = h;
+    // липкі панелі внизу екрана (кнопка «Купити» на картці тощо) — піднімаємо над смугою
+    [].forEach.call(document.querySelectorAll('body *'), function (e) {
+      if (e.classList.contains('sc33-lift') || m.contains(e) || e.closest('.sc33-lift')) return;
+      var cs = getComputedStyle(e);
+      if ((cs.position === 'fixed' || cs.position === 'sticky') && cs.bottom === '0px' && e.getClientRects().length && e.offsetHeight < 160) e.classList.add('sc33-lift');
+    });
+  }
+  scReady(scSafe(33, function () { cookieH(); setInterval(cookieH, 1500); }));
+
+  if (!checkout) return;
+
+  scStyle('sc33-style',
+    // підказки модуля 10 — нейтральні, в палітрі сайту, замість блакитних
+    'body .sc-co-note.info,body #sc-co-dlv{background:#F1F3F1!important;border-color:#E1E6E2!important;color:#2B2F2C!important}' +
+    // вибір відділення
+    '.sc33-empty .selectboxit-text,.sc33-empty.select__text,.sc33-empty .select__text{color:#6B716D!important}' +
+    '.sc33-err .selectboxit,.sc33-err.select,.sc33-err .select__text{border-color:#D9534F!important;box-shadow:0 0 0 3px rgba(217,83,79,.15)!important}' +
+    '#sc33-wh-msg{margin:6px 0 2px;color:#B23A36;font-size:13.5px;font-weight:600}' +
+    (mobile
+      ? // мобільна: обидві вкладки поміщаються; без великих кнопок-телефонів у футері
+        '.page--checkout .tabs__nav-wrap{display:flex!important}' +
+        '.page--checkout .tabs__nav-wrap .tabs__item{flex:1 1 0!important;min-width:0;text-align:center;padding-left:4px!important;padding-right:4px!important}' +
+        '.page--checkout .tabs__nav-wrap .tabs__item-text{font-size:15px!important;white-space:nowrap}' +
+        '.page--checkout .footer .phones--inline{display:none!important}'
+      : // десктоп: вкладки в один рядок, підсумок липкий, футера немає
+        '.checkout-tabs-i{white-space:nowrap}.checkout-tabs-text br{display:none}' +
+        '.checkout-aside{position:sticky!important;top:16px;align-self:flex-start}' +
+        'body:has(#checkout-container) .footer{display:none!important}'));
+
+  /* ---- Відділення без попереднього вибору ---- */
+  var PH = 'Оберіть відділення';
+  function whSelect() {
+    return [].filter.call(scCheckout().querySelectorAll('select[name*="warehouse"]'), function (s) {
+      return s.parentElement && s.parentElement.getClientRects().length;
+    })[0];
+  }
+  function whText(s) {
+    var c = document.getElementById(s.id + 'SelectBoxItText') || s.parentElement.querySelector('.selectboxit-text, .select__text');
+    return c;
+  }
+  function isPost(s) { return /поштомат/i.test(scOptText(scCheckout().querySelector('select[name="Delivery[delivery_type]"]')) || ''); }
+  function mark(s) {
+    var first = s.options.length ? s.options[0].value : '';
+    if (s.getAttribute('data-sc33-first') !== first) {   // нове місто — новий список, вибору ще немає
+      s.setAttribute('data-sc33-first', first);
+      s.removeAttribute('data-sc33');
+    }
+    if (s.getAttribute('data-sc33') === null) {
+      // вибір, збережений раніше (не перше значення), — свідомий; перше значення Хорошоп ставить сам
+      s.setAttribute('data-sc33', s.selectedIndex > 0 ? 'picked' : s.value);
+    }
+    var st = s.getAttribute('data-sc33');
+    if (st !== 'picked' && s.value !== st) { s.setAttribute('data-sc33', 'picked'); st = 'picked'; }
+    var t = whText(s), box = t && (t.closest('.selectboxit-container') || t.closest('.select') || t);
+    if (st === 'picked') {
+      if (box) box.classList.remove('sc33-empty', 'sc33-err');
+      var msg = document.getElementById('sc33-wh-msg'); if (msg) msg.remove();
+      return;
+    }
+    var ph = isPost(s) ? 'Оберіть поштомат' : PH;
+    if (t && t.textContent !== ph) t.textContent = ph;
+    if (box) box.classList.add('sc33-empty');
+  }
+  // клік по пункту списку (у т.ч. по тому самому №1) — теж вибір
+  document.addEventListener('click', function (e) {
+    var s = whSelect(); if (!s) return;
+    var li = e.target.closest && e.target.closest('.selectboxit-option, .mm-listitem, li');
+    if (!li) return;
+    var list = li.closest('[id^="' + s.id + '"], [id^="select-drawer"]');
+    var drawer = s.parentElement.getAttribute('data-panel');
+    if (list && (list.id.indexOf(s.id) === 0 || (drawer && list.id === drawer))) {
+      s.setAttribute('data-sc33', 'picked');
+      setTimeout(function () { mark(s); }, 50);
+    }
+  }, true);
+  // кнопка «Оформити» без вибраного відділення — не відправляємо, показуємо поле
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#checkout-container .j-submit, #checkout-container button[type="submit"]');
+    if (!b) return;
+    var s = whSelect();
+    if (!s || !b.closest('form') || !b.closest('form').contains(s) || s.getAttribute('data-sc33') === 'picked') return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    var t = whText(s), box = t && (t.closest('.selectboxit-container') || t.closest('.select') || t);
+    if (box) {
+      box.classList.add('sc33-err');
+      if (!document.getElementById('sc33-wh-msg')) {
+        var m = document.createElement('div'); m.id = 'sc33-wh-msg';
+        m.textContent = isPost(s) ? 'Оберіть, будь ласка, поштомат зі списку' : 'Оберіть, будь ласка, відділення зі списку';
+        box.parentNode.insertBefore(m, box.nextSibling);
+      }
+      box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, true);
+
+  function tick() {
+    var s = whSelect(); if (s) mark(s);
+    [].forEach.call(document.querySelectorAll('.selectboxit-search-field, .mm-search input'), function (i) {
+      if (!i.placeholder) i.placeholder = 'Пошук: номер або вулиця';
+    });
+  }
+  scReady(scSafe(33, function () { tick(); setInterval(scSafe(33, tick), 700); }));
+});
+
 scModule(29, function () {
   'use strict';
   // «Відгуки про магазин» на головній (десктоп): 4 відгуки в ряд замість 3 і найдокладніші — першими.
