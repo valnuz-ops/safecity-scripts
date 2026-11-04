@@ -1235,7 +1235,9 @@ scModule(6, function () {
     utp: '/kabel-vyta-para/2348/',
     coax: '/koaksialnyi-kabel/',
     connectors: '/patch-kordy/2378/',
-    storage: '/nakopychuvachi/2297/', sd: 151
+    storage: '/nakopychuvachi/2297/', sd: 151,
+    // бренди камер, до яких НЕ пропонуємо реєстратори TVT (рядок «Відеореєстратор» не показуємо)
+    noTvtNvr: /lightvision|light vision/i
   };
 
   var url = scFilterUrl;   // Хорошоп: /cat/filter/a=1,2;b=3/ — параметри за алфавітом
@@ -1258,6 +1260,7 @@ scModule(6, function () {
     var sdVal    = scGet(f, /^карта пам/);
     var hasSD    = /так|да|yes|sd|карт|\d\s?(гб|gb|тб|tb)/i.test(sdVal) && !/^(ні|нет|no|відсутн|отсутств)/i.test(sdVal);
     var isAjax   = /ajax/i.test(title);
+    var noTvt    = CFG.noTvtNvr.test(title + ' ' + scGet(f, /^(бренд|виробник|производитель|торгова марка)$/));
 
     scStyle('sc-kit-style', SC_KIT_CSS);
     var box = document.createElement('div');
@@ -1267,8 +1270,10 @@ scModule(6, function () {
     function row(label, hint) { return scKitRow(box, label, hint); }
     var chip = scKitChip;
 
-    // 1. Відеореєстратор
-    if (isAnalog) {
+    // 1. Відеореєстратор (крім брендів із CFG.noTvtNvr)
+    if (noTvt) {
+      // реєстраторів не пропонуємо
+    } else if (isAnalog) {
       var ar = row('Відеореєстратор', 'MHD-реєстратори TVT працюють з аналоговими HD-камерами');
       chip(ar, 'Реєстратори TVT →', url(CFG.nvrCat, { brand: CFG.tvt, tipPristrou: CFG.nvrTypeAnalog }));
     } else {
