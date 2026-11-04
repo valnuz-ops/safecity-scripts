@@ -326,6 +326,43 @@ function scPickLoad(pick, ok) {
 }
 function scAvailOk(p) { return scInStock(p.avail); }
 
+// Картки товарів зі сторінки каталогу (HTML розділу / фільтра). Блоки 6 і 23.
+function scCards(html) {
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  return [].filter.call(doc.querySelectorAll('.j-catalog-card'), function (c) {
+    return !c.parentElement.closest('.j-catalog-card');
+  }).map(function (c) {
+    // дві верстки карток Хорошопа: catalogCard-* (більшість розділів) і catalog-card__* (шаблон «Альтернативна енергетика»)
+    var a = c.querySelector('.catalogCard-title a, .catalog-card__title a') || c.querySelector('a[href]');
+    var img = c.querySelector('img');
+    var av = c.querySelector('[class*="availability"], .catalog-card__presence');
+    var pr = c.querySelector('.catalogCard-price, .catalog-card__price');
+    return {
+      url: a ? a.getAttribute('href') : '',
+      name: a ? (a.getAttribute('title') || a.textContent).trim() : '',
+      img: img ? (img.getAttribute('data-src') || img.getAttribute('src') || '').replace(/\/\d+x\d+l\d+nn0\//, '/310x310l85nn0/') : '',   // 160×160 → 310×310
+      avail: av ? av.textContent.replace(/\s+/g, ' ').trim() : '',
+      price: pr ? pr.textContent.replace(/\s+/g, ' ').trim() : ''
+    };
+  });
+}
+
+// Товари в наявності зі сторінки розділу / фільтра (url без мовного префікса).
+// Кеш у браузері на 1 год — переходи між картками не завантажують розділ знову.
+function scCatInStock(url) {
+  var k = 'scc1:' + SC_LANG + url, TTL = 3600 * 1000;
+  try {
+    var v = JSON.parse(localStorage.getItem(k));
+    if (v && Date.now() - v.t < TTL) return Promise.resolve(v.d);
+  } catch (e) {}
+  return fetch(SC_LANG + url, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.text() : ''; })
+    .then(function (html) {
+      var list = html ? scCards(html).filter(function (p) { return p.url && p.name && scInStock(p.avail); }) : [];
+      if (html) try { localStorage.setItem(k, JSON.stringify({ t: Date.now(), d: list })); } catch (e) {}
+      return list;
+    })['catch'](function () { return []; });
+}
+
 // Картка товару <a>: фото, назва, підпис (якщо є клас c.info), ціна. c — імена класів блоку
 function scItem(p, c) {
   var a = document.createElement('a');
@@ -1180,6 +1217,7 @@ scModule(5, function () {
 
 /* =====================================================================
  * 6. Картка відеокамери → «Підберіть до цієї камери» (реєстратори TVT)
+ *    + камери зі слотом microSD: карти пам’яті в наявності (до макс. обсягу камери, спершу для відеоспостереження)
  * ===================================================================== */
 scModule(6, function () {
   'use strict';
@@ -1216,7 +1254,9 @@ scModule(6, function () {
     var poe      = /так|да|yes/i.test(scGet(f, /^poe$/));
     var power    = scGet(f, /^(живлення|питание)$/);
     var wireless = /бездрот|беспровод|wi-?fi/i.test(scGet(f, /^(підключення|подключение)$/));
-    var hasSD    = /sd|карт/i.test(scGet(f, /^карта пам/));
+    // «Карта пам'яті»: у фільтрі Так/Ні, у старих картках — текст («microSD до 256 ГБ»)
+    var sdVal    = scGet(f, /^карта пам/);
+    var hasSD    = /так|да|yes|sd|карт|\d\s?(гб|gb|тб|tb)/i.test(sdVal) && !/^(ні|нет|no|відсутн|отсутств)/i.test(sdVal);
     var isAjax   = /ajax/i.test(title);
 
     scStyle('sc-kit-style', SC_KIT_CSS);
@@ -1277,13 +1317,88 @@ scModule(6, function () {
       chip(cr, 'Роз’єми та патч-корди →', url(CFG.connectors, { presence: 1 }));
     }
 
-    // 4. Карта пам'яті (якщо в камері є слот)
+    // 4. Карта пам'яті (якщо в камері є слот) → карти, які є в наявності, у межах обсягу камери
     if (hasSD) {
-      var sr = row('Запис на камеру', 'Камера може писати на microSD без реєстратора');
-      chip(sr, 'Карти пам’яті →', url(CFG.storage, { tipPristrou: CFG.sd }));
+      var maxKnown = sdMaxGB(f), maxGB = maxKnown || SD_DEFAULT_MAX;
+      var sr = row('Запис на камеру', 'Камера може писати на microSD без реєстратора' +
+        (maxKnown ? ' (карти до ' + gbText(maxKnown) + ')' : ''));
+      var sdList = document.createElement('div');
+      sdList.className = SD.list;
+      sr.appendChild(sdList);
+      chip(sr, 'Усі карти пам’яті →', url(CFG.storage, { presence: 1, tipPristrou: CFG.sd }));
+      scNear(box, function () {
+        scCatInStock(url(CFG.storage, { presence: 1, tipPristrou: CFG.sd }).slice(SC_LANG.length))
+          .then(scSafe(6, function (list) {
+            pickCards(list, maxGB).forEach(function (p) { sdList.appendChild(scItem(p, SD)); });
+            if (sdList.children.length) scStyle('sc-sd-style', SD_CSS);
+            else sdList.remove();
+          }));
+      });
     }
 
     anchor.parentNode.insertBefore(box, anchor.nextSibling);
+  }
+
+  /* --- Карти пам'яті для камери --- */
+  var SD_MAX = 3;   // скільки карт показувати
+  // обсяг не вказано ні в характеристиках, ні в описі — не пропонуємо карти більші за цей (ГБ),
+  // щоб не продати карту, яку камера не побачить
+  var SD_DEFAULT_MAX = 256;
+  // карти для відеоспостереження (розраховані на постійний перезапис) — показуємо першими
+  var SD_ENDURANCE = /endurance|purple|surveillance|monitoring|відеоспостереж|видеонаблюд|для камер|для відео/i;
+  var SD = scBem('sc-sd');
+  var SD_CSS =
+    '.sc-sd__list{flex:0 0 100%;display:flex;flex-direction:column;gap:6px;margin:2px 0 4px}' +
+    '.sc-kit a.sc-sd__item{display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid #e3e6ea;border-radius:8px;background:#fff;color:#1a1a1a;text-decoration:none;transition:border-color .15s}' +
+    '.sc-kit a.sc-sd__item:hover{border-color:#2b7de9}' +
+    '.sc-sd__img{flex:0 0 40px;width:40px;height:40px;object-fit:contain}' +
+    '.sc-sd__info{flex:1;min-width:0}' +
+    '.sc-sd__name{font-size:13px;line-height:1.3;display:block}' +
+    '.sc-sd__note{font-size:12px;color:#2e9e4f;display:block;margin-top:2px}' +
+    '.sc-sd__note:empty{display:none}' +
+    '.sc-sd__price{flex:0 0 auto;font-weight:700;white-space:nowrap}';
+
+  // «256 ГБ», «1 ТБ», «512GB» → гігабайти; 0 — не знайдено
+  function toGB(n, u) { n = parseFloat(String(n).replace(',', '.')); return /т|t/i.test(u) ? n * 1024 : n; }
+  function capGB(s) {
+    var m = String(s || '').match(/(\d+(?:[.,]\d+)?)\s?(гб|gb|тб|tb)(?![a-zа-я])/i);
+    return m ? toGB(m[1], m[2]) : 0;
+  }
+  function gbText(gb) { return gb >= 1024 ? (gb / 1024) + ' ТБ' : gb + ' ГБ'; }
+
+  // Максимальний обсяг карти, який підтримує камера: з характеристик, інакше з опису.
+  // Не знайшли — 0 (тоді діє SD_DEFAULT_MAX).
+  function sdMaxGB(f) {
+    var best = 0;
+    for (var k in f) {
+      if (!/карт|sd|пам/i.test(k)) continue;
+      var re = /(\d+(?:[.,]\d+)?)\s?(гб|gb|тб|tb)(?![a-zа-я])/gi, m;
+      while ((m = re.exec(f[k]))) best = Math.max(best, toGB(m[1], m[2]));
+    }
+    if (best) return best;
+    var d = scDesc().match(/(?:micro\s?sd|sd-карт|карт[аиу]? пам\S*)[^.;]{0,60}?(?:до|up to|max\.?|макс\.?)\s*(\d+(?:[.,]\d+)?)\s?(гб|gb|тб|tb)(?![a-zа-я])/i);
+    return d ? toGB(d[1], d[2]) : 0;
+  }
+
+  // Порядок: карти для відеоспостереження → більший обсяг (довше зберігається запис).
+  // Спершу різні обсяги, щоб покупець бачив вибір, потім решта. Більші за maxGB — не показуємо
+  // (карти без обсягу в назві — показуємо, але в кінці).
+  function pickCards(list, maxGB) {
+    var seen = {}, c = list.map(function (p) {
+      return { p: p, gb: capGB(p.name), end: SD_ENDURANCE.test(p.name) ? 1 : 0 };
+    }).filter(function (x) {
+      if (seen[x.p.url]) return false;
+      seen[x.p.url] = 1;
+      return !maxGB || !x.gb || x.gb <= maxGB;
+    });
+    c.sort(function (a, b) { return (!a.gb - !b.gb) || (b.end - a.end) || (b.gb - a.gb); });
+    var out = [], caps = {};
+    c.forEach(function (x) { if (out.length < SD_MAX && !caps[x.gb]) { caps[x.gb] = 1; out.push(x); } });
+    c.forEach(function (x) { if (out.length < SD_MAX && out.indexOf(x) < 0) out.push(x); });
+    return out.map(function (x) {
+      return { url: x.p.url, name: x.p.name, price: x.p.price, img: x.p.img,
+               note: x.end ? 'Для відеоспостереження — розрахована на постійний перезапис' : '' };
+    });
   }
 
   scInit(6, init);
@@ -3499,25 +3614,7 @@ scModule(23, function () {
     '.sc-live__price{margin-top:auto;font-weight:bold;font-size:15px;color:#1c2430}' +
     '.sc-live__av{font-size:12px;color:#2e9e4f;margin-top:2px}';
 
-  function cards(html) {
-    var doc = new DOMParser().parseFromString(html, 'text/html');
-    return [].filter.call(doc.querySelectorAll('.j-catalog-card'), function (c) {
-      return !c.parentElement.closest('.j-catalog-card');
-    }).map(function (c) {
-      // дві верстки карток Хорошопа: catalogCard-* (більшість розділів) і catalog-card__* (шаблон «Альтернативна енергетика»)
-      var a = c.querySelector('.catalogCard-title a, .catalog-card__title a') || c.querySelector('a[href]');
-      var img = c.querySelector('img');
-      var av = c.querySelector('[class*="availability"], .catalog-card__presence');
-      var pr = c.querySelector('.catalogCard-price, .catalog-card__price');
-      return {
-        url: a ? a.getAttribute('href') : '',
-        name: a ? (a.getAttribute('title') || a.textContent).trim() : '',
-        img: img ? (img.getAttribute('data-src') || img.getAttribute('src') || '').replace(/\/\d+x\d+l\d+nn0\//, '/310x310l85nn0/') : '',   // 160×160 → 310×310
-        avail: av ? av.textContent.replace(/\s+/g, ' ').trim() : '',
-        price: pr ? pr.textContent.replace(/\s+/g, ' ').trim() : ''
-      };
-    });
-  }
+  var cards = scCards;   // парсер карток каталогу — спільний (див. «Спільні помічники»)
 
   function render(box, list) {
     var wrap = document.createElement('div');
