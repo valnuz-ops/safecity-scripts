@@ -347,8 +347,9 @@ function scCards(html) {
   });
 }
 
-// Товари в наявності зі сторінки розділу / фільтра (url без мовного префікса).
-// Кеш у браузері на 1 год — переходи між картками не завантажують розділ знову.
+// Товари в наявності зі сторінки розділу (url без мовного префікса).
+// НЕ для /filter/-адрес: на запит скрипта Хорошоп віддає замість них сторінку перевірки (challenge) без товарів.
+// Кеш у браузері на 1 год — переходи між картками не завантажують розділ знову. Порожню відповідь не кешуємо.
 function scCatInStock(url) {
   var k = 'scc1:' + SC_LANG + url, TTL = 3600 * 1000;
   try {
@@ -358,7 +359,7 @@ function scCatInStock(url) {
   return fetch(SC_LANG + url, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.text() : ''; })
     .then(function (html) {
       var list = html ? scCards(html).filter(function (p) { return p.url && p.name && scInStock(p.avail); }) : [];
-      if (html) try { localStorage.setItem(k, JSON.stringify({ t: Date.now(), d: list })); } catch (e) {}
+      if (/j-catalog-card/.test(html)) try { localStorage.setItem(k, JSON.stringify({ t: Date.now(), d: list })); } catch (e) {}
       return list;
     })['catch'](function () { return []; });
 }
@@ -1332,9 +1333,9 @@ scModule(6, function () {
       sr.appendChild(sdList);
       chip(sr, 'Усі карти пам’яті →', url(CFG.storage, { presence: 1, tipPristrou: CFG.sd }));
       scNear(box, function () {
-        scCatInStock(url(CFG.storage, { presence: 1, tipPristrou: CFG.sd }).slice(SC_LANG.length))
+        scCatInStock(CFG.storage)   // сам розділ, не /filter/ (див. scCatInStock); карти відбираємо за назвою
           .then(scSafe(6, function (list) {
-            pickCards(list, maxGB).forEach(function (p) { sdList.appendChild(scItem(p, SD)); });
+            pickCards(list.filter(function (p) { return SD_CARD.test(p.name) && !/диск|hdd|ssd/i.test(p.name); }), maxGB).forEach(function (p) { sdList.appendChild(scItem(p, SD)); });
             if (sdList.children.length) scStyle('sc-sd-style', SD_CSS);
             else sdList.remove();
           }));
@@ -1349,6 +1350,7 @@ scModule(6, function () {
   // обсяг не вказано ні в характеристиках, ні в описі — не пропонуємо карти більші за цей (ГБ),
   // щоб не продати карту, яку камера не побачить
   var SD_DEFAULT_MAX = 256;
+  var SD_CARD = /карт[аи] пам|microsd|micro sd/i;   // у розділі «Накопичувачі» є ще жорсткі диски
   // карти для відеоспостереження (розраховані на постійний перезапис) — показуємо першими
   var SD_ENDURANCE = /endurance|purple|surveillance|monitoring|відеоспостереж|видеонаблюд|для камер|для відео/i;
   var SD = scBem('sc-sd');
@@ -1366,8 +1368,12 @@ scModule(6, function () {
   // «256 ГБ», «1 ТБ», «512GB» → гігабайти; 0 — не знайдено
   function toGB(n, u) { n = parseFloat(String(n).replace(',', '.')); return /т|t/i.test(u) ? n * 1024 : n; }
   function capGB(s) {
-    var m = String(s || '').match(/(\d+(?:[.,]\d+)?)\s?(гб|gb|тб|tb)(?![a-zа-я])/i);
-    return m ? toGB(m[1], m[2]) : 0;
+    s = String(s || '');
+    var m = s.match(/(\d+(?:[.,]\d+)?)\s?(гб|gb|тб|tb)(?![a-zа-я])/i);
+    if (m) return toGB(m[1], m[2]);
+    // обсяг у коді моделі: Hikvision HS-TF-P1/128G, IMOU ST2-64-S1
+    m = s.match(/[-\/](16|32|64|128|256|512)(?:g\b|-)/i);
+    return m ? +m[1] : 0;
   }
   function gbText(gb) { return gb >= 1024 ? (gb / 1024) + ' ТБ' : gb + ' ГБ'; }
 
