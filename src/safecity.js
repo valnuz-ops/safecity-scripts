@@ -3289,6 +3289,10 @@ scModule(24, function () {
       a.appendChild(s1);
       a.appendChild(s2);
     });
+    // Зареєстрований покупець: Хорошоп пише «Придбайте на 5 000 грн та отримайте знижку 2%», а у вікні — «Меню» і
+    // «Загальна сума покупок 5 000 грн». Це читається як знижка на поточний кошик, а вона діє лише на наступні
+    // замовлення після того, як сума виконаних досягне порогу. Міняємо тексти (лише текстові вузли — посилання/кнопки лишаються).
+    scDiscLoggedIn_();
     // Десктопний кошик: рядок знижки/купона стоїть під колонкою назви (перша клітинка — порожня під фото).
     // Прибираємо порожню клітинку, щоб блок починався від лівого краю, як смуга «До безкоштовної доставки».
     [].forEach.call(document.querySelectorAll('.cart-items .cart-discount'), function (box) {
@@ -3314,7 +3318,65 @@ scModule(24, function () {
     '.cart-recommended .productsSlider-i{display:flex!important;flex-direction:column!important;height:auto!important}' +
     '.cart-recommended .productsSlider-i>a{flex:1 1 auto}' +
     '.cart-recommended .productsSlider-order{margin-top:6px}' +
+    '.sc-disc-note{margin:12px 0 4px;padding:10px 12px;border-radius:8px;background:#f4fbf6;border:1px dashed #9cc8a8;color:#1c2430;font-size:14px;line-height:1.4}' +
     '.cart-discount .sc-disc-btn{display:block!important;width:100%!important;box-sizing:border-box!important;max-width:none!important;text-align:left!important;padding:10px 14px!important;border-radius:8px!important}');
+  var RE_BUY = /^\s*Придбайте на\s*([\d\s ]+грн)\s*та отримайте знижку\s*(\d+)\s*%\s*$/;
+  var RE_ROW = /^\s*(?:Загальна сума|Сума) покупок\s*([\d\s ]+грн)\s*$/;
+  var NOTE = 'Знижка діє на наступні замовлення після того, як сума ваших виконаних (отриманих) замовлень досягне порогу.';
+  // елементи, весь текст яких підходить під re, але жоден дочірній елемент — ні (найглибший «носій» фрази)
+  function leaves_(re) {
+    var res = [];
+    [].forEach.call(document.body ? document.body.querySelectorAll('div,span,p,a,button,li,td,dd,dt,strong,b,label') : [], function (e) {
+      if (e.getAttribute('data-sc-disc') || !re.test(e.textContent)) return;
+      for (var i = 0; i < e.children.length; i++) if (re.test(e.children[i].textContent)) return;
+      res.push(e);
+    });
+    return res;
+  }
+  // замінити текст елемента, не чіпаючи вкладені елементи, крім <br>
+  function setText_(e, txt) {
+    var done = false;
+    [].slice.call(e.childNodes).forEach(function (n) {
+      if (n.nodeType === 1 && n.tagName === 'BR') { e.removeChild(n); return; }
+      if (n.nodeType !== 3) return;
+      if (!done && n.nodeValue.trim()) { n.nodeValue = txt; done = true; } else n.nodeValue = '';
+    });
+    if (!done) e.textContent = txt;
+    e.setAttribute('data-sc-disc', '1');
+  }
+  function sum_(s) { return s.replace(/[\s ]+/g, ' ').trim().replace(/^(\d+) (\d{3}) грн$/, '$1 $2 грн'); }
+  function scDiscLoggedIn_() {
+    leaves_(RE_BUY).forEach(function (e) {
+      var m = e.textContent.match(RE_BUY);
+      setText_(e, 'Знижка постійним клієнтам: ' + m[2] + '% на наступні покупки, коли сума виконаних замовлень досягне ' + sum_(m[1]));
+    });
+    var rows = leaves_(RE_ROW);
+    rows.forEach(function (e) {
+      setText_(e, 'Сума виконаних замовлень від ' + sum_(e.textContent.match(RE_ROW)[1]));
+    });
+    if (!rows.length) return;
+    // спільний контейнер рядків (список рівнів знижки)
+    var box = rows[0].parentElement;
+    while (box && rows.some(function (r) { return !box.contains(r); })) box = box.parentElement;
+    if (!box || box === document.body) return;
+    if (rows.length === 1) box = box.parentElement || box;
+    // заголовок вікна «Меню» → «Знижка постійним клієнтам» (шукаємо лише в найближчому вікні навколо рядків)
+    var pop = box;
+    for (var i = 0; i < 8 && pop && pop !== document.body; i++, pop = pop.parentElement) {
+      var t = [].filter.call(pop.querySelectorAll('div,span,p,h1,h2,h3,h4,header'), function (x) {
+        return !x.children.length && x.textContent.trim() === 'Меню';
+      })[0];
+      if (t) { t.textContent = 'Знижка постійним клієнтам'; t.setAttribute('data-sc-disc', '1'); break; }
+      if (pop.textContent.length > 3000) break;
+    }
+    // пояснення під рівнями знижки
+    if (!box.parentElement.querySelector('.sc-disc-note')) {
+      var n = document.createElement('div');
+      n.className = 'sc-disc-note';
+      n.textContent = NOTE;
+      box.parentElement.insertBefore(n, box.nextSibling);
+    }
+  }
   var go = scSafe(24, run);
   scReady(go);
   window.addEventListener('load', go);
