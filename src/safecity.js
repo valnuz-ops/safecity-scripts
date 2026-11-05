@@ -3740,6 +3740,237 @@ scModule(23, function () {
 
 
 /* =====================================================================
+ * 34. Сторінка «Сервісний центр» → заявка на діагностику / ремонт
+ *     Вмикається лише там, де в тексті сторінки є
+ *       <div data-sc-service-form data-url="https://script.google.com/macros/s/…/exec"></div>
+ *     data-url — веб-застосунок з apps-script/service/Code.gs (таблиця заявок + Telegram).
+ *     Без data-url (або з чужою адресою) форма не показується — лишається вміст div.
+ *     Після відправки: номер заявки, що робити далі, кнопка «Роздрукувати заявку» (вкладається
+ *     в коробку). Пристрій їде в сервісний центр TRINITI-SB — адреса в SVC_TO.
+ * ===================================================================== */
+scModule(34, function () {
+  'use strict';
+
+  var SVC_TO = {                                     // куди клієнт везе / відправляє пристрій
+    addr: 'Київ, вул. Якова Гніздовського, 1Е',
+    np: 'Нова Пошта: Київ, відділення №384',
+    rcpt: 'Отримувач: ТОВ «ТРІНІТІ-СБ», ЄДРПОУ 34186648, тел. +38 068 374 54 56'
+  };
+  var URL_OK = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+
+  // [name, підпис, тип, обов'язкове, підказка]; тип: t — рядок, tel, email, a — textarea, s:… — вибір
+  var GROUPS = [
+    ['Контактні дані', [
+      ['name', 'ПІБ', 't', 1, 'Прізвище, ім’я'],
+      ['phone', 'Телефон', 'tel', 1, '+380…'],
+      ['email', 'Електронна пошта', 'email', 0, ''],
+      ['company', 'Назва компанії', 't', 0, 'якщо купували на компанію / ФОП']
+    ]],
+    ['Покупка', [
+      ['order', 'Номер замовлення SafeCity', 't', 0, 'або дата покупки'],
+      ['kind', 'Вид звернення', 's:Гарантійний ремонт|Платний ремонт / діагностика|Не знаю, потрібна діагностика', 1, '']
+    ]],
+    ['Інформація про пристрій', [
+      ['model', 'Модель', 't', 1, 'напр. Hikvision DS-2CD1043G2-LIU'],
+      ['serial', 'Серійний номер', 't', 0, 'з наклейки на корпусі'],
+      ['problem', 'Детальний опис несправності', 'a', 1, 'Що саме не працює, коли почалося, що вже пробували'],
+      ['kit', 'Комплектація', 'a', 0, 'Що кладете в коробку: блок живлення, кабелі, кріплення…'],
+      ['extra', 'Додаткова інформація', 'a', 0, '']
+    ]],
+    ['Передача пристрою', [
+      ['how', 'Як передаєте', 's:Новою Поштою|Особисто в сервісний центр (Київ)', 1, ''],
+      ['ttn', 'ТТН Нової Пошти', 't', 0, 'якщо вже відправили'],
+      ['back', 'Куди повернути після ремонту', 't', 0, 'місто і відділення Нової Пошти']
+    ]]
+  ];
+
+  var CSS =
+    '.sc-svc{border:1px solid #d6e2f2;border-radius:12px;padding:20px 22px;margin:0 0 28px;background:#f7faff;font-size:15px;line-height:1.45;color:#1c2430}' +
+    '.sc-svc__t{font-weight:bold;font-size:20px;margin:0 0 4px}' +
+    '.sc-svc__sub{color:#5b6675;font-size:14px;margin:0 0 14px}' +
+    '.sc-svc__g{font-weight:bold;font-size:16px;margin:18px 0 8px}' +
+    '.sc-svc__grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}' +
+    '.sc-svc__f{display:flex;flex-direction:column;gap:4px;min-width:0}' +
+    '.sc-svc__f--w{grid-column:1/-1}' +
+    '.sc-svc__l{font-size:14px;font-weight:bold}' +
+    '.sc-svc__l b{color:#d33}' +
+    '.sc-svc input,.sc-svc select,.sc-svc textarea{width:100%!important;max-width:100%;box-sizing:border-box;border:1px solid #c5d3e6;border-radius:8px;padding:8px 10px;font-size:15px;font-family:inherit;background:#fff;color:#1c2430}' +
+    '.sc-svc input,.sc-svc select{height:40px}' +
+    '.sc-svc textarea{min-height:76px;resize:vertical}' +
+    '.sc-svc .sc-svc__bad{border-color:#d33;background:#fff6f6}' +
+    '.sc-svc__hp{position:absolute!important;left:-9999px!important;width:1px;height:1px;overflow:hidden}' +
+    '.sc-svc__agree{font-size:13px;color:#5b6675;margin:14px 0 0}' +
+    '.sc-svc__btn{display:inline-block;margin:14px 10px 0 0;padding:11px 26px;border:0;border-radius:8px;background:#1f6fd1;color:#fff;font-size:16px;font-weight:bold;cursor:pointer}' +
+    '.sc-svc__btn:hover{background:#185bb0}' +
+    '.sc-svc__btn[disabled]{opacity:.6;cursor:default}' +
+    '.sc-svc__btn--o{background:#fff;color:#1f6fd1;border:1px solid #1f6fd1}' +
+    '.sc-svc__btn--o:hover{background:#eaf2fd}' +
+    '.sc-svc__err{color:#c22;font-size:14px;margin:10px 0 0}' +
+    '.sc-svc__ok{background:#fff;border-left:4px solid #2e9e4f;border-radius:10px;padding:14px 16px}' +
+    '.sc-svc__num{font-size:24px;font-weight:bold;margin:2px 0 8px}' +
+    '.sc-svc__ok ol{margin:8px 0 0 18px;padding:0}' +
+    '.sc-svc__ok li{margin:0 0 6px}' +
+    '@media (max-width:600px){.sc-svc{padding:14px}.sc-svc__grid{grid-template-columns:1fr}.sc-svc__btn{width:100%;margin-right:0}}' +
+    '#sc-svc-print{display:none}' +
+    '@media print{body.sc-svc-printing>*{display:none!important}body.sc-svc-printing>#sc-svc-print{display:block!important}' +
+    '#sc-svc-print{font:13px/1.4 Arial,sans-serif;color:#000}#sc-svc-print h1{font-size:18px;margin:0 0 4px}' +
+    '#sc-svc-print table{width:100%;border-collapse:collapse;margin:10px 0}#sc-svc-print td{border:1px solid #999;padding:5px 7px;vertical-align:top}' +
+    '#sc-svc-print td:first-child{width:32%;font-weight:bold}#sc-svc-print .s{margin-top:28px;display:flex;justify-content:space-between}}';
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function fieldHtml(f) {
+    var id = 'sc-svc-' + f[0], type = f[2], req = f[3] ? ' required' : '';
+    var lbl = '<label class="sc-svc__l" for="' + id + '">' + esc(f[1]) + (f[3] ? ' <b>*</b>' : '') + '</label>';
+    var ph = f[4] ? ' placeholder="' + esc(f[4]) + '"' : '';
+    var ctl;
+    if (type === 'a') ctl = '<textarea id="' + id + '" name="' + f[0] + '"' + ph + req + ' maxlength="2000"></textarea>';
+    else if (type.indexOf('s:') === 0) {
+      ctl = '<select id="' + id + '" name="' + f[0] + '"' + req + '><option value="">— оберіть —</option>' +
+        type.slice(2).split('|').map(function (o) { return '<option>' + esc(o) + '</option>'; }).join('') + '</select>';
+    } else {
+      ctl = '<input id="' + id + '" name="' + f[0] + '" type="' + (type === 't' ? 'text' : type) + '"' + ph + req +
+        ' maxlength="200"' + (type === 'tel' ? ' inputmode="tel" autocomplete="tel"' : type === 'email' ? ' autocomplete="email"' : f[0] === 'name' ? ' autocomplete="name"' : '') + '>';
+    }
+    return '<div class="sc-svc__f' + (type === 'a' ? ' sc-svc__f--w' : '') + '">' + lbl + ctl + '</div>';
+  }
+
+  function formHtml() {
+    return '<div class="sc-svc__t">Заявка до сервісного центру</div>' +
+      '<div class="sc-svc__sub">Поля з <b style="color:#d33">*</b> обов’язкові. Після відправки ви отримаєте номер заявки.</div>' +
+      '<form novalidate>' +
+      GROUPS.map(function (g) {
+        return '<div class="sc-svc__g">' + esc(g[0]) + '</div><div class="sc-svc__grid">' + g[1].map(fieldHtml).join('') + '</div>';
+      }).join('') +
+      '<div class="sc-svc__hp" aria-hidden="true"><input name="website" tabindex="-1" autocomplete="off"></div>' +
+      '<div class="sc-svc__agree">Надсилаючи заявку, ви погоджуєтесь з умовами сервісного обслуговування на цій сторінці.</div>' +
+      '<button class="sc-svc__btn" type="submit">Відправити заявку</button>' +
+      '<div class="sc-svc__err" hidden></div>' +
+      '</form>';
+  }
+
+  function allFields() {
+    var out = [];
+    GROUPS.forEach(function (g) { g[1].forEach(function (f) { out.push(f); }); });
+    return out;
+  }
+
+  function collect(form) {
+    var d = {};
+    allFields().forEach(function (f) { d[f[0]] = String(form.elements[f[0]].value || '').trim(); });
+    return d;
+  }
+
+  function check(form, d) {
+    var bad = [];
+    allFields().forEach(function (f) {
+      var el = form.elements[f[0]], v = d[f[0]], ok = true;
+      if (f[3] && !v) ok = false;
+      if (ok && f[0] === 'phone') ok = v.replace(/\D/g, '').length >= 10;
+      if (ok && f[0] === 'email' && v) ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+      if (ok && f[0] === 'problem') ok = v.length >= 5;
+      el.classList.toggle('sc-svc__bad', !ok);
+      if (!ok) bad.push(el);
+    });
+    return bad;
+  }
+
+  function printReq(num, date, d) {
+    var p = document.getElementById('sc-svc-print');
+    if (!p) { p = document.createElement('div'); p.id = 'sc-svc-print'; document.body.appendChild(p); }
+    p.innerHTML = '<h1>Заявка до сервісного центру № ' + esc(num) + '</h1>' +
+      '<div>Від ' + esc(date) + ' · магазин SafeCity (safecity.in.ua)</div>' +
+      '<table>' + allFields().map(function (f) {
+        return '<tr><td>' + esc(f[1]) + '</td><td>' + (esc(d[f[0]]) || '—').replace(/\n/g, '<br>') + '</td></tr>';
+      }).join('') + '</table>' +
+      '<div>Сервісний центр: ' + esc(SVC_TO.addr) + '. ' + esc(SVC_TO.np) + '. ' + esc(SVC_TO.rcpt) + '.</div>' +
+      '<div class="s"><span>Дата: ____________</span><span>Підпис замовника: ____________________</span></div>';
+    document.body.classList.add('sc-svc-printing');
+    var done = function () { document.body.classList.remove('sc-svc-printing'); window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
+    window.print();
+    setTimeout(done, 1500);                          // Safari не завжди надсилає afterprint
+  }
+
+  function showOk(box, num, d) {
+    var date = new Date().toLocaleDateString('uk-UA');
+    var np = d.how.indexOf('Нов') === 0;
+    box.innerHTML = '<div class="sc-svc__t">Заявку прийнято</div>' +
+      '<div class="sc-svc__ok"><div>Номер заявки</div><div class="sc-svc__num"></div>' +
+      '<div>Менеджер SafeCity зв’яжеться з вами протягом робочого дня (Пн–Пт) і підтвердить передачу пристрою.</div>' +
+      '<ol>' +
+      '<li>Роздрукуйте заявку й покладіть у коробку разом із пристроєм. Немає принтера — напишіть номер заявки на коробці.</li>' +
+      '<li>Перевірте комплектацію та надійно запакуйте пристрій.</li>' +
+      (np
+        ? '<li>Відправте Новою Поштою після підтвердження менеджера: ' + esc(SVC_TO.np) + '. ' + esc(SVC_TO.rcpt) + '. В описі відправлення вкажіть «SafeCity, заявка <span class="sc-svc__n2"></span>».</li>'
+        : '<li>Привезіть пристрій у сервісний центр: ' + esc(SVC_TO.addr) + ' (Пн–Пт, 10:00–18:00).</li>') +
+      '</ol></div>' +
+      '<button class="sc-svc__btn" type="button" data-a="print">Роздрукувати заявку</button>' +
+      '<button class="sc-svc__btn sc-svc__btn--o" type="button" data-a="new">Нова заявка</button>';
+    box.querySelector('.sc-svc__num').textContent = num;
+    var n2 = box.querySelector('.sc-svc__n2'); if (n2) n2.textContent = num;
+    box.querySelector('[data-a="print"]').addEventListener('click', scSafe(34, function () { printReq(num, date, d); }));
+    box.querySelector('[data-a="new"]').addEventListener('click', scSafe(34, function () { build(box); }));
+    try { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+  }
+
+  function build(box) {
+    var url = box.getAttribute('data-url') || '';
+    box.className = 'sc-svc';
+    box.innerHTML = formHtml();
+    var form = box.querySelector('form'), btn = form.querySelector('button'), err = form.querySelector('.sc-svc__err');
+    var say = function (t) { err.textContent = t; err.hidden = !t; };
+
+    form.addEventListener('input', function (e) {
+      if (e.target.classList) e.target.classList.remove('sc-svc__bad');
+    });
+
+    form.addEventListener('submit', scSafe(34, function (e) {
+      e.preventDefault();
+      say('');
+      var d = collect(form), bad = check(form, d);
+      if (bad.length) {
+        say('Заповніть, будь ласка, виділені поля.');
+        try { bad[0].focus(); } catch (x) {}
+        return;
+      }
+      btn.disabled = true; btn.textContent = 'Надсилаємо…';
+      var body = JSON.stringify({ form: d, website: form.elements.website.value, page: location.origin + location.pathname, build: SC_BUILD });
+      // text/plain — без CORS-preflight; Apps Script відповідає JSON {ok, num} або {ok:false, error}
+      fetch(url, { method: 'POST', body: body, headers: { 'Content-Type': 'text/plain;charset=UTF-8' } })
+        .then(function (r) { return r.json(); })
+        .then(function (r) {
+          if (r && r.ok && r.num) { showOk(box, r.num, d); return; }
+          throw new Error((r && r.error) || 'немає номера заявки');
+        })
+        .catch(function (x) {
+          btn.disabled = false; btn.textContent = 'Відправити заявку';
+          say('Не вдалося відправити заявку. Спробуйте ще раз або напишіть нам у Viber / Telegram: +' + SC_PHONE + '.');
+          scHealth('блок 34: відправка заявки', x);
+        });
+    }));
+  }
+
+  function init() {
+    var boxes = document.querySelectorAll('[data-sc-service-form]');
+    if (!boxes.length) return;
+    [].forEach.call(boxes, function (b) {
+      if (b.getAttribute('data-sc-ready') || !URL_OK.test(b.getAttribute('data-url') || '')) return;
+      b.setAttribute('data-sc-ready', '1');
+      scStyle('sc-svc-style', CSS);
+      scSafe(34, build)(b);
+    });
+  }
+
+  scReady(scSafe(34, init));
+});
+
+
+/* =====================================================================
  * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
  *     Хорошоп змінив шаблон — блоки мовчки перестають з'являтися. Раз за перегляд, через ~5 с після
  *     завантаження (сторінка дорисована), перевіряємо те, без чого блоки не працюють, і надсилаємо звіт
