@@ -1564,6 +1564,20 @@ scModule(8, function () {
     '#sc-calc .scc-msg{flex:1 1 100%;font-size:13px;margin-top:4px}' +
     '#sc-calc .scc-f{font-size:12px;color:#7a828c;margin:10px 0 0}';
 
+  // --- Marstek (лише товари Marstek; сумісність — з описів TRINITI та сторінок Marstek) ---
+  var MS = {
+    ve3:   { url: '/systema-nakopychennia-enerhii-all-in-one-venus-e-3.0-marstek/', note: 'Venus E 3.0 · 5,12 кВт·год, 2,5 кВт' },
+    vc:    { url: '/systema-nakopychennia-enerhii-all-in-one-venus-c-marstek/', note: 'Venus C · 2,56 кВт·год, 2,5 кВт' },
+    vmini: { url: '/systema-nakopychennia-enerhii-all-in-one-venus-e-mini-marstek/', note: 'Venus E Mini · 2 кВт·год, 1,5 кВт' },
+    va:    { url: '/systema-rezervnoho-zhyvlennia-invertor-ta-batareia-vse-v-odnomu-marstek-venus-a-potuzhnist/', note: 'Venus A · 2,12 кВт·год, свій сонячний вхід' },
+    dInv:  { url: '/invertor-marstek-mst-hi-2200-do-systemy-nakopychennia-enerhii-marstek-venus-d-2-2-kvt-ip65/', note: 'Інверторний модуль Venus D · 2,2 кВт, 4 MPPT' },
+    dBat:  { url: '/dodatkova-batareia-marstek-mst-e2-5st-d-do-systemy-nakopychennia-enerhii-marstek-venus-d-2/', note: 'Батарея Venus D · 2,56 кВт·год, до 6 шт.' },
+    ct:    { url: '/rozumnyi-lichilnyk-ct002-marstek/', note: 'Лічильник CT002 · для режиму власного споживання' },
+    db63:  { url: '/smartboks-odnofaznyi-marstek-db63s-dlia-keruvannia-systemamy-nakopychennia-enerhii-serii-marstek-venus/', note: 'Смартбокс DB63S · до 4 Venus паралельно' },
+    m4:    { url: '/mikroinvertor-dlia-soniachnykh-panelei-2kw-marstek-m4-2000-saturn-m-4-mppt-on-grid/', note: 'Мікроінвертор 2 кВт · 4 панелі' },
+    m2:    { url: '/mikroinvertor-dlia-soniachnykh-panelei-1kw-marstek-m2-1000-saturn-m-2-mppt-on-grid/', note: 'Мікроінвертор 1 кВт · 2 панелі' }
+  };
+
   var num = scNum;
   function watts(s) { var v = num(s); return /к(Вт|ВА)/i.test(s) ? v * 1000 : v; }
 
@@ -2760,6 +2774,10 @@ scModule(18, function () {
  *       A2/B2 — ще й TurretCam / DomeCam HLVF і Superior HLVF; BulletCam HLVF не сумісна з жодним MountCam)
  *     • Зарядні станції OUKITEL → чохол під модель, дод. батарея; сонячні панелі Kraft (XT60) — якщо в описі станції є XT60
  *     • ІЧ-прожектори 12 В → блок живлення зі струмом ≥ споживання × 1,25
+ *     • Marstek: сумісність лише в межах бренду (з описів TRINITI і сторінок Marstek, 05.11.2026):
+ *       Venus D: інверторний модуль MST-HI-2200 ↔ батареї MST-E2.5ST-D (1–6 шт.; без батареї модуль не працює);
+ *       Venus E 3.0 / C / E Mini → мікроінвертор Marstek для панелей (купується окремо), E 3.0 і C — ще смартбокс DB63S;
+ *       мікроінвертори Saturn-M → ці системи; лічильник CT002 ↔ Venus E 3.0, C, D, A; смартбокс DB63S → Venus E 3.0 і C.
  *     Товари вантажаться, лише коли покупець догортає до блоку (scNear), з кешем на 1 год (scProduct).
  * ===================================================================== */
 scModule(19, function () {
@@ -2909,6 +2927,52 @@ scModule(19, function () {
         list: list,
         foot: 'A — компактний, короткий виніс; B — довгий виніс, відводить камеру далі від стіни чи карниза. Кріпляться й на стовп стрічками.'
       };
+    },
+
+    // ---------- Marstek: лише товари Marstek ----------
+    function (t) {
+      if (!/Marstek/i.test(t)) return null;
+      if (/MST-HI-2200/i.test(t)) return {
+        title: '🔋 Батареї для Venus D',
+        text: 'Інверторний модуль працює лише з батареями Marstek MST-E2.5ST-D: від 1 до 6 шт. (2,56–15,36 кВт·год). Без батареї модуль не працює.',
+        list: [MS.dBat, MS.ct]
+      };
+      if (/MST-E2\.5ST-D/i.test(t)) return {
+        title: '⚡ Інверторний модуль для цієї батареї',
+        text: 'Батарея сумісна лише з інверторним модулем Marstek MST-HI-2200 (система Venus D). В одну систему — до 6 батарей.',
+        list: [MS.dInv, MS.ct]
+      };
+      if (/DB63S/i.test(t)) return {
+        title: '🔋 Сумісні системи Marstek',
+        text: 'Смартбокс DB63S працює із системами Marstek Venus E 3.0 і Venus C (за даними постачальника):',
+        list: [MS.ve3, MS.vc]
+      };
+      if (/CT002/i.test(t)) return {
+        title: '🔋 Системи Marstek для цього лічильника',
+        text: 'Лічильник потрібен для режиму власного споживання: система бачить споживання будинку. Сумісні системи Marstek:',
+        list: [MS.ve3, MS.dInv, MS.va, MS.vc]
+      };
+      if (/\bM[24]-\d{4}\b|Saturn-M/i.test(t)) return {
+        title: '🔋 Накопичувати енергію панелей',
+        text: 'До систем Marstek Venus E 3.0, Venus C і Venus E Mini сонячні панелі підключають через мікроінвертор Marstek (за даними постачальника):',
+        list: [MS.ve3, MS.vc, MS.vmini]
+      };
+      if (/Venus E Mini/i.test(t)) return {
+        title: '☀️ Для сонячних панелей',
+        text: 'Щоб заряджати Venus E Mini від сонця, потрібен мікроінвертор Marstek — він купується окремо:',
+        list: [MS.m2, MS.m4]
+      };
+      if (/Venus (E 3\.0|C)\b/i.test(t)) return {
+        title: '🧩 Підберіть до системи Marstek',
+        text: 'Сонячні панелі підключають через мікроінвертор Marstek (купується окремо); лічильник CT002 і смартбокс DB63S — для керування системою:',
+        list: [MS.m4, MS.ct, MS.db63, MS.m2]
+      };
+      if (/Venus A\b/i.test(t)) return {
+        title: '🧩 Підберіть до Venus A',
+        text: 'Розумний лічильник Marstek для режиму власного споживання:',
+        list: [MS.ct]
+      };
+      return null;
     },
 
     // ---------- ІЧ-прожектори 12 В → блок живлення ----------
