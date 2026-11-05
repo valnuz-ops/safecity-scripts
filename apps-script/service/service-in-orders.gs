@@ -175,8 +175,9 @@ function svcClipMulti_(s, n) {
   return String(s == null ? '' : s).replace(/\r/g, '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, n);
 }
 
-// Текст, що починається з = + - @, таблиця сприйняла б як формулу
-function svcCell_(s) { return /^[=+\-@]/.test(s) ? "'" + s : s; }
+// Текст, що починається з = + - @, таблиця сприйняла б як формулу; лише цифри (телефон 050…, ТТН,
+// номер замовлення) — як число без нуля на початку. Апостроф лишає значення текстом як є.
+function svcCell_(s) { return /^[=+\-@]/.test(s) || /^[\d\s()]+$/.test(s) ? "'" + s : s; }
 
 function svcHash_(s) {
   var h = 5381;
