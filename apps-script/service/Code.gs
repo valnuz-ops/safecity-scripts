@@ -4,14 +4,12 @@
  *
  * ЯК НАЛАШТУВАТИ
  * 1. script.google.com → «Новий проєкт» → назва «SafeCity — сервісні заявки» →
- *    вставте весь цей файл замість вмісту Code.gs → «Зберегти».
- * 2. ⚙️ «Налаштування проєкту» → «Властивості скрипту» → «Додати властивість скрипту»:
- *      TG_TOKEN — токен Telegram-бота від @BotFather (можна той самий бот, що й у «сторожа»);
- *      TG_CHAT  — chat_id, куди писати (ваш id або id групи, напр. -1001234567890).
- *    Ключі — ЛИШЕ тут, у властивостях: репозиторій публічний, у коді їх бути не повинно.
+ *    вставте весь цей файл замість вмісту Code.gs.
+ * 2. Впишіть свої значення в блок «НАЛАШТУВАННЯ» нижче (TG_TOKEN, TG_CHAT; SHEET_ID — за бажанням) → «Зберегти».
+ *    Увага: у публічний репозиторій GitHub цей файл зі справжнім токеном НЕ комітимо.
  * 3. Виберіть функцію setup → «Виконати», дайте дозволи. Скрипт створить у вашому Google Диску таблицю
- *    «SafeCity — сервісні заявки», запам'ятає її (властивість SHEET_ID) і надішле в Telegram
- *    тестове повідомлення з посиланням на таблицю. Свою таблицю — впишіть її id у SHEET_ID до запуску.
+ *    «SafeCity — сервісні заявки» (якщо SHEET_ID порожній) і надішле в Telegram тестове повідомлення
+ *    з посиланням на неї.
  * 4. «Розгорнути» → «Нове розгортання» → тип «Веб-застосунок»:
  *      «Виконувати як» — «Я»; «Хто має доступ» — «Усі» → «Розгорнути».
  * 5. Скопіюйте URL веб-застосунку (https://script.google.com/macros/s/…/exec) і вставте його
@@ -24,6 +22,12 @@
  * порожнім; повтор тієї самої заявки (телефон + модель) протягом 30 хв повертає той самий номер;
  * не більше 20 заявок на годину.
  */
+
+/* ===== НАЛАШТУВАННЯ ===== */
+var TG_TOKEN = '';   // токен Telegram-бота від @BotFather, напр. '123456789:AAH…'
+var TG_CHAT  = '';   // chat_id, куди писати: ваш id або id групи, напр. '-1001234567890'
+var SHEET_ID = '';   // id своєї таблиці (з адреси …/spreadsheets/d/ID/edit); порожньо — setup створить нову
+/* ======================== */
 
 var MAX_PER_HOUR = 20;
 var REPEAT_SECONDS = 30 * 60;
@@ -119,14 +123,19 @@ function message_(num, d) {
   var digits = d.phone.replace(/\D/g, '');
   if (digits.length === 10 && digits.charAt(0) === '0') digits = '38' + digits;
   lines.push('', 'Viber: viber://chat?number=%2B' + digits);
-  var id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
+  var id = conf_('SHEET_ID', SHEET_ID);
   if (id) lines.push('Таблиця: https://docs.google.com/spreadsheets/d/' + id);
   return lines.join('\n').slice(0, 4000);
 }
 
+// Значення з блоку НАЛАШТУВАННЯ, інакше — з властивостей скрипту (там setup зберігає id створеної таблиці)
+function conf_(name, val) {
+  return val || PropertiesService.getScriptProperties().getProperty(name) || '';
+}
+
 function sheet_() {
   var props = PropertiesService.getScriptProperties();
-  var id = props.getProperty('SHEET_ID');
+  var id = conf_('SHEET_ID', SHEET_ID);
   var ss;
   if (id) ss = SpreadsheetApp.openById(id);
   else {
@@ -164,9 +173,8 @@ function setup() {
 }
 
 function send_(text) {
-  var p = PropertiesService.getScriptProperties();
-  var token = p.getProperty('TG_TOKEN'), chat = p.getProperty('TG_CHAT');
-  if (!token || !chat) throw new Error('Задайте TG_TOKEN і TG_CHAT у властивостях скрипту');
+  var token = conf_('TG_TOKEN', TG_TOKEN), chat = conf_('TG_CHAT', TG_CHAT);
+  if (!token || !chat) throw new Error('Впишіть TG_TOKEN і TG_CHAT у блок НАЛАШТУВАННЯ');
   var res = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
     method: 'post',
     payload: { chat_id: chat, text: text, disable_web_page_preview: 'true' },
