@@ -1564,20 +1564,6 @@ scModule(8, function () {
     '#sc-calc .scc-msg{flex:1 1 100%;font-size:13px;margin-top:4px}' +
     '#sc-calc .scc-f{font-size:12px;color:#7a828c;margin:10px 0 0}';
 
-  // --- Marstek (лише товари Marstek; сумісність — з описів TRINITI та сторінок Marstek) ---
-  var MS = {
-    ve3:   { url: '/systema-nakopychennia-enerhii-all-in-one-venus-e-3.0-marstek/', note: 'Venus E 3.0 · 5,12 кВт·год, 2,5 кВт' },
-    vc:    { url: '/systema-nakopychennia-enerhii-all-in-one-venus-c-marstek/', note: 'Venus C · 2,56 кВт·год, 2,5 кВт' },
-    vmini: { url: '/systema-nakopychennia-enerhii-all-in-one-venus-e-mini-marstek/', note: 'Venus E Mini · 2 кВт·год, 1,5 кВт' },
-    va:    { url: '/systema-rezervnoho-zhyvlennia-invertor-ta-batareia-vse-v-odnomu-marstek-venus-a-potuzhnist/', note: 'Venus A · 2,12 кВт·год, свій сонячний вхід' },
-    dInv:  { url: '/invertor-marstek-mst-hi-2200-do-systemy-nakopychennia-enerhii-marstek-venus-d-2-2-kvt-ip65/', note: 'Інверторний модуль Venus D · 2,2 кВт, 4 MPPT' },
-    dBat:  { url: '/dodatkova-batareia-marstek-mst-e2-5st-d-do-systemy-nakopychennia-enerhii-marstek-venus-d-2/', note: 'Батарея Venus D · 2,56 кВт·год, до 6 шт.' },
-    ct:    { url: '/rozumnyi-lichilnyk-ct002-marstek/', note: 'Лічильник CT002 · для режиму власного споживання' },
-    db63:  { url: '/smartboks-odnofaznyi-marstek-db63s-dlia-keruvannia-systemamy-nakopychennia-enerhii-serii-marstek-venus/', note: 'Смартбокс DB63S · до 4 Venus паралельно' },
-    m4:    { url: '/mikroinvertor-dlia-soniachnykh-panelei-2kw-marstek-m4-2000-saturn-m-4-mppt-on-grid/', note: 'Мікроінвертор 2 кВт · 4 панелі' },
-    m2:    { url: '/mikroinvertor-dlia-soniachnykh-panelei-1kw-marstek-m2-1000-saturn-m-2-mppt-on-grid/', note: 'Мікроінвертор 1 кВт · 2 панелі' }
-  };
-
   var num = scNum;
   function watts(s) { var v = num(s); return /к(Вт|ВА)/i.test(s) ? v * 1000 : v; }
 
@@ -2844,6 +2830,20 @@ scModule(19, function () {
     a3: { url: '/blok-zhyvlennia-krf-1203ps-kraft-12v-3a/', note: '12 В / 3 А' },
     a5: { url: '/blok-zhyvlennia-krf-1205ps-kraft-12v-5a/', note: '12 В / 5 А' },
     b5: { url: '/blok-zhyvlennia-krf-1205pb-kraft-12v-5a/', note: '12 В / 5 А, для монтажу в бокс' }
+  };
+
+  // --- Marstek (лише товари Marstek; сумісність — з описів TRINITI та сторінок Marstek) ---
+  var MS = {
+    ve3:   { url: '/systema-nakopychennia-enerhii-all-in-one-venus-e-3.0-marstek/', note: 'Venus E 3.0 · 5,12 кВт·год, 2,5 кВт' },
+    vc:    { url: '/systema-nakopychennia-enerhii-all-in-one-venus-c-marstek/', note: 'Venus C · 2,56 кВт·год, 2,5 кВт' },
+    vmini: { url: '/systema-nakopychennia-enerhii-all-in-one-venus-e-mini-marstek/', note: 'Venus E Mini · 2 кВт·год, 1,5 кВт' },
+    va:    { url: '/systema-rezervnoho-zhyvlennia-invertor-ta-batareia-vse-v-odnomu-marstek-venus-a-potuzhnist/', note: 'Venus A · 2,12 кВт·год, свій сонячний вхід' },
+    dInv:  { url: '/invertor-marstek-mst-hi-2200-do-systemy-nakopychennia-enerhii-marstek-venus-d-2-2-kvt-ip65/', note: 'Інверторний модуль Venus D · 2,2 кВт, 4 MPPT' },
+    dBat:  { url: '/dodatkova-batareia-marstek-mst-e2-5st-d-do-systemy-nakopychennia-enerhii-marstek-venus-d-2/', note: 'Батарея Venus D · 2,56 кВт·год, до 6 шт.' },
+    ct:    { url: '/rozumnyi-lichilnyk-ct002-marstek/', note: 'Лічильник CT002 · для режиму власного споживання' },
+    db63:  { url: '/smartboks-odnofaznyi-marstek-db63s-dlia-keruvannia-systemamy-nakopychennia-enerhii-serii-marstek-venus/', note: 'Смартбокс DB63S · до 4 Venus паралельно' },
+    m4:    { url: '/mikroinvertor-dlia-soniachnykh-panelei-2kw-marstek-m4-2000-saturn-m-4-mppt-on-grid/', note: 'Мікроінвертор 2 кВт · 4 панелі' },
+    m2:    { url: '/mikroinvertor-dlia-soniachnykh-panelei-1kw-marstek-m2-1000-saturn-m-2-mppt-on-grid/', note: 'Мікроінвертор 1 кВт · 2 панелі' }
   };
 
   var num = scNum;
