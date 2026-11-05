@@ -868,6 +868,7 @@ scModule(3, function () {
     inv24: [
       { url: '/akumuliatorna-batareia-sk-25.6v100ah-li-sun-series-lifepo4-sako/' },
       { url: '/akumuliatorna-batareia-power-queen-lifepo4-24v100ah-bluetooth-p24v100-100-basic-bt-8-a160-power-queen/' },
+      { url: '/akumuliatorna-batareia-litii-zalizo-fosfatna-z-bluetooth-25-6v-100a-hod-lifepo4-litime-l24/' },   // LiTime L24V100 BT (24309)
       { url: '/akkumuliatorna-batareia-litime-lifepo4-lt24v100/' },
       { url: '/akumuliatorna-batareia-100-ah-24v-tlfp-24100-ultra-lifepo4-trinix/' }
     ],
