@@ -1218,7 +1218,7 @@ scModule(5, function () {
 
 
 /* =====================================================================
- * 6. Картка відеокамери → «Підберіть до цієї камери» (реєстратори TVT)
+ * 6. Картка відеокамери → «Підберіть до цієї камери» (реєстратори того ж бренду: TVT, Hikvision, Dahua, Ajax)
  *    + камери зі слотом microSD: карти пам’яті в наявності (до макс. обсягу камери, спершу для відеоспостереження)
  * ===================================================================== */
 scModule(6, function () {
@@ -1229,6 +1229,8 @@ scModule(6, function () {
     nvrTypeIP: [47],               // NVR-відеореєстратор
     nvrTypeAnalog: [66],           // MHD-відеореєстратор
     tvt: 101, ajax: 96,
+    // реєстратори пропонуємо лише того ж бренду, що й камера; інші бренди (Light Vision, IMOU, Ezviz…) — без рядка «Відеореєстратор»
+    nvrBrands: [[/\btvt\b/i, 101, 'TVT'], [/hikvision/i, 131, 'Hikvision'], [/dahua/i, 135, 'Dahua']],
     // [кількість каналів, ID значення фільтра «Кількість каналів IP»]
     channels:     [[4, 5], [8, 1], [16, 2], [32, 4]],
     channelsAjax: [[8, 1], [16, 2]],
@@ -1237,9 +1239,7 @@ scModule(6, function () {
     utp: '/kabel-vyta-para/2348/',
     coax: '/koaksialnyi-kabel/',
     connectors: '/patch-kordy/2378/',
-    storage: '/nakopychuvachi/2297/', sd: 151,
-    // бренди камер, до яких НЕ пропонуємо реєстратори TVT (рядок «Відеореєстратор» не показуємо)
-    noTvtNvr: /lightvision|light vision/i
+    storage: '/nakopychuvachi/2297/', sd: 151
   };
 
   var url = scFilterUrl;   // Хорошоп: /cat/filter/a=1,2;b=3/ — параметри за алфавітом
@@ -1262,7 +1262,11 @@ scModule(6, function () {
     var sdVal    = scGet(f, /^карта пам/);
     var hasSD    = /так|да|yes|sd|карт|\d\s?(гб|gb|тб|tb)/i.test(sdVal) && !/^(ні|нет|no|відсутн|отсутств)/i.test(sdVal);
     var isAjax   = /ajax/i.test(title);
-    var noTvt    = CFG.noTvtNvr.test(title + ' ' + scGet(f, /^(бренд|виробник|производитель|торгова марка)$/));
+    var brandTxt = scGet(f, /^(бренд|виробник|производитель|торгова марка)$/);
+    // бренд реєстратора = бренд камери: спершу за характеристикою «Бренд», потім за назвою
+    var nvrBrand = null;
+    CFG.nvrBrands.some(function (b) { if (b[0].test(brandTxt)) { nvrBrand = b; return true; } });
+    if (!nvrBrand && !brandTxt) CFG.nvrBrands.some(function (b) { if (b[0].test(title)) { nvrBrand = b; return true; } });
 
     scStyle('sc-kit-style', SC_KIT_CSS);
     var box = document.createElement('div');
@@ -1272,16 +1276,18 @@ scModule(6, function () {
     function row(label, hint) { return scKitRow(box, label, hint); }
     var chip = scKitChip;
 
-    // 1. Відеореєстратор (крім брендів із CFG.noTvtNvr)
-    if (noTvt) {
-      // реєстраторів не пропонуємо
+    // 1. Відеореєстратор — лише того ж бренду (Ajax → Ajax NVR, TVT → TVT, Hikvision → Hikvision, Dahua → Dahua)
+    if (!isAjax && !nvrBrand) {
+      // реєстраторів іншого бренду не пропонуємо
     } else if (isAnalog) {
-      var ar = row('Відеореєстратор', 'MHD-реєстратори TVT працюють з аналоговими HD-камерами');
-      chip(ar, 'Реєстратори TVT →', url(CFG.nvrCat, { brand: CFG.tvt, tipPristrou: CFG.nvrTypeAnalog }));
+      if (!isAjax) {
+        var ar = row('Відеореєстратор', 'Аналогові HD-камери ' + nvrBrand[2] + ' — з MHD-реєстраторами ' + nvrBrand[2]);
+        chip(ar, 'Реєстратори ' + nvrBrand[2] + ' →', url(CFG.nvrCat, { brand: nvrBrand[1], tipPristrou: CFG.nvrTypeAnalog }));
+      }
     } else {
       var nr = row('Відеореєстратор', isAjax
         ? 'Для камер Ajax — реєстратори Ajax NVR. Оберіть кількість камер:'
-        : 'Реєстратори TVT. Скільки камер плануєте підключити?');
+        : 'Реєстратори ' + nvrBrand[2] + '. Скільки камер плануєте підключити?');
       var chips = (isAjax ? CFG.channelsAjax : CFG.channels).map(function (c) {
         return { id: c[1], el: chip(nr, 'до ' + c[0] + ' камер', '#') };
       });
@@ -1296,7 +1302,7 @@ scModule(6, function () {
       }
       var refresh = function () {
         chips.forEach(function (c) {
-          var p = isAjax ? { brand: CFG.ajax } : { brand: CFG.tvt, tipPristrou: CFG.nvrTypeIP };
+          var p = isAjax ? { brand: CFG.ajax } : { brand: nvrBrand[1], tipPristrou: CFG.nvrTypeIP };
           if (poeBox && poeBox.checked) p.poe = 1;
           p.klkstKanalvIp = c.id;
           c.el.href = url(CFG.nvrCat, p);
@@ -1418,7 +1424,7 @@ scModule(6, function () {
 
 
 /* =====================================================================
- * 7. Картка відеореєстратора → «Підберіть до цього реєстратора» (камери TVT)
+ * 7. Картка відеореєстратора → «Підберіть до цього реєстратора» (камери того ж бренду: TVT, Hikvision, Dahua, Ajax)
  * ===================================================================== */
 scModule(7, function () {
   'use strict';
@@ -1426,6 +1432,8 @@ scModule(7, function () {
   var CFG = {
     cams: '/videokamery/',
     tvt: 101, ajax: 96,
+    // камери пропонуємо лише того ж бренду, що й реєстратор
+    camBrands: [[/\btvt\b/i, 101, 'TVT'], [/hikvision/i, 131, 'Hikvision'], [/dahua/i, 135, 'Dahua']],
     ipCam: 50, ptz: 68,
     // групи роздільної здатності камер: [назва, макс. Мп, ID значень фільтра]
     res: [['4 Мп', 4, [3, 5]], ['5–6 Мп', 6, [1, 7, 9, 14]], ['8 Мп', 8, [2, 13]]],
@@ -1456,7 +1464,11 @@ scModule(7, function () {
     var poe = /так|да|yes/i.test(scGet(f, /^poe$/)) || /poe/i.test(title);
     var poePorts = num(scGet(f, /^кількість poe-портів$/));
 
-    if (!isAjax && !isIP && !ipCh) return;   // аналогові без IP-каналів — камер TVT для них немає
+    if (!isAjax && !isIP && !ipCh) return;   // аналогові без IP-каналів — IP-камер для них немає
+    var brandTxt = scGet(f, /^(бренд|виробник|производитель|торгова марка)$/);
+    var camBrand = null;
+    CFG.camBrands.some(function (b) { if (b[0].test(brandTxt)) { camBrand = b; return true; } });
+    if (!camBrand && !brandTxt) CFG.camBrands.some(function (b) { if (b[0].test(title)) { camBrand = b; return true; } });
 
     scStyle('sc-kit-style', SC_KIT_CSS);
     var box = document.createElement('div');
@@ -1470,17 +1482,17 @@ scModule(7, function () {
     if (isAjax) {
       var ar = row('Камери', 'Для Ajax NVR — камери Ajax');
       chip(ar, 'Камери Ajax →', url(CFG.cams, { brand: CFG.ajax, presence: 1 }));
-    } else {
+    } else if (camBrand) {
       var hint = isIP
         ? (ipCh ? 'До ' + ipCh + ' IP-камер' : 'Мережевий реєстратор') + (recMp ? ' · запис до ' + recMp + ' Мп' : '')
         : 'Гібридний: можна додати до ' + ipCh + ' IP-камер';
-      var cr = row('IP-камери TVT', hint);
+      var cr = row('IP-камери ' + camBrand[2], hint);
       CFG.res.forEach(function (g) {
         if (recMp && g[1] > recMp) return;          // реєстратор не запише таку роздільну здатність
-        chip(cr, g[0], url(CFG.cams, { brand: CFG.tvt, presence: 1, rozdlnaZdatnstKameri: g[2], tipPristrou: CFG.ipCam }));
+        chip(cr, g[0], url(CFG.cams, { brand: camBrand[1], presence: 1, rozdlnaZdatnstKameri: g[2], tipPristrou: CFG.ipCam }));
       });
-      chip(cr, 'Поворотні PTZ', url(CFG.cams, { brand: CFG.tvt, presence: 1, tipPristrou: CFG.ptz }));
-      chip(cr, 'Усі камери TVT →', url(CFG.cams, { brand: CFG.tvt, presence: 1, tipPristrou: [CFG.ipCam, CFG.ptz] }));
+      chip(cr, 'Поворотні PTZ', url(CFG.cams, { brand: camBrand[1], presence: 1, tipPristrou: CFG.ptz }));
+      chip(cr, 'Усі камери ' + camBrand[2] + ' →', url(CFG.cams, { brand: camBrand[1], presence: 1, tipPristrou: [CFG.ipCam, CFG.ptz] }));
     }
 
     // 2. Живлення камер
