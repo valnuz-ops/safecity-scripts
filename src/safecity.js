@@ -4028,6 +4028,80 @@ scModule(34, function () {
 
 
 /* =====================================================================
+ * 35. Картка товару → «Замовити в месенджері»: Telegram і Viber під «Купити» (06.11.2026)
+ *     Telegram — клієнтський бот (start=buy_<артикул>): картка товару з ціною й наявністю,
+ *       замовлення або запитання; менеджеру — сповіщення, відповідь через Reply.
+ *     Viber — чат із номером SC_PHONE з готовим текстом (назва, артикул, посилання).
+ *     Клік → подія sc_messenger_click у dataLayer (GA4 через GTM) + gtag / Meta / TikTok «Contact».
+ *     Лише для товарів у наявності (для відсутніх — блок 16).
+ * ===================================================================== */
+scModule(35, function () {
+  'use strict';
+
+  var CSS =
+    '#sc-msg{margin:10px 0 0;font-size:14px;line-height:1.35}' +
+    '#sc-msg .scm-t{color:#5f6b78;font-size:13px;margin:0 0 6px}' +
+    '#sc-msg .scm-b{display:flex;gap:8px}' +
+    '#sc-msg .scm-b a{flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;' +
+      'height:44px;padding:0 10px;border:1px solid #dbe2ea;border-radius:10px;background:#fff;color:#1d2733;text-decoration:none;font-weight:600;font-size:14px;white-space:nowrap}' +
+    '#sc-msg .scm-b a:hover{border-color:#b9c6d4;background:#f8fafc}' +
+    '#sc-msg svg{flex:0 0 20px}';
+  var ICON = {
+    tg: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#2AABEE"/>' +
+      '<path d="M5.4 11.7l11.2-4.3c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.1-1.4 1.3c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6.1-.9z" fill="#fff"/></svg>',
+    viber: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#7360F2"/>' +
+      '<path d="M9.3 6.6c-.3-.3-.8-.3-1.1 0l-.9.9c-.7.7-.8 1.9-.2 3.1 1.3 2.6 3.4 4.8 6.1 6.1 1.2.6 2.4.5 3.1-.2l.9-.9c.3-.3.3-.8 0-1.1l-1.7-1.5c-.3-.3-.8-.3-1.1 0l-.8.8c-1.4-.6-2.6-1.8-3.2-3.2l.8-.8c.3-.3.3-.8 0-1.1L9.3 6.6z" fill="#fff"/>' +
+      '<path d="M13 6.3a4.8 4.8 0 0 1 4.7 4.7M13 8.3a2.8 2.8 0 0 1 2.7 2.7" fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/></svg>'
+  };
+
+  function track(m, name, art) {
+    try { (window.dataLayer = window.dataLayer || []).push({ event: 'sc_messenger_click', messenger: m, item_id: art, item_name: name }); } catch (x) {}
+    try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_messenger_click', { messenger: m, item_id: art }); } catch (x) {}
+    try { if (typeof window.fbq === 'function') window.fbq('track', 'Contact', { content_ids: [art], content_type: 'product' }); } catch (x) {}
+    try { if (window.ttq && typeof window.ttq.track === 'function') window.ttq.track('Contact', { contents: [{ content_id: art, content_type: 'product' }] }); } catch (x) {}
+  }
+
+  function init() {
+    if (document.getElementById('sc-msg')) return;
+    var anchor = scAnchor();
+    if (!anchor || !document.querySelector(SC_AVAIL_SEL)) return;
+    var name = scH1().replace(/\s+/g, ' ').trim();
+    var art = scArt().replace(/[^\w-]/g, '').slice(0, 50);
+    if (!name || !art) return;
+    var url = location.origin + location.pathname;
+    var msg = 'Добрий день! Хочу замовити: ' + name + ' (арт. ' + art + ')\n' + url;
+
+    scStyle('sc-msg-style', CSS);
+    var box = document.createElement('div');
+    box.id = 'sc-msg';
+    box.innerHTML = '<div class="scm-t">Не хочете заповнювати форму? Замовте в месенджері:</div><div class="scm-b">' +
+      (SC_CLIENT_BOT ? '<a data-m="telegram" target="_blank" rel="noopener">' + ICON.tg + 'Telegram</a>' : '') +
+      '<a data-m="viber">' + ICON.viber + 'Viber</a></div>';
+    if (SC_CLIENT_BOT) box.querySelector('[data-m="telegram"]').href = 'https://t.me/' + SC_CLIENT_BOT + '?start=buy_' + art;
+    box.querySelector('[data-m="viber"]').href = 'viber://chat?number=%2B' + SC_PHONE + '&draft=' + encodeURIComponent(msg);
+    [].forEach.call(box.querySelectorAll('a'), function (a) {
+      a.addEventListener('click', function () { track(a.getAttribute('data-m'), name, art); });
+    });
+
+    // одразу під «Купити» / плашкою відправки (блок 1), перед плашкою довіри (блок 15)
+    var ship = document.getElementById('ship-info');
+    var after = ship && ship.parentNode === anchor.parentNode ? ship : anchor;
+    after.parentNode.insertBefore(box, after.nextSibling);
+    // плашка довіри могла підтягнутися до кнопок від'ємним відступом — тепер цей відступ у нас
+    var trust = document.getElementById('sc-trust');
+    if (trust && trust.previousElementSibling === box && parseFloat(trust.style.marginTop) < 0) {
+      box.style.marginTop = (parseFloat(trust.style.marginTop) - 2) + 'px'; trust.style.marginTop = '';
+    } else {
+      var mb = parseFloat(getComputedStyle(after).marginBottom) || 0;
+      if (mb > 16) box.style.marginTop = (10 - mb) + 'px';
+    }
+  }
+
+  scInit(35, init);
+});
+
+
+/* =====================================================================
  * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
  *     Хорошоп змінив шаблон — блоки мовчки перестають з'являтися. Раз за перегляд, через ~5 с після
  *     завантаження (сторінка дорисована), перевіряємо те, без чого блоки не працюють, і надсилаємо звіт
