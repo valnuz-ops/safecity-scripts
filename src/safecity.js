@@ -4028,7 +4028,7 @@ scModule(34, function () {
 
 
 /* =====================================================================
- * 35. Картка товару → «Замовити в месенджері»: Telegram і Viber під «Купити» (06.11.2026)
+ * 35. Картка товару → «Або напишіть нам: Telegram · Viber» — компактний рядок під «Купити» (06.11.2026)
  *     Telegram — клієнтський бот (start=buy_<артикул>): картка товару з ціною й наявністю,
  *       замовлення або запитання; менеджеру — сповіщення, відповідь через Reply.
  *     Viber — чат із номером SC_PHONE з готовим текстом (назва, артикул, посилання).
@@ -4039,13 +4039,14 @@ scModule(35, function () {
   'use strict';
 
   var CSS =
-    '#sc-msg{margin:10px 0 0;font-size:14px;line-height:1.35}' +
-    '#sc-msg .scm-t{color:#5f6b78;font-size:13px;margin:0 0 6px}' +
+    // компактний рядок під «Купити»: другорядна дія, не конкурує з кнопкою покупки
+    '#sc-msg{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:12px 0 0;font-size:14px;line-height:1.3}' +
+    '#sc-msg .scm-t{color:#5f6b78;font-size:14px;margin:0}' +
     '#sc-msg .scm-b{display:flex;gap:8px}' +
-    '#sc-msg .scm-b a{flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;' +
-      'height:44px;padding:0 10px;border:1px solid #dbe2ea;border-radius:10px;background:#fff;color:#1d2733;text-decoration:none;font-weight:600;font-size:14px;white-space:nowrap}' +
-    '#sc-msg .scm-b a:hover{border-color:#b9c6d4;background:#f8fafc}' +
-    '#sc-msg svg{flex:0 0 20px}';
+    '#sc-msg .scm-b a{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px 0 10px;border:1px solid #dbe2ea;border-radius:17px;' +
+      'background:#fff;color:#1d2733;text-decoration:none;font-weight:500;font-size:14px;white-space:nowrap;transition:border-color .15s,background .15s}' +
+    '#sc-msg .scm-b a:hover{border-color:#b9c6d4;background:#f6f9fc}' +
+    '#sc-msg svg{flex:0 0 18px;width:18px;height:18px}';
   var ICON = {
     tg: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#2AABEE"/>' +
       '<path d="M5.4 11.7l11.2-4.3c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.1-1.4 1.3c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6.1-.9z" fill="#fff"/></svg>',
@@ -4074,7 +4075,7 @@ scModule(35, function () {
     scStyle('sc-msg-style', CSS);
     var box = document.createElement('div');
     box.id = 'sc-msg';
-    box.innerHTML = '<div class="scm-t">Не хочете заповнювати форму? Замовте в месенджері:</div><div class="scm-b">' +
+    box.innerHTML = '<div class="scm-t">Або напишіть нам:</div><div class="scm-b">' +
       (SC_CLIENT_BOT ? '<a data-m="telegram" target="_blank" rel="noopener">' + ICON.tg + 'Telegram</a>' : '') +
       '<a data-m="viber">' + ICON.viber + 'Viber</a></div>';
     if (SC_CLIENT_BOT) box.querySelector('[data-m="telegram"]').href = 'https://t.me/' + SC_CLIENT_BOT + '?start=buy_' + art;
@@ -4083,17 +4084,15 @@ scModule(35, function () {
       a.addEventListener('click', function () { track(a.getAttribute('data-m'), name, art); });
     });
 
-    // одразу під «Купити» / плашкою відправки (блок 1), перед плашкою довіри (блок 15)
-    var ship = document.getElementById('ship-info');
-    var after = ship && ship.parentNode === anchor.parentNode ? ship : anchor;
-    after.parentNode.insertBefore(box, after.nextSibling);
+    // одразу під блоком «Купити» (не над ним: плашка відправки, блок 1, стоїть перед цим блоком), перед плашкою довіри (блок 15)
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
     // плашка довіри могла підтягнутися до кнопок від'ємним відступом — тепер цей відступ у нас
     var trust = document.getElementById('sc-trust');
-    if (trust && trust.previousElementSibling === box && parseFloat(trust.style.marginTop) < 0) {
-      box.style.marginTop = (parseFloat(trust.style.marginTop) - 2) + 'px'; trust.style.marginTop = '';
+    if (trust && trust.previousElementSibling === box && trust.style.marginTop) {
+      box.style.marginTop = trust.style.marginTop; trust.style.marginTop = '';
     } else {
-      var mb = parseFloat(getComputedStyle(after).marginBottom) || 0;
-      if (mb > 16) box.style.marginTop = (10 - mb) + 'px';
+      var mb = parseFloat(getComputedStyle(anchor).marginBottom) || 0;
+      if (mb > 16) box.style.marginTop = (12 - mb) + 'px';
     }
   }
 
