@@ -3727,6 +3727,14 @@ scModule(31, function () {
   // Шапка (десктоп): кошик у тон новій палітрі — темний замість сіро-синього #3F4F67 з теми
   scStyle('sc-header-style',
     '.basket__icon .icon{fill:#1E1F1E!important}.basket__title,.basket__value{color:#1E1F1E!important}');
+  // Шапка: тема дописує кому після першого телефону («+38 (066) 095-80-74,») — прибираємо
+  scReady(scSafe(31, function () {
+    [].forEach.call(document.querySelectorAll('.phones__item-link.j-phone-item'), function (a) {
+      [].forEach.call(a.childNodes, function (n) {
+        if (n.nodeType === 3 && /,\s*$/.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(/,\s*$/, '');
+      });
+    });
+  }));
 });
 
 scModule(30, function () {
