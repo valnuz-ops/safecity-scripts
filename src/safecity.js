@@ -4136,14 +4136,22 @@ scModule(35, function () {
 scModule(36, function () {
   'use strict';
 
-  var NUM_LABEL = /^(.+),\s*(м|мм|см|вт·год|вт\*год|вт|квт|а·год|мп|u|дб|кг)$/i;
+  var NUM_LABEL = /^(.+),\s*(м|мм|см|вт·год|вт\*год|вт|квт|а·год|мп|u|кг)$/i;
+  // як ця ж одиниця може бути записана в текстовій характеристиці
+  var UNIT = {
+    'м': 'м(?![а-яіїєa-z])|m(?![a-z])|метр', 'мм': 'мм|mm', 'см': 'см|cm', 'вт·год': 'вт·год|вт\\*год|вт ?год|wh', 'вт*год': 'вт·год|вт\\*год|вт ?год|wh',
+    'вт': 'вт(?![·*\\s]?год)|w(?!h)', 'квт': 'квт|kw', 'а·год': 'а·год|а\\*год|аг|ah', 'мп': 'мп|mp|мпікс', 'u': 'u', 'кг': 'кг|kg'
+  };
 
   function cells(r) {
     var c = r.querySelectorAll('th,td');
     return c.length === 2 ? c : null;
   }
-  function nums(t) {
-    return (String(t).replace(/(\d),(\d)/g, '$1.$2').match(/\d+(?:\.\d+)?/g) || []).map(parseFloat);
+  // числа, після яких стоїть потрібна одиниця
+  function nums(t, unit) {
+    var re = new RegExp('(\\d+(?:[.,]\\d+)?)\\s?(?:' + unit + ')', 'gi'), m, out = [];
+    while ((m = re.exec(t))) out.push(parseFloat(m[1].replace(',', '.')));
+    return out;
   }
 
   function init() {
@@ -4153,17 +4161,17 @@ scModule(36, function () {
       if (r.getAttribute('data-sc-num')) return;
       var c = cells(r);
       if (!c) return;
-      var label = c[0].textContent.replace(/\s+/g, ' ').trim();
-      if (!NUM_LABEL.test(label)) return;
+      var m = c[0].textContent.replace(/\s+/g, ' ').trim().match(NUM_LABEL);
+      if (!m) return;
       r.setAttribute('data-sc-num', '1');
       var raw = c[1].textContent.replace(/\s+/g, ' ').trim();
       if (!/^\d+(?:[.,]\d+)?$/.test(raw)) return;
-      var v = parseFloat(raw.replace(',', '.'));
-      var dup = [].some.call(rows, function (o) {
+      var v = parseFloat(raw.replace(',', '.')), unit = UNIT[m[2].toLowerCase()];
+      var dup = unit && [].some.call(rows, function (o) {
         if (o === r) return false;
         var oc = cells(o);
         if (!oc || NUM_LABEL.test(oc[0].textContent.replace(/\s+/g, ' ').trim())) return false;
-        return nums(oc[1].textContent).some(function (x) { return Math.abs(x - v) < 0.01; });
+        return nums(oc[1].textContent, unit).some(function (x) { return Math.abs(x - v) < 0.01; });
       });
       if (dup) r.style.display = 'none';
       else c[1].textContent = String(Math.round(v * 100) / 100);
