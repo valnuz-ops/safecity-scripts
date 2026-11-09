@@ -4127,6 +4127,54 @@ scModule(35, function () {
 
 
 /* =====================================================================
+ * 36. Картка товару → характеристики: числові поля фільтрів не дублюють текстові (09.11.2026)
+ *     Для повзунків фільтрів у шаблонах є окремі числові параметри «Довжина, м», «Енергоємність, Вт·год»,
+ *     «Потужність, Вт», «Роздільна здатність, Мп»… Хорошоп показує їх у картці поруч із текстовими
+ *     («Довжина кабелю 40 м» + «Довжина, м 40.0»). Якщо те саме число вже є в іншому рядку — числовий
+ *     рядок ховаємо; якщо немає — лише прибираємо «.0» (40.0 → 40). У DOM рядки лишаються (scFeatures читає їх).
+ * ===================================================================== */
+scModule(36, function () {
+  'use strict';
+
+  var NUM_LABEL = /^(.+),\s*(м|мм|см|вт·год|вт\*год|вт|квт|а·год|мп|u|дб|кг)$/i;
+
+  function cells(r) {
+    var c = r.querySelectorAll('th,td');
+    return c.length === 2 ? c : null;
+  }
+  function nums(t) {
+    return (String(t).replace(/(\d),(\d)/g, '$1.$2').match(/\d+(?:\.\d+)?/g) || []).map(parseFloat);
+  }
+
+  function init() {
+    var rows = document.querySelectorAll('.product-features__row');
+    if (!rows.length) return;
+    [].forEach.call(rows, function (r) {
+      if (r.getAttribute('data-sc-num')) return;
+      var c = cells(r);
+      if (!c) return;
+      var label = c[0].textContent.replace(/\s+/g, ' ').trim();
+      if (!NUM_LABEL.test(label)) return;
+      r.setAttribute('data-sc-num', '1');
+      var raw = c[1].textContent.replace(/\s+/g, ' ').trim();
+      if (!/^\d+(?:[.,]\d+)?$/.test(raw)) return;
+      var v = parseFloat(raw.replace(',', '.'));
+      var dup = [].some.call(rows, function (o) {
+        if (o === r) return false;
+        var oc = cells(o);
+        if (!oc || NUM_LABEL.test(oc[0].textContent.replace(/\s+/g, ' ').trim())) return false;
+        return nums(oc[1].textContent).some(function (x) { return Math.abs(x - v) < 0.01; });
+      });
+      if (dup) r.style.display = 'none';
+      else c[1].textContent = String(Math.round(v * 100) / 100);
+    });
+  }
+
+  scInit(36, init);
+});
+
+
+/* =====================================================================
  * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
  *     Хорошоп змінив шаблон — блоки мовчки перестають з'являтися. Раз за перегляд, через ~5 с після
  *     завантаження (сторінка дорисована), перевіряємо те, без чого блоки не працюють, і надсилаємо звіт
