@@ -4137,22 +4137,31 @@ scModule(36, function () {
   'use strict';
 
   var NUM_LABEL = /^(.+),\s*(м|мм|см|вт·год|вт\*год|вт|квт|а·год|мп|u|кг)$/i;
-  // як ця ж одиниця може бути записана в текстовій характеристиці
+  // як ця ж величина може бути записана в текстовій характеристиці: [одиниця, множник до одиниці поля]
+  var M = [['м(?![а-яіїєa-z])|m(?![a-z])|метр', 1], ['мм|mm', 0.001], ['см|cm', 0.01], ['км|km', 1000]];
+  var WH = [['вт·год|вт\\*год|вт ?год|wh', 1], ['квт·год|квт\\*год|квт ?год|kwh', 1000]];
+  var W = [['вт(?![·*\\s]?год)|w(?!h)', 1], ['квт(?![·*\\s]?год)|kw(?!h)', 1000]];
   var UNIT = {
-    'м': 'м(?![а-яіїєa-z])|m(?![a-z])|метр', 'мм': 'мм|mm', 'см': 'см|cm', 'вт·год': 'вт·год|вт\\*год|вт ?год|wh', 'вт*год': 'вт·год|вт\\*год|вт ?год|wh',
-    'вт': 'вт(?![·*\\s]?год)|w(?!h)', 'квт': 'квт|kw', 'а·год': 'а·год|а\\*год|аг|ah', 'мп': 'мп|mp|мпікс', 'u': 'u', 'кг': 'кг|kg'
+    'м': M, 'мм': [['мм|mm', 1], ['см|cm', 10], ['м(?![а-яіїєa-z])|m(?![a-z])', 1000]], 'см': [['см|cm', 1], ['мм|mm', 0.1]],
+    'вт·год': WH, 'вт*год': WH, 'вт': W, 'квт': [['квт(?![·*\\s]?год)|kw(?!h)', 1], ['вт(?![·*\\s]?год)|w(?!h)', 0.001]],
+    'а·год': [['а·год|а\\*год|аг|ah', 1], ['ма·год|мaг|mah', 0.001]], 'мп': [['мп|mp|мпікс', 1]], 'u': [['u', 1]], 'кг': [['кг|kg', 1], ['г(?![а-яіїєa-z])|g(?![a-z])', 0.001]]
   };
 
   function cells(r) {
     var c = r.querySelectorAll('th,td');
     return c.length === 2 ? c : null;
   }
-  // числа, після яких стоїть потрібна одиниця
-  function nums(t, unit) {
-    var re = new RegExp('(\\d+(?:[.,]\\d+)?)\\s?(?:' + unit + ')', 'gi'), m, out = [];
-    while ((m = re.exec(t))) out.push(parseFloat(m[1].replace(',', '.')));
+  // значення в одиницях поля для всіх чисел із відповідною одиницею
+  function nums(t, list) {
+    var out = [];
+    list.forEach(function (u) {
+      var re = new RegExp('(\\d+(?:[.,]\\d+)?)\\s?(?:' + u[0] + ')', 'gi'), m;
+      while ((m = re.exec(t))) out.push(parseFloat(m[1].replace(',', '.')) * u[1]);
+    });
     return out;
   }
+  // збіг з точністю до округлення поля (22.5 Вт у тексті → 23 у полі)
+  function same(x, v) { return Math.abs(x - v) < 0.01 || Math.round(x) === v; }
 
   function init() {
     var rows = document.querySelectorAll('.product-features__row');
@@ -4171,7 +4180,7 @@ scModule(36, function () {
         if (o === r) return false;
         var oc = cells(o);
         if (!oc || NUM_LABEL.test(oc[0].textContent.replace(/\s+/g, ' ').trim())) return false;
-        return nums(oc[1].textContent, unit).some(function (x) { return Math.abs(x - v) < 0.01; });
+        return nums(oc[1].textContent, unit).some(function (x) { return same(x, v); });
       });
       if (dup) r.style.display = 'none';
       else c[1].textContent = String(Math.round(v * 100) / 100);
