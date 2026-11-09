@@ -2853,6 +2853,7 @@ scModule(19, function () {
     va:    { url: '/systema-rezervnoho-zhyvlennia-invertor-ta-batareia-vse-v-odnomu-marstek-venus-a-potuzhnist/', note: 'Venus A · 2,12 кВт·год, свій сонячний вхід' },
     dInv:  { url: '/invertor-marstek-mst-hi-2200-do-systemy-nakopychennia-enerhii-marstek-venus-d-2-2-kvt-ip65/', note: 'Інверторний модуль Venus D · 2,2 кВт, 4 MPPT' },
     dBat:  { url: '/dodatkova-batareia-marstek-mst-e2-5st-d-do-systemy-nakopychennia-enerhii-marstek-venus-d-2/', note: 'Батарея Venus D · 2,56 кВт·год, до 6 шт.' },
+    dKit:  { url: '/systema-nakopychennia-enerhii-invertor-ta-batareia-marstek-venus-d-potuzhnist-2-2-kvt-ener/', note: 'Комплект Venus D · інвертор + батарея 2,56 кВт·год' },
     ct:    { url: '/rozumnyi-lichilnyk-ct002-marstek/', note: 'Лічильник CT002 · для режиму власного споживання' },
     db63:  { url: '/smartboks-odnofaznyi-marstek-db63s-dlia-keruvannia-systemamy-nakopychennia-enerhii-serii-marstek-venus/', note: 'Смартбокс DB63S · до 4 Venus паралельно' },
     m4:    { url: '/mikroinvertor-dlia-soniachnykh-panelei-2kw-marstek-m4-2000-saturn-m-4-mppt-on-grid/', note: 'Мікроінвертор 2 кВт · 4 панелі' },
@@ -2952,8 +2953,13 @@ scModule(19, function () {
       };
       if (/MST-E2\.5ST-D/i.test(t)) return {
         title: '⚡ Інверторний модуль для цієї батареї',
-        text: 'Батарея сумісна лише з інверторним модулем Marstek MST-HI-2200 (система Venus D). В одну систему — до 6 батарей.',
-        list: [MS.dInv, MS.ct]
+        text: 'Батарея сумісна лише з інверторним модулем Marstek MST-HI-2200 (система Venus D). В одну систему — до 6 батарей. Інвертор продається окремо або в комплекті з першою батареєю:',
+        list: [MS.dKit, MS.dInv, MS.ct]
+      };
+      if (/Venus D\b/i.test(t)) return {
+        title: '🔋 Розширити Venus D',
+        text: 'У комплекті одна батарея. Ємність нарощують батареями Marstek MST-E2.5ST-D — до 6 шт. у системі (15,36 кВт·год); лічильник CT002 — для режиму власного споживання:',
+        list: [MS.dBat, MS.ct]
       };
       if (/DB63S/i.test(t)) return {
         title: '🔋 Сумісні системи Marstek',
@@ -2963,7 +2969,7 @@ scModule(19, function () {
       if (/CT002/i.test(t)) return {
         title: '🔋 Системи Marstek для цього лічильника',
         text: 'Лічильник потрібен для режиму власного споживання: система бачить споживання будинку. Сумісні системи Marstek:',
-        list: [MS.ve3, MS.dInv, MS.va, MS.vc]
+        list: [MS.ve3, MS.dKit, MS.va, MS.vc]
       };
       if (/\bM[24]-\d{4}\b|Saturn-M/i.test(t)) return {
         title: '🔋 Накопичувати енергію панелей',
