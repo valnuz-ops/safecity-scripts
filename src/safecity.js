@@ -5743,7 +5743,6 @@ scModule(40, function () {
     'box-shadow:0 8px 28px rgba(0,0,0,.16);transition:transform .25s ease;font-size:14px;line-height:1.35;color:#1d2733}' +
     '#sc40.on{transform:translate(-50%,0)}' +
     '#sc40.top{bottom:auto;top:16px;transform:translate(-50%,-140%)}#sc40.top.on{transform:translate(-50%,0)}' +
-    'body.sc-sticky-pad #sc40{bottom:84px}' +
     '#sc40 img{flex:0 0 52px;width:52px;height:52px;object-fit:contain;border-radius:6px;background:#f6f8f6}' +
     '#sc40 .sc40-t{flex:1;min-width:0}' +
     '#sc40 .sc40-h{font-weight:700;font-size:15px}' +
@@ -5772,6 +5771,20 @@ scModule(40, function () {
     box.querySelector('.sc40-x').addEventListener('click', function () { box.classList.remove('on'); setTimeout(function () { box.remove(); }, 300); });
     box.querySelector('.sc40-go').addEventListener('click', function () { ga('sc_cartrem_click', { why: why, items: c.n, value: c.sum }); });
     document.body.appendChild(box);
+    // над смугою cookie і закріпленою «Купити» (блоки 13, 18), щоб не перекривали
+    var lift = scSafe(40, function () {
+      if (!box.isConnected) return clearInterval(iv);
+      if (box.classList.contains('top')) return;
+      var h = 0;
+      ['#cookies-modal.is-visible .modal__box', '#cookies-panel', '#sc-sticky.on'].forEach(function (s) {
+        var el = document.querySelector(s), r = el && el.offsetParent !== null ? el.getBoundingClientRect() : null;
+        if (r && r.height && r.bottom >= window.innerHeight - 2) h = Math.max(h, window.innerHeight - r.top);
+      });
+      var b = (h ? Math.round(h) + 10 : 16) + 'px';
+      if (box.style.bottom !== b) box.style.bottom = b;
+    });
+    var iv = setInterval(lift, 700);
+    lift();
     setTimeout(function () { box.classList.add('on'); }, 30);
     ga('sc_cartrem_view', { why: why, items: c.n, value: c.sum, non_interaction: true });
   }
