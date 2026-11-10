@@ -4136,7 +4136,7 @@ scModule(35, function () {
 scModule(36, function () {
   'use strict';
 
-  var NUM_LABEL = /^(.+),\s*(м|мм|см|вт·год|вт\*год|вт|квт|а·год|мп|u|кг)$/i;
+  var NUM_LABEL = /^(.+),\s*(м|мм|см|вт·год|вт\*год|вт|квт|а·год|а|мп|u|кг)$/i;
   // як ця ж величина може бути записана в текстовій характеристиці: [одиниця, множник до одиниці поля]
   var M = [['м(?![а-яіїєa-z])|m(?![a-z])|метр', 1], ['мм|mm', 0.001], ['см|cm', 0.01], ['км|km', 1000]];
   var WH = [['вт·год|вт\\*год|вт ?год|wh', 1], ['квт·год|квт\\*год|квт ?год|kwh', 1000]];
@@ -4144,7 +4144,7 @@ scModule(36, function () {
   var UNIT = {
     'м': M, 'мм': [['мм|mm', 1], ['см|cm', 10], ['м(?![а-яіїєa-z])|m(?![a-z])', 1000]], 'см': [['см|cm', 1], ['мм|mm', 0.1]],
     'вт·год': WH, 'вт*год': WH, 'вт': W, 'квт': [['квт(?![·*\\s]?год)|kw(?!h)', 1], ['вт(?![·*\\s]?год)|w(?!h)', 0.001]],
-    'а·год': [['а·год|а\\*год|аг|ah', 1], ['ма·год|мaг|mah', 0.001]], 'мп': [['мп|mp|мпікс', 1]], 'u': [['u', 1]], 'кг': [['кг|kg', 1], ['г(?![а-яіїєa-z])|g(?![a-z])', 0.001]]
+    'а·год': [['а·год|а\\*год|аг|ah', 1], ['ма·год|мaг|mah', 0.001]], 'а': [['а(?![·*\\s]?год|г|[а-яіїєa-z])|a(?![a-z])', 1], ['ма(?![·*\\s]?год|г|[а-яіїєa-z])|ma(?![a-z])', 0.001]], 'мп': [['мп|mp|мпікс', 1]], 'u': [['u', 1]], 'кг': [['кг|kg', 1], ['г(?![а-яіїєa-z])|g(?![a-z])', 0.001]]
   };
 
   function cells(r) {
@@ -4163,26 +4163,43 @@ scModule(36, function () {
   // збіг з точністю до округлення поля (22.5 Вт у тексті → 23 у полі)
   function same(x, v) { return Math.abs(x - v) < 0.01 || Math.round(x) === v; }
 
-  // «Застосування» з фіду постачальника, яке звужує або плутає призначення (HDMI-кабель «Для проєкторів»)
-  var APPLY_HIDE = { 'кабель hdmi': 1 };
+  // «Застосування» з фіду постачальника: прибрати значення, що звужують або плутають призначення.
+  // Ключ — «Тип пристрою» у нижньому регістрі; '*' — для всіх; true — сховати рядок повністю.
+  var APPLY_FIX = {
+    'кабель hdmi': true,                 // «Для проєкторів» — кабель не лише для проєкторів
+    'poe-комутатор': true,               // «Для серверів» — PoE-комутатори для камер
+    'комутатор': true,
+    'блок безперебійного живлення': ['Для сигналізації'], // ДБЖ 12/24 В — і для камер/домофонів
+    '*': ['Для риболовлі', 'Для ДПС']
+  };
+  var APPLY_RENAME = { 'Джерела безперебійного живлення': 'Для ДБЖ', 'Інвертори': 'Для інверторів' };
 
-  function hideApply(rows) {
-    var type = '';
+  function fixApply(rows) {
+    var type = '', row = null;
     [].forEach.call(rows, function (r) {
       var c = cells(r);
-      if (c && /^тип пристрою$/i.test(c[0].textContent.replace(/\s+/g, ' ').trim())) type = c[1].textContent.replace(/\s+/g, ' ').trim().toLowerCase();
+      if (!c) return;
+      var h = c[0].textContent.replace(/\s+/g, ' ').trim().toLowerCase();
+      if (h === 'тип пристрою') type = c[1].textContent.replace(/\s+/g, ' ').trim().toLowerCase();
+      else if (h === 'застосування') row = r;
     });
-    if (!APPLY_HIDE[type]) return;
-    [].forEach.call(rows, function (r) {
-      var c = cells(r);
-      if (c && /^застосування$/i.test(c[0].textContent.replace(/\s+/g, ' ').trim())) r.style.display = 'none';
-    });
+    if (!row || row.getAttribute('data-sc-apply')) return;
+    row.setAttribute('data-sc-apply', '1');
+    var rule = APPLY_FIX[type];
+    if (rule === true) { row.style.display = 'none'; return; }
+    var drop = (rule || []).concat(APPLY_FIX['*']);
+    var cell = cells(row)[1];
+    var vals = cell.textContent.replace(/\s+/g, ' ').trim().split(/\s*[,;]\s*/);
+    var out = vals.filter(function (v) { return v && drop.indexOf(v) < 0; })
+      .map(function (v) { return APPLY_RENAME[v] || v; });
+    if (!out.length) row.style.display = 'none';
+    else if (out.join(', ') !== vals.join(', ')) cell.textContent = out.join(', ');
   }
 
   function init() {
     var rows = document.querySelectorAll('.product-features__row');
     if (!rows.length) return;
-    hideApply(rows);
+    fixApply(rows);
     [].forEach.call(rows, function (r) {
       if (r.getAttribute('data-sc-num')) return;
       var c = cells(r);
