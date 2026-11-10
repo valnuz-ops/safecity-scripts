@@ -4753,31 +4753,94 @@ scModule(39, function () {
   var MAX = 4;
 
   function color(n) { return /чорн|black|graphite|графіт/i.test(n) ? 'чорний' : 'білий'; }
-  // що запропонувати до товару: [запит до пошуку, скільки взяти, фільтр]
-  function rules(it) {
-    var n = it.n, k = it.k, ip = /^IP-/.test(n);
-    if (k === 'Відеокамери') {
-      if (/wi-?fi|imou|ezviz/i.test(n)) return [["карта пам'яті microsd", 2]];
-      if (/^IP/.test(n)) return [['poe-комутатор', 1], ['кабель вита пара utp', 1], ['патч-корд мережевий', 1]];
-      return [['блок живлення 12v', 1], ['кабель коаксіальний', 1]];
+  function R(q, n, note, f) { return { q: q, n: n, note: note, f: f }; }
+  function has(cart, re) { return cart.some(function (it) { return re.test(it.k + ' ' + it.n); }); }
+  var NOTE = {
+    poe: 'Живлення й мережа для камер одним кабелем',
+    utp: 'Кабель від камер до комутатора',
+    patch: 'Підключити реєстратор / роутер',
+    sd: 'Запис на саму камеру',
+    hdd: 'Без диска реєстратор не записує',
+    hdmi: 'Підключити монітор / телевізор',
+    exitBtn: 'Відчинити двері зсередини',
+    psu12: 'Живлення замка 12 В',
+    lock: 'Відчинення дверей кнопкою з монітора',
+    closer: 'Двері зачиняються самі — замок спрацює'
+  };
+  // що запропонувати до товару в кошику: R(запит до пошуку, скільки, підпис, фільтр); cart — усі товари кошика
+  function rules(it, cart) {
+    var n = it.n, k = it.k, b = it.b, ip = /^IP-/.test(n), out = [];
+    var noSwitch = !has(cart, /комутатор/i), noLock = !has(cart, /замок|защіпка/i), noPsu = !has(cart, /блок живлення/i);
+    switch (k) {
+      case 'Відеокамери':
+        if (/wi-?fi|imou|ezviz/i.test(n)) return [R("карта пам'яті microsd", 2, NOTE.sd)];
+        if (/^IP/.test(n)) return [noSwitch && R('poe-комутатор некерований', 1, NOTE.poe), R('кабель вита пара utp cat5e', 1, NOTE.utp), R('патч-корд мережевий utp', 1, NOTE.patch), R("карта пам'яті microsd", 1, NOTE.sd)];
+        return [R('блок живлення 12v', 1, 'Живлення камер 12 В'), R('кабель коаксіальний rg-59', 1, 'Кабель від камери до реєстратора')];
+      case 'Відеореєстратори':
+        if (/^Нагрудний/.test(n)) return [];
+        return [R('жорсткий диск purple', 2, NOTE.hdd), ip && !/poe/i.test(n) && noSwitch && R('poe-комутатор некерований', 1, NOTE.poe), R('кабель hdmi 2.0', 1, NOTE.hdmi)];
+      case 'Відеодомофони':
+        return [R('відеопанель ' + b, 2, 'Панель того ж бренду', function (x) { return /^IP-/.test(x.n) === ip && x.k === 'Відеопанелі'; }),
+          noLock && R('замок електромагнітний', 1, NOTE.lock), R("карта пам'яті microsd", 1, 'Запис відвідувачів (якщо є слот microSD)')];
+      case 'Відеопанелі':
+        return [R('відеодомофон ' + b, 2, 'Монітор того ж бренду', function (x) { return /^IP-/.test(x.n) === ip && x.k === 'Відеодомофони'; }),
+          noLock && R('замок електромагнітний', 1, NOTE.lock), R('кнопка виходу', 1, NOTE.exitBtn)];
+      case 'Комплекти відеодомофонів':
+        return [noLock && R('замок електромагнітний', 1, NOTE.lock), R('кнопка виходу', 1, NOTE.exitBtn), noPsu && R('блок живлення 12v', 1, NOTE.psu12)];
+      case 'Електромагнітні замки':
+        return [R('кнопка виходу', 1, NOTE.exitBtn), noPsu && R('блок живлення 12v', 1, NOTE.psu12), R('дверний доводчик', 1, NOTE.closer)];
+      case 'Електромеханічні замки': case 'Електрозащіпки':
+        return [R('кнопка виходу', 1, NOTE.exitBtn), noPsu && R('блок живлення 12v', 1, NOTE.psu12)];
+      case 'Кнопки виходу': case 'Кодові клавіатури':
+        return [noLock && R('замок електромагнітний', 1, 'Замок, яким керує кнопка / клавіатура'), noPsu && R('блок живлення 12v', 1, NOTE.psu12)];
+      case 'Зчитувачі': case 'Контролери': {
+        var key = /mifare/i.test(n) && !/em/i.test(n) ? 'картка mifare' : /mifare/i.test(n) ? 'ключ-брелок em-marine mifare' : 'ключ-брелок em-marine';
+        return [R(key, 1, 'Ключі під стандарт зчитувача'), noLock && R('замок електромагнітний', 1, 'Замок, яким керує контролер'), R('кнопка виходу', 1, NOTE.exitBtn)];
+      }
+      case 'ДБЖ 12-24V': {
+        var ah = (n.match(/під АКБ\s*(\d+(?:\.\d+)?)Ah/i) || [])[1];
+        return ah ? [R('акумулятор 12v ' + ah + 'ah', 1, 'Акумулятор потрібної ємності — купується окремо')] : [];
+      }
+      case 'Маршрутизатори':
+        return /маршрутизатор|роутер/i.test(n) && !/4g|lte/i.test(n) ? [R('дбж для роутера', 1, 'Інтернет працює без світла')] : [];
+      case 'Точки доступу':
+        return [noSwitch && R('poe-інжектор', 1, 'Живлення точки доступу по кабелю'), R('патч-корд мережевий utp', 1, NOTE.patch)];
+      case 'Комутатори':
+        return [R('патч-корд мережевий utp', 1, NOTE.patch), R('кабель вита пара utp cat5e', 1, 'Кабель до камер / точок доступу')];
+      case 'Кабель вита пара':
+        return [R('кримпер', 1, 'Обтиснути конектори RJ-45')];
+      case 'Шафи та стійки':
+        return [R('серверна полиця', 1, 'Полиця для реєстратора / роутера'), R('патч-панель', 1, 'Акуратне підключення кабелів'), R('блок розеток', 1, 'Живлення обладнання в шафі')];
+      case 'Сигналізація Ajax':
+        if (/\bhub\b|централь/i.test(n)) {
+          var c = color(n);
+          return [R('датчик руху ajax motionprotect ' + c, 1, 'Датчик руху в приміщення'), R('датчик відкриття ajax doorprotect ' + c, 1, 'На вхідні двері / вікна'),
+            R('сирена ajax homesiren ' + c, 1, 'Гучне сповіщення в будинку'), R('клавіатура ajax keypad ' + c, 1, 'Ставити й знімати з охорони')];
+        }
+        if (/датчик|сповіщувач|сирена|клавіатура|keypad|брелок|кнопка|реле|розетка|вимикач/i.test(n) && !/smartbracket|кріпильна/i.test(n) && !has(cart, /\bhub\b|централь/i))
+          return [R('централь ajax hub 2 ' + color(n), 1, 'Без хаба пристрої Ajax не працюють (якщо хаба ще немає)')];
+        return [];
+      case 'Сигналізація U-Prox':
+        return !/центр охорони/i.test(n) && !has(cart, /центр охорони/i) ? [R('центр охорони u-prox mpx', 1, 'Без центру пристрої U-Prox не працюють (якщо ще немає)')] : [];
+      case "ІЧ-бар'єри":
+        return /бар'єр/i.test(n) ? [R("кронштейн для іч-бар'єрів", 1, 'Кріплення бар\'єра'), R('термоелемент', 1, 'Обігрів узимку на вулиці')] : [];
+      case 'Інвертори гібридні та автономні': {
+        var v = (n.match(/(\d+)V\b/) || [])[1];
+        var bat = v === '48' ? 'акумулятор lifepo4 51.2v' : v === '24' ? 'акумулятор lifepo4 25.6v' : v === '12' ? 'акумулятор lifepo4 12.8v' : null;
+        return [bat && R(bat, 1, 'Акумулятор під напругу інвертора ' + v + ' В'), R('кабель силовий awg', 1, 'Підключення акумулятора'), R('авр', 1, 'Автоматичне перемикання на інвертор')];
+      }
+      case 'Акумулятори для ДБЖ':
+        return /lifepo4/i.test(n) && /12\.8V/.test(n) ? [R('зарядний пристрій lifepo4', 1, 'Зарядка LiFePO4 12.8 В')] : [];
+      case 'Сонячні панелі':
+        return [R('конектор mc4', 1, 'Підключення панелей'), R('кабель силовий для сонячних панелей', 1, 'Кабель від панелей до інвертора'), R('ключ для конектора mc4', 1, 'Монтаж конекторів')];
+      case 'Повербанки':
+        return /\b(6[5-9]|[7-9]\d|1\d\d)W\b/.test(n) ? [R('перехідник starlink mini type-c dc', 1, 'Живлення Starlink Mini від цього повербанка')] : [];
+      case 'Гучномовці':
+        return [R('мікшуючий підсилювач cmx', 1, 'Гучномовцям потрібен підсилювач')];
+      case 'Мікшери і підсилювачі':
+        return [R('гучномовець cmx', 2, 'Гучномовці до підсилювача'), R('мікрофон cmx', 1, 'Оголошення')];
     }
-    if (k === 'Відеореєстратори') return [['жорсткий диск purple', 2]].concat(ip ? [['poe-комутатор', 1]] : []).concat([['кабель hdmi 2.0', 1]]);
-    if (k === 'Відеодомофони') {
-      return [['відеопанель ' + it.b, 2, function (x) { return /^IP-/.test(x.n) === ip; }], ['замок електромагнітний', 1]];
-    }
-    if (k === 'Відеопанелі') return [['відеодомофон ' + it.b, 2, function (x) { return /^IP-/.test(x.n) === ip && x.k === 'Відеодомофони'; }]];
-    if (k === 'Електромагнітні замки' || k === 'Електрозащіпки') return [['кнопка виходу', 1], ['блок живлення 12v', 1]];
-    if (k === 'ДБЖ 12-24V') {
-      var ah = (n.match(/під АКБ\s*(\d+(?:\.\d+)?)Ah/i) || [])[1];
-      return ah ? [['акумулятор 12v ' + ah + 'ah', 1]] : [];
-    }
-    if (k === 'Маршрутизатори' && /маршрутизатор|роутер/i.test(n)) return [['дбж для роутера', 1]];
-    if (k === 'Комутатори') return [['патч-корд мережевий', 1], ['кабель вита пара utp', 1]];
-    if (k === 'Сигналізація Ajax' && /\bhub\b|централь/i.test(n)) {
-      var c = color(n);
-      return [['ajax motionprotect ' + c, 1], ['ajax doorprotect ' + c, 1], ['ajax homesiren ' + c, 1]];
-    }
-    return [];
+    return out;
   }
 
   function pick(api, inCart) {
@@ -4786,19 +4849,26 @@ scModule(39, function () {
     var have = {}, kinds = {}, out = [];
     inCart.forEach(function (it) { have[it.u] = 1; kinds[kind(it.n)] = 1; });
     inCart.forEach(function (it) {
-      rules(it).forEach(function (r) {
-        var res = api.search(r[0]);
+      rules(it, inCart).forEach(function (r) {
+        if (!r || out.length >= MAX) return;
+        var res = api.search(r.q);
         if (res.partial) return;
         var got = 0;
-        for (var i = 0; i < res.items.length && got < r[1] && out.length < MAX; i++) {
+        for (var i = 0; i < res.items.length && got < r.n && out.length < MAX; i++) {
           var x = res.items[i];
-          if (!x.s || have[x.u] || kinds[kind(x.n)] || (r[2] && !r[2](x))) continue;
-          have[x.u] = 1; kinds[kind(x.n)] = 1; out.push(x); got++;
+          if (!x.s || have[x.u] || kinds[kind(x.n)] || (r.f && !r.f(x))) continue;
+          have[x.u] = 1; kinds[kind(x.n)] = 1; out.push({ it: x, note: r.note }); got++;
         }
       });
     });
     return out;
   }
+  window.SC_UPSELL_TEST = function (urls) {
+    var api = window.scSearchApi;
+    if (!api) return 'немає пошуку';
+    var cart = urls.map(api.byUrl).filter(Boolean);
+    return pick(api, cart).map(function (p) { return p.it.n.slice(0, 50) + ' — ' + p.note; });
+  };
 
   // id товару для AjaxCart — зі сторінки товару (читаємо потік до першої появи j-buy-button-widget-<id>)
   var ids = {};
@@ -4830,6 +4900,7 @@ scModule(39, function () {
     '.sc39__c{flex:0 0 150px;display:flex;flex-direction:column;border:1px solid #e6e6e6;border-radius:8px;padding:8px;background:#fff}',
     '.sc39__c img{width:100%;height:90px;object-fit:contain}',
     '.sc39__n{font-size:13px;line-height:1.3;color:#222;text-decoration:none;margin:6px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;flex:1}',
+    '.sc39__note{font-size:12px;line-height:1.25;color:#2a7a3f;margin:0 0 6px}',
     '.sc39__p{font-weight:700;font-size:14px;margin-bottom:6px}',
     '.sc39__b{border:0;border-radius:6px;background:#2a9d4a;color:#fff;font-weight:600;font-size:13px;padding:7px 6px;cursor:pointer}',
     '.sc39__b[disabled]{opacity:.7;cursor:default}'
@@ -4858,9 +4929,10 @@ scModule(39, function () {
         var box = document.createElement('div');
         box.className = 'sc39';
         box.setAttribute('data-key', key);
-        box.innerHTML = '<div class="sc39__h">До цього знадобиться</div><div class="sc39__row">' + items.map(function (x) {
+        box.innerHTML = '<div class="sc39__h">До цього знадобиться</div><div class="sc39__row">' + items.map(function (p) {
+          var x = p.it;
           return '<div class="sc39__c">' + (x.i ? '<img src="' + esc(x.i) + '" alt="" loading="lazy">' : '') +
-            '<a class="sc39__n" href="' + esc(x.u) + '">' + esc(x.n) + '</a><div class="sc39__p">' + price(x.p) + '</div>' +
+            '<a class="sc39__n" href="' + esc(x.u) + '">' + esc(x.n) + '</a>' + (p.note ? '<div class="sc39__note">' + esc(p.note) + '</div>' : '') + '<div class="sc39__p">' + price(x.p) + '</div>' +
             '<button type="button" class="sc39__b" data-u="' + esc(x.u) + '">До кошика</button></div>';
         }).join('') + '</div>';
         anchor.parentElement.insertBefore(box, anchor);
