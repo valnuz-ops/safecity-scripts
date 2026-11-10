@@ -5580,23 +5580,28 @@ scModule(39, function () {
     function kind(n) { return String(n).toLowerCase().split(/\s+/).slice(0, 3).join(' '); }
     var have = {}, kinds = {}, out = [];
     inCart.forEach(function (it) { have[it.u] = 1; kinds[kind(it.n)] = 1; });
-    inCart.forEach(function (it) {
-      rules(it, inCart).forEach(function (r) {
-        if (!r || out.length >= MAX) return;
-        if (r.u) {                                        // конкретний товар за посиланням
-          var y = api.byUrl(r.u);
-          if (y && y.s && !have[y.u]) { have[y.u] = 1; kinds[kind(y.n)] = 1; out.push({ it: y, note: r.note }); }
-          return;
-        }
-        var res = api.search(r.q);
-        if (res.partial) return;
-        var got = 0;
-        for (var i = 0; i < res.items.length && got < r.n && out.length < MAX; i++) {
-          var x = res.items[i];
-          if (!x.s || have[x.u] || kinds[kind(x.n)] || (r.f && !r.f(x))) continue;
-          have[x.u] = 1; kinds[kind(x.n)] = 1; out.push({ it: x, note: r.note }); got++;
-        }
-      });
+    // по черзі для кожного товару кошика (спершу найдорожчий): 1-ше правило кожного, потім 2-ге…
+    // інакше 4 місця забирав перший товар (замок → кронштейн, кнопка, БЖ, доводчик), а до реєстратора диска не було
+    var lists = inCart.slice().sort(function (a, b) { return (b.p || 0) - (a.p || 0); })
+      .map(function (it) { return rules(it, inCart).filter(Boolean); });
+    var queue = [];
+    for (var round = 0; lists.some(function (l) { return l.length > round; }); round++)
+      lists.forEach(function (l) { if (l[round]) queue.push(l[round]); });
+    queue.forEach(function (r) {
+      if (!r || out.length >= MAX) return;
+      if (r.u) {                                        // конкретний товар за посиланням
+        var y = api.byUrl(r.u);
+        if (y && y.s && !have[y.u]) { have[y.u] = 1; kinds[kind(y.n)] = 1; out.push({ it: y, note: r.note }); }
+        return;
+      }
+      var res = api.search(r.q);
+      if (res.partial) return;
+      var got = 0;
+      for (var i = 0; i < res.items.length && got < r.n && out.length < MAX; i++) {
+        var x = res.items[i];
+        if (!x.s || have[x.u] || kinds[kind(x.n)] || (r.f && !r.f(x))) continue;
+        have[x.u] = 1; kinds[kind(x.n)] = 1; out.push({ it: x, note: r.note }); got++;
+      }
     });
     return out;
   }
