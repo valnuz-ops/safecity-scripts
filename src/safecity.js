@@ -4580,7 +4580,7 @@ scModule(37, function () {
     for (var a = 0; a < alts.length; a++) {
       var t = alts[a].t, w = alts[a].w;
       best = Math.max(best, w * matchIn(doc.toks, t), w * 0.45 * matchIn(doc.xt, t));
-      if (t.length >= 4 && /\d/.test(t)) for (var c = 0; c < doc.codes.length; c++) {
+      if ((t.length >= 4 && /\d/.test(t)) || /^\d{3}$/.test(t)) for (var c = 0; c < doc.codes.length; c++) {
         var p = doc.codes[c].indexOf(t);
         if (p >= 0) best = Math.max(best, w * (p === 0 ? 1 : 0.85));
       }
@@ -4599,7 +4599,13 @@ scModule(37, function () {
   }
 
   function search(idx, query) {
-    var qt = normText(query).filter(function (t) { return !STOP[t]; });
+    var qt = [];
+    normText(query).forEach(function (t) {
+      if (STOP[t]) return;
+      // «wgp103» → «wgp» + «103», якщо літерна частина — відоме слово (бренд, серія)
+      var m = t.match(/^([a-z]{2,6})(\d[a-z0-9]*)$/);
+      if (m && idx.vocab[m[1]] && !idx.vocab[t]) qt.push(m[1], m[2]); else qt.push(t);
+    });
     if (!qt.length) return { total: 0, items: [] };
     var alts = qt.map(function (q) { return alternatives(q, idx); });
     var res = [];
