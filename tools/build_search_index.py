@@ -52,7 +52,7 @@ PHRASES = [
 def norm_text(s):
     s = ' ' + re.sub('[’`ʼ]', "'", (s or '').lower()).replace('ё', 'е') + ' '
     s = re.sub(r'(\d),(\d)', r'\1.\2', s)
-    s = re.sub(r'(\d) (\d{3})(?!\d)', r'\1\2', s)
+    s = re.sub(r'(?<![0-9a-zа-яіїєґ.])(\d{1,3}) (\d{3})(?!\d)', r'\1\2', s)   # «30 000» → 30000, але не «lifepo4 200ah»
     for rx, rep in PHRASES:
         s = rx.sub(rep, s)
     s = re.sub(r"[^a-z0-9а-яіїєґ.\-+/' ]", ' ', s)
