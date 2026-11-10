@@ -4681,10 +4681,26 @@ scModule(37, function () {
     // виправлені слова (опечатка / розкладка) — для рядка «Показано для: …»
     var fixed = [];
     alts.forEach(function (al, i) { if (al.fix) fixed.push([qt[i], al.fix]); });
+    // число в запиті («акб 100») — це значення з одиницею (100Ah, 100W) або окреме число; якщо такі
+    // товари є, не беремо ті, де число лише всередині коду моделі («…-4-A100» у LiTime 165Ah)
+    var UNITS = '(?:ah|mah|wh|kwh|w|kw|va|kva|v|a|mp|tb|gb|g|м|мм|см|канал|порт)';
+    var numRe = {};
+    function numHit(doc, q) {
+      // одразу після літер (код моделі) — лише багатолітерні одиниці: «krf-t1000va» так, «ups103a» ні
+      var re = numRe[q] || (numRe[q] = new RegExp('(?:^|[^0-9.a-zа-яіїєґ])' + q + UNITS + '(?![0-9a-zа-яіїєґ])|[a-zа-яіїєґ]' + q + '(?:ah|mah|wh|kwh|kw|va|kva|mp|tb|gb)(?![0-9a-zа-яіїєґ])'));
+      for (var k = 0; k < doc.toks.length; k++) { var d = doc.toks[k]; if (d === q || re.test(d)) return true; }
+      return false;
+    }
+    var unitOnly = qt.map(function (q) {
+      return /^\d{2,4}$/.test(q) && qt.length > 1 && idx.docs.some(function (d) { return numHit(d, q); });
+    });
     var res = [];
     idx.docs.forEach(function (doc) {
       var sum = 0, hit = 0;
-      for (var i = 0; i < qt.length; i++) { var s = tokenScore(alts[i], doc, qt[i]); if (s) { hit++; sum += s; } }
+      for (var i = 0; i < qt.length; i++) {
+        if (unitOnly[i] && !numHit(doc, qt[i])) continue;
+        var s = tokenScore(alts[i], doc, qt[i]); if (s) { hit++; sum += s; }
+      }
       if (!hit) return;
       var score = sum / qt.length + (hit === qt.length ? 1 : 0);
       // слово-тип (відеокамера, комутатор…) з будь-якого місця запиту = перше слово назви
@@ -4816,6 +4832,9 @@ scModule(37, function () {
     '.sc37-card{display:flex;flex-direction:column;border:1px solid #e6e6e6;border-radius:8px;padding:10px;color:#222;text-decoration:none;background:#fff}',
     '.sc37-card:hover{border-color:#2a9d4a}',
     '.sc37-card img{width:100%;aspect-ratio:1/1;object-fit:contain;margin-bottom:8px}',
+    // немає фото / не відкрилось — сіра заглушка того ж розміру, щоб картки не «стрибали»
+    '.sc37-noimg{display:block;width:100%;aspect-ratio:1/1;margin-bottom:8px;border-radius:6px;background:#f4f5f4 url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23c8ccc8%27 d=%27M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5z%27/%3E%3C/svg%3E") center/32% no-repeat}',
+    '.sc37-dd .sc37-noimg{width:44px;height:44px;flex:0 0 44px;margin:0;aspect-ratio:auto}',
     '.sc37-card .sc37-b{font-size:12px;color:#888}',
     '.sc37-card .sc37-t{font-size:14px;line-height:1.3;margin:4px 0 8px;flex:1}',
     '.sc37-card .sc37-pr{font-weight:700;font-size:16px}',
@@ -4898,7 +4917,7 @@ scModule(37, function () {
     var fx = top.length ? fixedText(q, r) : '';
     if (fx) html += '<div class="sc37-fix">Показано для: <b>' + esc(fx) + '</b></div>';
     top.forEach(function (it, i) {
-      html += '<a class="sc37-nav" href="' + esc(it.u) + '" data-i="' + i + '">' + (it.i ? '<img src="' + esc(it.i) + '" alt="" loading="lazy">' : '<span style="width:44px"></span>') +
+      html += '<a class="sc37-nav" href="' + esc(it.u) + '" data-i="' + i + '">' + (it.i ? '<img src="' + esc(it.i) + '" alt="" loading="lazy">' : '<span class="sc37-noimg"></span>') +
         '<span class="sc37-n">' + esc(it.n) + '<div class="sc37-p">' + price(it.p) + (it.s ? '' : '<span class="sc37-out">немає в наявності</span>') + '</div></span></a>';
     });
     if (top.length) html += (r.partial ? '<div class="sc37-none" style="padding:6px 12px;font-size:13px">Точного збігу немає — показуємо схожі.</div>' : '') +
@@ -4918,6 +4937,15 @@ scModule(37, function () {
     if (q.length < 2) return q.length ? hide() : showHist(input);
     timer = setTimeout(function () { load(scSafe(37, function () { if (input.value.trim() === q) render(input, q); })); }, 120);
   }
+  // фото не відкрилось (застаріла мініатюра) — заглушка замість «битої» картинки
+  document.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t.tagName === 'IMG' && t.closest && t.closest('.sc37-card, .sc37-dd')) {
+      var ph = document.createElement('span');
+      ph.className = 'sc37-noimg';
+      t.parentNode.replaceChild(ph, t);
+    }
+  }, true);
   // порожнє поле — «Ви шукали» (останні запити з цього браузера)
   function showHist(input) {
     var h = histGet();
@@ -5058,7 +5086,7 @@ scModule(37, function () {
       [].forEach.call(document.querySelectorAll('.catalog__top-col--right'), function (el) { el.style.visibility = 'hidden'; });   // сортування Хорошопу не діє на наш список
       function cards(from, to, arr) {
         return arr.slice(from, to).map(function (it, i) {
-          return '<a class="sc37-card" href="' + esc(it.u) + '" data-i="' + (from + i) + '">' + (it.i ? '<img src="' + esc(it.i) + '" alt="' + esc(it.n) + '" loading="lazy">' : '') +
+          return '<a class="sc37-card" href="' + esc(it.u) + '" data-i="' + (from + i) + '">' + (it.i ? '<img src="' + esc(it.i) + '" alt="' + esc(it.n) + '" loading="lazy">' : '<span class="sc37-noimg"></span>') +
             (it.b ? '<span class="sc37-b">' + esc(it.b) + '</span>' : '') + '<span class="sc37-t">' + esc(it.n) + '</span>' +
             '<span class="sc37-pr">' + price(it.p) + '</span><span class="sc37-st' + (it.s ? '' : ' is-out') + '">' + (it.s ? 'В наявності' : 'Немає в наявності') + '</span></a>';
         }).join('');

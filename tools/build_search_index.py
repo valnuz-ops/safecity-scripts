@@ -73,7 +73,9 @@ def text(el, tag):
 
 def thumb(url):
     # /content/images/13/21860255606531_+b891c032b4.jpg -> /content/images/13/160x160l80nn0/21860255606531.webp
-    m = re.search(r'/content/images/(\d+)/(\d+)[^/]*\.\w+$', url or '')
+    # SEO-назви (10.11.2026): /content/images/42/akumuljator-…-85129030621278.jpg -> …/160x160l80nn0/akumuljator-…-85129030621278.webp
+    # (мініатюра Хорошопу відкривається лише з повною назвою файлу; без неї — 404, і в пошуку не було фото у 97 товарів)
+    m = re.search(r'/content/images/(\d+)/([^/]+?)(?:_\+[0-9a-f]+)?\.\w+$', url or '')
     return '/content/images/%s/160x160l80nn0/%s.webp' % (m.group(1), m.group(2)) if m else ''
 
 
