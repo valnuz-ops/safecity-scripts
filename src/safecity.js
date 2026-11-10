@@ -5777,7 +5777,7 @@ scModule(40, function () {
       if (box.classList.contains('top')) return;
       var h = 0;
       ['#cookies-modal.is-visible .modal__box', '#cookies-panel', '#sc-sticky.on'].forEach(function (s) {
-        var el = document.querySelector(s), r = el && el.offsetParent !== null ? el.getBoundingClientRect() : null;
+        var el = document.querySelector(s), r = el && getComputedStyle(el).visibility !== 'hidden' ? el.getBoundingClientRect() : null;   // fixed: offsetParent = null
         if (r && r.height && r.bottom >= window.innerHeight - 2) h = Math.max(h, window.innerHeight - r.top);
       });
       var b = (h ? Math.round(h) + 10 : 16) + 'px';
