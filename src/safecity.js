@@ -4805,8 +4805,15 @@ scModule(39, function () {
           noLock && R('замок електромагнітний', 1, NOTE.lock), R('кнопка виходу', 1, NOTE.exitBtn)];
       case 'Комплекти відеодомофонів':
         return [noLock && R('замок електромагнітний', 1, NOTE.lock), R('кнопка виходу', 1, NOTE.exitBtn), noPsu && R('блок живлення 12v', 1, NOTE.psu12)];
-      case 'Електромагнітні замки':
-        return [R('кнопка виходу', 1, NOTE.exitBtn), noPsu && R('блок живлення 12v', 1, NOTE.psu12), R('дверний доводчик', 1, NOTE.closer)];
+      case 'Електромагнітні замки': {
+        // кронштейн під модель — та сама відповідність, що й у блоці 19 на картці замка
+        var kr = /kraft/i.test(n) ? 'kraft' : 'trinix', br = null;
+        if (/\bTML-300LED\s*\(DS\)/i.test(n)) br = '/kronshtein-k-300lds-trinix/';
+        else if (/\b(KRF|TML)-200\b/i.test(n)) br = '/kronshtein-k-200l-' + kr + '/';
+        else if (/\b(KRF|TML)-300LED\b/i.test(n)) br = '/kronshtein-k-300l-' + kr + '/';
+        else if (/\b(KRF|TML)-500LED\b/i.test(n)) br = '/kronshtein-k-500l-' + kr + '/';
+        return [br && { u: br, n: 1, note: 'Кронштейн саме під цей замок (L — якщо двері відчиняються від замка)' }, R('кнопка виходу', 1, NOTE.exitBtn), noPsu && R('блок живлення 12v', 1, NOTE.psu12), R('дверний доводчик', 1, NOTE.closer)];
+      }
       case 'Електромеханічні замки': case 'Електрозащіпки':
         return [R('кнопка виходу', 1, NOTE.exitBtn), noPsu && R('блок живлення 12v', 1, NOTE.psu12)];
       case 'Кнопки виходу': case 'Кодові клавіатури':
@@ -4871,6 +4878,11 @@ scModule(39, function () {
     inCart.forEach(function (it) {
       rules(it, inCart).forEach(function (r) {
         if (!r || out.length >= MAX) return;
+        if (r.u) {                                        // конкретний товар за посиланням
+          var y = api.byUrl(r.u);
+          if (y && y.s && !have[y.u]) { have[y.u] = 1; kinds[kind(y.n)] = 1; out.push({ it: y, note: r.note }); }
+          return;
+        }
         var res = api.search(r.q);
         if (res.partial) return;
         var got = 0;
