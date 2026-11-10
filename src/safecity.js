@@ -4456,6 +4456,8 @@ scModule(37, function () {
       }))['catch'](function (e) { loading = null; scErr(37, e); });
   }
 
+  // для перевірки з консолі: SC_SEARCH_TEST('павербанк') → перші 10 назв
+  window.SC_SEARCH_TEST = function (q, n) { return IDX ? search(IDX, q).items.slice(0, n || 10).map(function (it) { return (it.s ? '+ ' : '- ') + it.n; }) : (load(function () {}), 'індекс ще вантажиться'); };
   function ga(q, n, place) {
     try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_search', { search_term: String(q).slice(0, 100), results: n, place: place }); } catch (x) {}
   }
@@ -4478,7 +4480,7 @@ scModule(37, function () {
     '.sc37-res__bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:0 0 14px;color:#555}',
     '.sc37-res__bar label{display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap}',
     '.sc37-res__bar input[type=checkbox]{appearance:auto;-webkit-appearance:checkbox;position:static;opacity:1;width:16px;height:16px;margin:0}',
-    '.sc37-res__bar select{padding:6px 8px;border:1px solid #ddd;border-radius:6px;background:#fff;font-size:14px}',
+    '.sc37-res__bar select{width:auto;padding:6px 8px;border:1px solid #ddd;border-radius:6px;background:#fff;font-size:14px}',
     '.sc37-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}',
     '.sc37-card{display:flex;flex-direction:column;border:1px solid #e6e6e6;border-radius:8px;padding:10px;color:#222;text-decoration:none;background:#fff}',
     '.sc37-card:hover{border-color:#2a9d4a}',
