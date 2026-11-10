@@ -4237,7 +4237,7 @@ scModule(36, function () {
  *     • GA4: sc_search (search_term, results, place) — видно запити без результатів.
  *     Увімкнення: SC_SEARCH_ON; для перевірки ?sc_search=1 / ?sc_search=0 (запам'ятовується в браузері).
  * ===================================================================== */
-var SC_SEARCH_ON = false;   // true — для всіх відвідувачів
+var SC_SEARCH_ON = true;    // true — для всіх відвідувачів
 var SC_SEARCH_INDEX = 'https://valnuz-ops.github.io/safecity-scripts/search/index.json';
 
 scModule(37, function () {
