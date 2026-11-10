@@ -4402,9 +4402,10 @@ scModule(37, function () {
     return set;
   }
 
-  function buildIndex(data) {
-    var f = data.f, vocab = {};
-    var docs = data.items.map(function (row) {
+  // Збирає індекс частинами по ~30 мс, віддаючи браузеру керування між ними, — сторінка не «замерзає» (на телефоні збірка ≈1 с)
+  function buildIndex(data, done) {
+    var f = data.f, vocab = {}, rows = data.items, docs = [], i = 0;
+    function one(row) {
       var it = {};
       f.forEach(function (k, j) { it[k] = row[j]; });
       var pre = typeof it.wn === 'string';
@@ -4426,10 +4427,15 @@ scModule(37, function () {
         if (/[а-яіїєґ]{4}/.test(t)) t.split('-').forEach(function (p) { if (p.length > 3) first.push(stem(p)); });
       }
       return { it: it, toks: Object.keys(main), xt: Object.keys(extra), first: first, len: it.n.length, codes: codes, cat: lower(it.k) };
-    });
-    var byUrl = {};
-    docs.forEach(function (d) { byUrl[d.it.u] = d.it; });
-    return { docs: docs, vocab: vocab, vocabList: Object.keys(vocab), byUrl: byUrl };
+    }
+    (function chunk() {
+      var t0 = Date.now();
+      while (i < rows.length && Date.now() - t0 < 30) docs.push(one(rows[i++]));
+      if (i < rows.length) return setTimeout(scSafe(37, chunk), 0);
+      var byUrl = {};
+      docs.forEach(function (d) { byUrl[d.it.u] = d.it; });
+      done({ docs: docs, vocab: vocab, vocabList: Object.keys(vocab), byUrl: byUrl });
+    })();
   }
 
   function dl(a, b, max) {
@@ -4528,9 +4534,11 @@ scModule(37, function () {
     if (loading) return;
     loading = fetch(SC_SEARCH_INDEX).then(function (r) { if (!r.ok) throw new Error('index ' + r.status); return r.json(); })
       .then(scSafe(37, function (data) {
-        IDX = buildIndex(data);
-        document.documentElement.classList.add('sc-srch');
-        waiters.splice(0).forEach(function (f) { f(IDX); });
+        buildIndex(data, scSafe(37, function (idx) {
+          IDX = idx;
+          document.documentElement.classList.add('sc-srch');
+          waiters.splice(0).forEach(function (f) { f(IDX); });
+        }));
       }))['catch'](function (e) { loading = null; scErr(37, e); });
   }
 
