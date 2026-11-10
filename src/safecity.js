@@ -2277,7 +2277,8 @@ scModule(11, function () {
   function cityText() {
     var c = form().querySelector('[name="Recipient[delivery_city]"]');
     if (!c) return '';
-    return (c.tagName === 'SELECT' ? optText(c) : c.value || '').trim();
+    if (c.tagName === 'SELECT') return c.value ? optText(c) : '';   // мобільна: пункт «Виберіть місто» (value '') — місто ще не обрано
+    return (c.value || '').trim();
   }
   function items() {
     return [].map.call(document.querySelectorAll('.j-cart-product'), function (li) {
@@ -3695,7 +3696,7 @@ scModule(33, function () {
       if (!i.placeholder) i.placeholder = 'Пошук: номер або вулиця';
     });
   }
-  scReady(scSafe(33, function () { tick(); setInterval(scSafe(33, tick), 700); }));
+  if (checkout) scReady(scSafe(33, function () { tick(); setInterval(scSafe(33, tick), 700); }));   // лише оформлення — на інших сторінках цих полів немає
 });
 
 scModule(29, function () {
@@ -5579,23 +5580,28 @@ scModule(39, function () {
     function kind(n) { return String(n).toLowerCase().split(/\s+/).slice(0, 3).join(' '); }
     var have = {}, kinds = {}, out = [];
     inCart.forEach(function (it) { have[it.u] = 1; kinds[kind(it.n)] = 1; });
-    inCart.forEach(function (it) {
-      rules(it, inCart).forEach(function (r) {
-        if (!r || out.length >= MAX) return;
-        if (r.u) {                                        // конкретний товар за посиланням
-          var y = api.byUrl(r.u);
-          if (y && y.s && !have[y.u]) { have[y.u] = 1; kinds[kind(y.n)] = 1; out.push({ it: y, note: r.note }); }
-          return;
-        }
-        var res = api.search(r.q);
-        if (res.partial) return;
-        var got = 0;
-        for (var i = 0; i < res.items.length && got < r.n && out.length < MAX; i++) {
-          var x = res.items[i];
-          if (!x.s || have[x.u] || kinds[kind(x.n)] || (r.f && !r.f(x))) continue;
-          have[x.u] = 1; kinds[kind(x.n)] = 1; out.push({ it: x, note: r.note }); got++;
-        }
-      });
+    // по черзі для кожного товару кошика (спершу найдорожчий): 1-ше правило кожного, потім 2-ге…
+    // інакше 4 місця забирав перший товар (замок → кронштейн, кнопка, БЖ, доводчик), а до реєстратора диска не було
+    var lists = inCart.slice().sort(function (a, b) { return (b.p || 0) - (a.p || 0); })
+      .map(function (it) { return rules(it, inCart).filter(Boolean); });
+    var queue = [];
+    for (var round = 0; lists.some(function (l) { return l.length > round; }); round++)
+      lists.forEach(function (l) { if (l[round]) queue.push(l[round]); });
+    queue.forEach(function (r) {
+      if (!r || out.length >= MAX) return;
+      if (r.u) {                                        // конкретний товар за посиланням
+        var y = api.byUrl(r.u);
+        if (y && y.s && !have[y.u]) { have[y.u] = 1; kinds[kind(y.n)] = 1; out.push({ it: y, note: r.note }); }
+        return;
+      }
+      var res = api.search(r.q);
+      if (res.partial) return;
+      var got = 0;
+      for (var i = 0; i < res.items.length && got < r.n && out.length < MAX; i++) {
+        var x = res.items[i];
+        if (!x.s || have[x.u] || kinds[kind(x.n)] || (r.f && !r.f(x))) continue;
+        have[x.u] = 1; kinds[kind(x.n)] = 1; out.push({ it: x, note: r.note }); got++;
+      }
     });
     return out;
   }
@@ -5642,6 +5648,7 @@ scModule(39, function () {
     '.sc39__b[disabled]{opacity:.7;cursor:default}'
   ].join('\n'));
 
+  var emptyKey = null;
   function inject() {
     var api = window.scSearchApi;
     if (!api) return;
@@ -5656,12 +5663,13 @@ scModule(39, function () {
       var key = urls.join('|');
       var old = cart.querySelector('.sc39');
       if (old && old.getAttribute('data-key') === key) return;
+      if (!old && key === emptyKey) return;                  // для цього кошика нічого не знайшли — не рахуємо знову
       api.load(scSafe(39, function () {
         var inCart = urls.map(api.byUrl).filter(Boolean);
         var items = pick(api, inCart);
         var cur = cart.querySelector('.sc39');
         if (cur) cur.remove();
-        if (!items.length) return;
+        if (!items.length) { emptyKey = key; return; }
         var box = document.createElement('div');
         box.className = 'sc39';
         box.setAttribute('data-key', key);
@@ -5696,6 +5704,23 @@ scModule(39, function () {
     [400, 1200, 2500].forEach(function (t) { setTimeout(scSafe(39, inject), t); });
   }), true);
   scIdle(scSafe(39, inject));   // сторінка /checkout або відкритий кошик після перезавантаження
+  // Повільний інтернет: вікно кошика Хорошопу може відкритися через 3–8 с після «Купити» — таймери вище
+  // вже відпрацювали. Тому ще й стежимо за сторінкою: щойно кошик намалювався/змінився — вставляємо блок
+  // (inject нічого не робить, коли кошик закритий або блок для цього набору товарів уже стоїть).
+  var pend = 0;
+  scIdle(scSafe(39, function () {
+    new MutationObserver(function (recs) {
+      if (pend) return;
+      // лише зміни всередині кошика (слайдер на головній тощо не будять inject і не змушують перераховувати макет)
+      for (var i = 0; i < recs.length; i++) {
+        var t = recs[i].target;
+        if (t.closest && t.closest('#cart, #cart-drawer, .j-cart-body, #checkout-container')) {
+          pend = setTimeout(function () { pend = 0; scSafe(39, inject)(); }, 400);
+          return;
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  }));
 });
 
 
