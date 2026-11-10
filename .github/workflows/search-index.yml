@@ -1,0 +1,24 @@
+name: search-index
+on:
+  schedule:
+    - cron: '17 2 * * *'   # щоночі ~04:17 за Києвом, після нічного оновлення фідів Хорошопа
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: search-index
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build index
+        env:
+          FB_FEED_URL: https://safecity.in.ua/marketplace-integration/facebook/5584cb56ae2c5129756bfa9736f0ff71?langId=3
+          GOOGLE_FEED_URL: https://safecity.in.ua/marketplace-integration/google-feed/b573742161465e3a2deba881f9129298?langId=3
+        run: python3 tools/build_search_index.py
+      - name: Commit
+        run: |
+          git config user.name "search-index-bot"
+          git config user.email "search-index-bot@users.noreply.github.com"
+          git add search/index.json
+          git diff --cached --quiet && echo "no changes" || (git commit -m "search: оновлено індекс пошуку" && git push)
