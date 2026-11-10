@@ -4916,6 +4916,7 @@ scModule(37, function () {
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function price(p) { return String(p).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' грн'; }
   // k — категорія, b — бренд (фільтри нашої сторінки результатів; Хорошоп їх ігнорує)
+  function plural(n, f) { var a = n % 100, b = n % 10; return (a > 10 && a < 20) ? f[2] : b === 1 ? f[0] : (b >= 2 && b <= 4) ? f[1] : f[2]; }
   // «Показано для: камера» — запит з виправленими словами (опечатка / розкладка)
   function fixedText(q, r) {
     if (!r.fixed || !r.fixed.length) return '';
@@ -5026,6 +5027,10 @@ scModule(37, function () {
     '.sc37-dd a.sc37-hist{padding:7px 12px;color:#444}',
     '.sc37-dd a.sc37-hist:before{content:"\\21BA";color:#bbb;margin-right:2px}',
     '.sc37-res .sc37-chips{margin:0 0 10px}',
+    '.sc37-dd a.sc37-go{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px;padding:11px 14px;border-radius:10px;background:#2a9d4a;color:#fff;font-weight:600;font-size:15px;text-decoration:none}',
+    '.sc37-dd a.sc37-go span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}',
+    '.sc37-dd a.sc37-go b{flex:0 0 auto;font-weight:600;opacity:.9;font-size:13px}',
+    '.sc37-dd a.sc37-go.is-active,.sc37-dd a.sc37-go:hover{background:#1f7a39;color:#fff}',
     '.sc37-dd .sc37-fix{padding:7px 12px;font-size:13px;color:#666;background:#fafafa;border-bottom:1px solid #f1f1f1}',
     '.sc37-res .sc37-lbl{color:#888;font-size:13px;margin-right:2px;align-self:center}',
     '@media (max-width:767px){.sc37-grid{grid-template-columns:repeat(2,1fr);gap:8px}.sc37-card{padding:8px}.sc37-dd{position:fixed;left:0!important;right:0;width:auto!important;border-radius:0}',
@@ -5087,6 +5092,9 @@ scModule(37, function () {
         html += '</div>';
       }
     }
+    // мобільна версія Хорошопу не має видимої кнопки «шукати» (лише Enter на клавіатурі) — велика кнопка
+    // одразу під полем, над клавіатурою; «Усі результати» внизу списку на телефоні не видно
+    if (top.length && window.innerWidth < 768) html = '<a class="sc37-go sc37-nav" href="' + resultsUrl(q) + '"><span>Шукати «' + esc(q.slice(0, 40)) + '»</span><b>' + r.total + ' ' + plural(r.total, ['товар', 'товари', 'товарів']) + ' →</b></a>' + html;
     var fx = top.length ? fixedText(q, r) : '';
     if (fx) html += '<div class="sc37-fix">Показано для: <b>' + esc(fx) + '</b></div>';
     if (r.qnote && top.length) html += '<div class="sc37-fix">Підходять: <b>' + esc(r.qnote) + '</b></div>';
@@ -5134,6 +5142,8 @@ scModule(37, function () {
   }
   document.addEventListener('focusin', scSafe(37, function (e) {
     if (!(e.target.matches && e.target.matches('input[name="q"]'))) return;
+    // клавіша Enter на телефоні — з написом/лупою «Пошук», а не «Далі»/«↵»
+    if (!e.target.getAttribute('enterkeyhint')) e.target.setAttribute('enterkeyhint', 'search');
     load(function () {});
     var v = e.target.value.trim();
     if (v.length >= 2 && IDX) render(e.target, v);
