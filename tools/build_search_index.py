@@ -22,6 +22,8 @@ SPEC_KEYS = ['Тип пристрою', 'Встановлення', 'Тип вс
              'Тип виконання', 'Тип відеосигналу', 'Тип акумулятора', 'Тип датчика', 'Тип кабелю', 'Серія', 'Колір',
              'Особливості', 'Smart функції', 'Монтаж', 'Підключення', 'Матеріал корпусу']
 FLAG_KEYS = {'PoE': 'PoE', 'Wi-Fi': 'Wi-Fi', 'Мікрофон': 'мікрофон', 'Підтримка PoE': 'PoE'}
+# діапазон ваги, під який підходить товар (поле r індексу): «доводчик на двері 30 кг» → лише ті, де 30 кг у діапазоні
+RANGE_KEYS = {'Маса дверного полотна'}
 
 
 # --- нормалізація тексту — ТОЧНА копія normText() з модуля 37 safecity.js (PHRASES) ---
@@ -44,6 +46,7 @@ PHRASES = [
     (_R(_N + r'(?:a|а|ампер\S*)\b>'), r'\1a'),
     (_R(_N + r'(?:mm|мм)\b>'), r'\1мм'),
     (_R(_N + r'(?:cm|см)\b>'), r'\1см'),
+    (_R(_N + r'(?:kg|кг|кілограм\S*|килограм\S*)\b>'), r'\1kg'),
     (_R(_N + r'(?:m|м|метр\S*)\b>'), r'\1м'),
     (_R(r'(\d+)\s?-?\s?(?:х\s?)?(?:канал\S*|кан|ch|channel\S*)\b>'), r'\1канал'),
     (_R(r'(\d+)\s?-?\s?(?:порт\S*|port\S*)\b>'), r'\1порт'),
@@ -94,7 +97,7 @@ def main():
         except Exception as e:
             print('google feed failed:', e)
 
-    specs = {}
+    specs, ranges = {}, {}
     try:
         sroot = ET.fromstring(get(SUPPLIER, 300))
         for o in sroot.iter('offer'):
@@ -103,6 +106,13 @@ def main():
                 n, v = p.get('name', '').strip(), (p.text or '').strip()
                 if not v or v == '-':
                     continue
+                if n in RANGE_KEYS:                           # «25-60 кг» → '25-60', «180 кг» → '0-180'
+                    m = re.match(r'^\s*(?:(\d+(?:[.,]\d+)?)\s*[-–]\s*)?(\d+(?:[.,]\d+)?)\s*кг', v)
+                    if m:
+                        hi = float(m.group(2).replace(',', '.'))
+                        # лише верхня межа («180 кг») — як у фільтрі «Вага дверей»: лише верхня група (150–180)
+                        lo = float(m.group(1).replace(',', '.')) if m.group(1) else max([b for b in (0, 25, 45, 65, 85, 120, 150) if b < hi])
+                        ranges[o.get('id')] = '%g-%g' % (lo, hi)
                 if n in FLAG_KEYS:
                     if v.lower().startswith('так'):
                         vals.append(FLAG_KEYS[n])
@@ -142,13 +152,14 @@ def main():
         it_.append(norm_text(it_[0]))                                   # wn — назва, нормалізована
         it_.append(norm_text((it_[5] or '') + ' ' + (it_[6] or '')))    # wo — бренд + розділ
         it_.append(norm_text(it_[8]))                                   # wx — характеристики
+        it_.append(ranges.get(code, ''))                                # r — діапазон ваги дверей, кг («25-60»)
     if len(items) < 1000:
         sys.exit('too few items (%d) — keeping old index' % len(items))
-    data = {'v': 2, 'f': ['n', 'u', 'p', 's', 'i', 'b', 'k', 'c', 'x', 'wn', 'wo', 'wx'], 'items': items}
+    data = {'v': 2, 'f': ['n', 'u', 'p', 's', 'i', 'b', 'k', 'c', 'x', 'wn', 'wo', 'wx', 'r'], 'items': items}
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
-    print('items', len(items), 'without code', nocode, 'with specs', sum(1 for i in items if i[8]), 'bytes', os.path.getsize(OUT))
+    print('items', len(items), 'without code', nocode, 'with ranges', sum(1 for i in items if i[12]), 'with specs', sum(1 for i in items if i[8]), 'bytes', os.path.getsize(OUT))
 
 
 if __name__ == '__main__':

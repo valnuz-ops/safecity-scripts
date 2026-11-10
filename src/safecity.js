@@ -4360,6 +4360,7 @@ scModule(37, function () {
     [R(N + '(?:a|а|ампер\\S*)\\b>'), '$1a'],
     [R(N + '(?:mm|мм)\\b>'), '$1мм'],
     [R(N + '(?:cm|см)\\b>'), '$1см'],
+    [R(N + '(?:kg|кг|кілограм\\S*|килограм\\S*)\\b>'), '$1kg'],
     [R(N + '(?:m|м|метр\\S*)\\b>'), '$1м'],
     [R('(\\d+)\\s?-?\\s?(?:х\\s?)?(?:канал\\S*|кан|ch|channel\\S*)\\b>'), '$1канал'],
     [R('(\\d+)\\s?-?\\s?(?:порт\\S*|port\\S*)\\b>'), '$1порт'],
@@ -4672,9 +4673,35 @@ scModule(37, function () {
   var QUERY_FIX = [
     [/(?:^|\s)(?:акб|акум\S*|аккум\S*|батаре\S*|живлення|питание)\s+(?:для|на)\s+(роутер\S*|маршрутизатор\S*|модем\S*|onu|ону|термінал\S*)/i, ' дбж для $1']
   ];
+  // «доводчик на двері 30 кг»: вага — не слово для назви, а умова. Шукаємо без неї і лишаємо товари,
+  // у діапазон яких (поле r індексу, «Маса дверного полотна» постачальника) ця вага потрапляє.
+  // Якщо серед знайденого діапазонів немає («замок 280 кг») — звичайний пошук із «280 кг» у назві.
+  var WEIGHT_RE = /(?:^|\s)(?:на\s+|до\s+|вагою\s+|весом\s+)?(\d{1,3}(?:[.,]\d)?)\s*(?:кг|kg|кілограм\S*|килограм\S*)(?=[\s.,]|$)/i;
   function search(idx, query) {
+    query = String(query);
+    QUERY_FIX.forEach(function (f) { query = query.replace(f[0], f[1]); });
+    var wm = query.match(WEIGHT_RE);
+    if (wm) {
+      var W = parseFloat(wm[1].replace(',', '.')), rest = query.replace(wm[0], ' ');
+      var r0 = searchCore(idx, rest);
+      if (r0.items.some(function (it) { return it.r; })) {
+        var width = function (it) { var m = String(it.r).split('-'); return parseFloat(m[1]) - parseFloat(m[0]); };
+        var items = r0.items.filter(function (it) {
+          if (!it.r) return false;
+          var m = String(it.r).split('-');
+          return W >= parseFloat(m[0]) && W <= parseFloat(m[1]);
+        });
+        // спершу в наявності, далі — вужчий діапазон (25–45 кг для 30 кг точніше, ніж 25–150 кг)
+        items = items.map(function (it, i) { return [it, i]; }).sort(function (a, b) {
+          return (b[0].s - a[0].s) || (width(a[0]) - width(b[0])) || (a[1] - b[1]);
+        }).map(function (x) { return x[0]; });
+        return { total: items.length, partial: r0.partial, items: items, cats: facet(items, 'k'), brands: facet(items, 'b'), fixed: r0.fixed, weight: W };
+      }
+    }
+    return searchCore(idx, query);
+  }
+  function searchCore(idx, query) {
     var qt = [];
-    QUERY_FIX.forEach(function (f) { query = String(query).replace(f[0], f[1]); });
     normText(query).forEach(function (t) {
       if (STOP[t]) return;
       // «wgp103» → «wgp» + «103», якщо літерна частина — відоме слово (бренд, серія)
@@ -4930,6 +4957,7 @@ scModule(37, function () {
     }
     var fx = top.length ? fixedText(q, r) : '';
     if (fx) html += '<div class="sc37-fix">Показано для: <b>' + esc(fx) + '</b></div>';
+    if (r.weight && top.length) html += '<div class="sc37-fix">Підходять для дверей вагою <b>' + esc(r.weight) + ' кг</b></div>';
     top.forEach(function (it, i) {
       html += '<a class="sc37-nav" href="' + esc(it.u) + '" data-i="' + i + '">' + (it.i ? '<img src="' + esc(it.i) + '" alt="" loading="lazy">' : '<span class="sc37-noimg"></span>') +
         '<span class="sc37-n">' + esc(it.n) + '<div class="sc37-p">' + price(it.p) + (it.s ? '' : '<span class="sc37-out">немає в наявності</span>') + '</div></span></a>';
@@ -5173,6 +5201,7 @@ scModule(37, function () {
         shown = Math.min(PAGE, arr.length);
         var fx = fixedText(q, r);
         box.innerHTML = (fx ? '<p class="sc37-note">Показано результати для «<b>' + esc(fx) + '</b>»</p>' : '') +
+          (r.weight ? '<p class="sc37-note">Лише ті, що підходять для дверей вагою <b>' + esc(r.weight) + ' кг</b> (за паспортом)</p>' : '') +
           (r.partial ? '<p class="sc37-note">Точного збігу немає — схожі товари:</p>' : '') +
           chips('Категорія', 'k', facet(byBrand, 'k'), selCat) + chips('Бренд', 'b', facet(byCat, 'b'), selBrand) + attrRows() +
           '<div class="sc37-res__bar"><span>Знайдено: ' + arr.length + '</span><label><input type="checkbox"' + (onlyStock ? ' checked' : '') + '> лише в наявності</label>' +
