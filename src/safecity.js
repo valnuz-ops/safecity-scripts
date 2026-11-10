@@ -3282,6 +3282,7 @@ scModule(24, function () {
     '.product__block--user-discount .user-discount__icon{flex:0 0 auto}' +
     '.product__block--user-discount .user-discount__text{padding-left:18px!important}';
   function run() {
+    scDiscTipWrap_();   // якщо main.js Хорошопа підвантажився пізніше за наш скрипт
     [].forEach.call(document.querySelectorAll('.user-discount__text'), function (t) {
       if (t.getAttribute('data-sc-disc')) return;
       var a = t.querySelector('a[href="#auth"], a[data-modal="#sign-in"]');   // мобільна / десктопна версія
@@ -3395,6 +3396,87 @@ scModule(24, function () {
       box.parentElement.insertBefore(n, box.nextSibling);
     }
   }
+  // Вікно рівнів знижки (Хорошоп: віджет hs.dropdown на .user-discount-details, відкривається наведенням на
+  // .js-user-discount-dropdown). Віджет одразу переносить вікно в «body > .container» і запам'ятовує свій рядок-тригер.
+  // Після зміни модифікації Хорошоп перемальовує блок ціни й створює нове вікно, а старе лишається в контейнері,
+  // прив'язане до рядка, якого вже немає. Якщо воно було відкрите — ніщо його не закриває (лише клік деінде), і воно
+  // висить поверх «Купити». Крім того, вікно ставиться за координатами рядка лише в мить відкриття, а права колонка
+  // «липка» — після прокрутки вікно лишається на старому місці. Тому:
+  //  • вікна, чий рядок-тригер зник зі сторінки, прибираємо (перед повторною ініціалізацією і при кожній перевірці);
+  //  • відкрите вікно ховаємо, коли курсор 0,5 с не над вікном і не над рядком, при прокрутці, кліку/дотику поза ним
+  //    або коли курсор пішов зі сторінки.
+  function scDiscTipGuard_() {
+    var SEL_TIP = '.user-discount-details.is-visible', SEL_KEEP = '.user-discount-details, .js-user-discount-dropdown';
+    var timer = null, raf = 0, x = -1, y = -1, y0 = null;
+    var root = document.documentElement;
+    // вікно-«сирота»: жодного з його рядків-тригерів уже немає на сторінці
+    function orphan(d) {
+      var jq = window.jQuery, inst;
+      if (!jq || !jq.fn || !jq.fn.dropdown) return false;
+      try { inst = jq(d).dropdown('instance'); } catch (e) { return false; }
+      if (!inst || !inst.$trigger || !inst.$trigger.length) return false;
+      return !inst.$trigger.toArray().some(function (t) { return root.contains(t); });
+    }
+    function dropOrphans() {
+      [].forEach.call(document.querySelectorAll('.user-discount-details'), function (d) {
+        if (!orphan(d)) return;
+        try { window.jQuery(d).remove(); } catch (e) { if (d.parentNode) d.parentNode.removeChild(d); }   // jQuery знімає й обробники віджета
+      });
+    }
+    function tips() { return document.querySelectorAll(SEL_TIP); }
+    function over() {
+      if (x < 0) return false;
+      var el = document.elementFromPoint(x, y);
+      return !!(el && el.closest && el.closest(SEL_KEEP));
+    }
+    function hideAll() {
+      clearTimeout(timer); timer = null; y0 = null;
+      [].forEach.call(tips(), function (d) {
+        var inst = null;
+        try { inst = window.jQuery(d).dropdown('instance'); } catch (e) {}
+        if (inst && inst.close) { try { inst.close(); } catch (e) {} }   // штатно, щоб віджет знав, що вікно закрите
+        d.classList.remove('is-visible');
+      });
+    }
+    function check() {
+      raf = 0;
+      if (!tips().length) { clearTimeout(timer); timer = null; y0 = null; return; }
+      dropOrphans();
+      if (!tips().length) { clearTimeout(timer); timer = null; y0 = null; return; }
+      if (y0 === null) y0 = window.pageYOffset;
+      if (over()) { clearTimeout(timer); timer = null; return; }
+      if (!timer) timer = setTimeout(function () { timer = null; if (!over()) hideAll(); }, 500);
+    }
+    function later() { if (!raf) raf = (window.requestAnimationFrame || setTimeout)(check); }
+    document.addEventListener('mousemove', function (e) { x = e.clientX; y = e.clientY; later(); }, { passive: true });
+    document.addEventListener('mouseout', function (e) { if (!e.relatedTarget) { x = y = -1; later(); } });
+    window.addEventListener('blur', function () { x = y = -1; later(); });
+    // прокрутка: «липкий» рядок їде разом з екраном, а вікно — ні
+    window.addEventListener('scroll', function () {
+      if (!tips().length) return;
+      if (y0 === null) y0 = window.pageYOffset;
+      if (Math.abs(window.pageYOffset - y0) > 30) hideAll();
+    }, { passive: true });
+    // клік/дотик поза вікном і рядком
+    document.addEventListener('pointerdown', function (e) {
+      if (tips().length && !(e.target.closest && e.target.closest(SEL_KEEP))) hideAll();
+    }, true);
+    scDiscTipGuard_.dropOrphans = dropOrphans;
+  }
+  // Повторна ініціалізація Хорошопом (після зміни модифікації): спершу прибрати вікна старого блоку
+  function scDiscTipWrap_() {
+    var F = window.Face;
+    if (!F || typeof F.userDiscountDropdown !== 'function' || F.userDiscountDropdown.scWrapped) return;
+    var orig = F.userDiscountDropdown;
+    var w = function () {
+      try { if (scDiscTipGuard_.dropOrphans) scDiscTipGuard_.dropOrphans(); } catch (e) {}
+      return orig.apply(this, arguments);
+    };
+    w.scWrapped = 1;
+    F.userDiscountDropdown = w;
+  }
+  scSafe(24, scDiscTipGuard_)();
+  scSafe(24, scDiscTipWrap_)();
   var go = scSafe(24, run);
   scReady(go);
   window.addEventListener('load', go);
