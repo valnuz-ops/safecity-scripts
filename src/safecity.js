@@ -4707,8 +4707,10 @@ scModule(39, function () {
   }
 
   function pick(api, inCart) {
-    var have = {}, out = [];
-    inCart.forEach(function (it) { have[it.u] = 1; });
+    // «тип» = перші три слова назви: якщо в кошику вже є «Кабель HDMI 2.0», інший такий не пропонуємо
+    function kind(n) { return String(n).toLowerCase().split(/\s+/).slice(0, 3).join(' '); }
+    var have = {}, kinds = {}, out = [];
+    inCart.forEach(function (it) { have[it.u] = 1; kinds[kind(it.n)] = 1; });
     inCart.forEach(function (it) {
       rules(it).forEach(function (r) {
         var res = api.search(r[0]);
@@ -4716,8 +4718,8 @@ scModule(39, function () {
         var got = 0;
         for (var i = 0; i < res.items.length && got < r[1] && out.length < MAX; i++) {
           var x = res.items[i];
-          if (!x.s || have[x.u] || (r[2] && !r[2](x))) continue;
-          have[x.u] = 1; out.push(x); got++;
+          if (!x.s || have[x.u] || kinds[kind(x.n)] || (r[2] && !r[2](x))) continue;
+          have[x.u] = 1; kinds[kind(x.n)] = 1; out.push(x); got++;
         }
       });
     });
