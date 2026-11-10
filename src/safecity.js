@@ -4226,6 +4226,397 @@ scModule(36, function () {
 
 
 /* =====================================================================
+ * 37. Розумний пошук (10.11.2026)
+ *     Вбудований пошук Хорошопу шукає лише за початком слова: не розуміє «павербанк», «4мп», «100аг»,
+ *     код моделі без дефісів, опечатки, розкладку, російські слова. Тут — власний пошук по індексу
+ *     search/index.json (усі товари з Facebook-фіду Хорошопу + ключові характеристики постачальника;
+ *     збирається щоночі GitHub Action search-index, tools/build_search_index.py).
+ *     • Підказки під полем пошуку (замість підказок Хорошопу) — індекс вантажиться лише при фокусі на полі.
+ *     • Сторінка /katalog/search/?q=… — наші результати замість списку Хорошопу; якщо в нас нічого
+ *       не знайшлось — лишаємо результати Хорошопу (запасний варіант).
+ *     • GA4: sc_search (search_term, results, place) — видно запити без результатів.
+ *     Увімкнення: SC_SEARCH_ON; для перевірки ?sc_search=1 / ?sc_search=0 (запам'ятовується в браузері).
+ * ===================================================================== */
+var SC_SEARCH_ON = false;   // true — для всіх відвідувачів
+var SC_SEARCH_INDEX = 'https://valnuz-ops.github.io/safecity-scripts/search/index.json';
+
+scModule(37, function () {
+  'use strict';
+  var flag = location.search.match(/[?&]sc_search=([01])/);
+  try { if (flag) localStorage.setItem('sc_search', flag[1]); } catch (e) {}
+  var local = (function () { try { return localStorage.getItem('sc_search'); } catch (e) { return null; } })();
+  if (!(local === '1' || (SC_SEARCH_ON && local !== '0'))) return;
+  try { new RegExp('(?<![a-z])a'); } catch (e) { return; }   // старі браузери (iOS < 16.4) — лишаємо пошук Хорошопу
+
+  /* ---------- ядро пошуку ---------- */
+  var W = '0-9a-zа-яіїєґ', B = '(?<![' + W + '])', E = '(?![' + W + '])', N = '(\\d+(?:[.,]\\d+)?)\\s?';
+  function R(src) { return new RegExp(src.replace(/\\b</g, B).replace(/\\b>/g, E), 'g'); }
+  var PHRASES = [
+    [R('\\b<(?:power ?bank|павер ?банк|повер ?банк|пауер ?банк)\\S*'), 'повербанк'],
+    [R('\\b<(?:wi[\\s-]?fi|вай[\\s-]?фай|вифи|віфі)\\b>'), 'wifi'],
+    [R('\\b<(?:ip|іп)[\\s-]?камер'), 'ip камер'],
+    [R(N + '(?:мп|mp|мегапікс\\S*|мегапикс\\S*|mpx)\\b>'), '$1mp'],
+    [R(N + '(?:ah|аг|а·год|а\\*год|ач|а год|ампер ?год\\S*)\\b>'), '$1ah'],
+    [R(N + '(?:mah|маг|ма·год|мач|ма год)\\b>'), '$1mah'],
+    [R(N + '(?:kwh|квт·год|квт\\*год|квт год|квтг|квтч)\\b>'), '$1kwh'],
+    [R(N + '(?:wh|вт·год|вт\\*год|вт год|втг|втч)\\b>'), '$1wh'],
+    [R(N + '(?:kw|квт|кв)\\b>'), '$1kw'],
+    [R(N + '(?:w|вт|ват\\S*)\\b>'), '$1w'],
+    [R(N + '(?:v|в|вольт\\S*)\\b>'), '$1v'],
+    [R(N + '(?:a|а|ампер\\S*)\\b>'), '$1a'],
+    [R(N + '(?:mm|мм)\\b>'), '$1мм'],
+    [R(N + '(?:cm|см)\\b>'), '$1см'],
+    [R(N + '(?:m|м|метр\\S*)\\b>'), '$1м'],
+    [R('(\\d+)\\s?-?\\s?(?:х\\s?)?(?:канал\\S*|кан|ch|channel\\S*)\\b>'), '$1канал'],
+    [R('(\\d+)\\s?-?\\s?(?:порт\\S*|port\\S*)\\b>'), '$1порт'],
+    [R('(\\d+)\\s?(?:tb|тб)\\b>'), '$1tb'], [R('(\\d+)\\s?(?:gb|гб)\\b>'), '$1gb']
+  ];
+  // слово запиту → додаткові варіанти (будь-який може збігтися)
+  var SYN = {
+    'камера': ['відеокамера', 'камера'], 'камеры': ['відеокамера', 'камера'], 'камери': ['відеокамера', 'камера'], 'камеру': ['відеокамера', 'камера'], 'видеокамера': ['відеокамера'],
+    'реєстратор': ['відеореєстратор', 'реєстратор'], 'регистратор': ['відеореєстратор', 'реєстратор'], 'регістратор': ['відеореєстратор', 'реєстратор'], 'видеорегистратор': ['відеореєстратор'], 'відеорегістратор': ['відеореєстратор'], 'nvr': ['відеореєстратор', 'nvr'], 'dvr': ['відеореєстратор', 'dvr'], 'xvr': ['гібридний', 'xvr'],
+    'домофон': ['відеодомофон', 'домофон', 'аудіодомофон'], 'видеодомофон': ['відеодомофон'], 'панель': ['відеопанель', 'панель'], 'вызывная': ['відеопанель'], 'викликна': ['відеопанель'], 'дзвінок': ['відеодзвінок', 'дзвінок'], 'звонок': ['відеодзвінок', 'дзвінок'],
+    'акб': ['акумулятор', 'акб'], 'аккумулятор': ['акумулятор'], 'батарея': ['акумулятор', 'батарея'],
+    'ибп': ['дбж', 'ups', 'безперебійного'], 'ббж': ['дбж', 'ups', 'безперебійного'], 'упс': ['дбж', 'ups'], 'ups': ['дбж', 'ups'], 'бесперебойник': ['дбж', 'безперебійного'], 'безперебійник': ['дбж', 'безперебійного'],
+    'инвертор': ['інвертор'], 'зарядная': ['зарядна'], 'станция': ['станція'], 'генератор': ['генератор'],
+    'сигнализация': ['сигналізація', 'ajax'], 'сигналізація': ['сигналізація', 'ajax'], 'датчик': ['датчик', 'сповіщувач'], 'извещатель': ['сповіщувач', 'датчик'], 'сповіщувач': ['сповіщувач', 'датчик'], 'хаб': ['hub', 'хаб'], 'сирена': ['сирена', 'homesiren', 'streetsiren'],
+    'коммутатор': ['комутатор'], 'свитч': ['комутатор'], 'світч': ['комутатор'], 'switch': ['комутатор', 'switch'], 'роутер': ['маршрутизатор', 'роутер'], 'маршрутизатор': ['маршрутизатор'],
+    'витая': ['вита'], 'витуха': ['вита'], 'патчкорд': ['патч-корд'], 'патч': ['патч-корд'], 'питания': ['живлення'], 'бп': ['блок живлення'],
+    'жесткий': ['жорсткий', 'hdd'], 'диск': ['диск', 'hdd'], 'hdd': ['жорсткий', 'hdd'], 'флешка': ['microsd', 'карта'],
+    'наружная': ['вуличне', 'вулична'], 'уличная': ['вуличне', 'вулична'], 'вулична': ['вуличне', 'вулична'], 'внутренняя': ['внутрішнє', 'внутрішня'], 'внутрішня': ['внутрішнє', 'внутрішня'], 'купольная': ['купольна'], 'цилиндрическая': ['циліндрична'], 'поворотная': ['поворотна', 'ptz'],
+    'солнечная': ['сонячна'], 'старлинк': ['starlink'], 'старлінк': ['starlink'],
+    'хиквижн': ['hikvision'], 'хіквіжн': ['hikvision'], 'хиквижен': ['hikvision'], 'дахуа': ['dahua'], 'твт': ['tvt'], 'имоу': ['imou'], 'імоу': ['imou'], 'эзвиз': ['ezviz'], 'езвіз': ['ezviz'], 'аякс': ['ajax'],
+    'экофлоу': ['ecoflow'], 'екофлоу': ['ecoflow'], 'джекери': ['jackery'], 'джекері': ['jackery'], 'деє': ['deye'], 'дее': ['deye'], 'крафт': ['kraft'], 'тринікс': ['trinix'], 'триникс': ['trinix'], 'слинекс': ['slinex'], 'слінекс': ['slinex'], 'укітел': ['oukitel'], 'оукитель': ['oukitel'], 'оупес': ['oupes'], 'чоетек': ['choetech'], 'хуавей': ['huawei'], 'тплинк': ['tp-link'], 'кади': ['cudy'], 'кюді': ['cudy'], 'мікротік': ['mikrotik'], 'микротик': ['mikrotik']
+  };
+  var STOP = { 'для': 1, 'і': 1, 'и': 1, 'та': 1, 'з': 1, 'с': 1, 'на': 1, 'в': 1, 'у': 1, 'до': 1, 'по': 1, 'от': 1, 'від': 1, 'купити': 1, 'купить': 1, 'ціна': 1, 'цена': 1 };
+  var ENDINGS = ['ями', 'ами', 'ові', 'ого', 'ому', 'ими', 'ій', 'ий', 'их', 'ів', 'ах', 'ям', 'ам', 'ою', 'ею', 'ой', 'ая', 'яя', 'ое', 'ые', 'ие', 'а', 'я', 'и', 'і', 'у', 'ю', 'е', 'о', 'ь', 'ы'];
+  var L2C = { q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з', '[': 'х', ']': 'ї', a: 'ф', s: 'і', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д', ';': 'ж', "'": 'є', z: 'я', x: 'ч', c: 'с', v: 'м', b: 'и', n: 'т', m: 'ь', ',': 'б', '.': 'ю' };
+  var C2L = {};
+  Object.keys(L2C).forEach(function (k) { C2L[L2C[k]] = k; });
+  C2L['ы'] = 's'; C2L['э'] = "'"; C2L['ъ'] = ']';
+  var TR_L2C = [['shch', 'щ'], ['sch', 'щ'], ['zh', 'ж'], ['kh', 'х'], ['ts', 'ц'], ['ch', 'ч'], ['sh', 'ш'], ['yu', 'ю'], ['ya', 'я'], ['ye', 'є'], ['yi', 'ї'], ['ph', 'ф'], ['ck', 'к'], ['ee', 'і'], ['oo', 'у'],
+    ['a', 'а'], ['b', 'б'], ['c', 'к'], ['d', 'д'], ['e', 'е'], ['f', 'ф'], ['g', 'г'], ['h', 'х'], ['i', 'і'], ['j', 'дж'], ['k', 'к'], ['l', 'л'], ['m', 'м'], ['n', 'н'], ['o', 'о'], ['p', 'п'], ['q', 'к'], ['r', 'р'], ['s', 'с'], ['t', 'т'], ['u', 'у'], ['v', 'в'], ['w', 'в'], ['x', 'кс'], ['y', 'й'], ['z', 'з']];
+  var TR_C2L = { 'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'ґ': 'g', 'д': 'd', 'е': 'e', 'є': 'ye', 'ж': 'zh', 'з': 'z', 'и': 'y', 'і': 'i', 'ї': 'yi', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ь': '', 'ю': 'yu', 'я': 'ya', 'ы': 'y', 'э': 'e', 'ё': 'e', 'ъ': '' };
+
+  function lower(s) { return String(s || '').toLowerCase().replace(/[’`ʼ]/g, "'").replace(/ё/g, 'е'); }
+  function stem(w) {
+    if (w.length < 5 || /[\da-z]/.test(w)) return w;
+    for (var i = 0; i < ENDINGS.length; i++) { var e = ENDINGS[i]; if (w.length - e.length >= 4 && w.slice(-e.length) === e) return w.slice(0, -e.length); }
+    return w;
+  }
+  function compact(s) { return lower(s).replace(/[^a-z0-9а-яіїєґ]/g, ''); }
+  function lat2cyr(w) {
+    var out = '', i = 0;
+    while (i < w.length) {
+      var hit = null;
+      for (var k = 0; k < TR_L2C.length; k++) if (w.substr(i, TR_L2C[k][0].length) === TR_L2C[k][0]) { hit = TR_L2C[k]; break; }
+      if (hit) { out += hit[1]; i += hit[0].length; } else { out += w[i]; i++; }
+    }
+    return out;
+  }
+  function cyr2lat(w) { return w.split('').map(function (c) { return TR_C2L[c] !== undefined ? TR_C2L[c] : c; }).join(''); }
+  function layoutFix(w) {
+    if (/^[a-z;'\[\],.]+$/.test(w)) return w.split('').map(function (c) { return L2C[c] || c; }).join('');
+    if (/^[а-яіїєґыэъ]+$/.test(w)) return w.split('').map(function (c) { return C2L[c] || c; }).join('');
+    return null;
+  }
+  function normText(s) {
+    s = ' ' + lower(s) + ' ';
+    s = s.replace(/(\d),(\d)/g, '$1.$2');
+    for (var i = 0; i < PHRASES.length; i++) s = s.replace(PHRASES[i][0], PHRASES[i][1]);
+    return s.replace(/[^a-z0-9а-яіїєґ.\-+/' ]/g, ' ').split(/[\s/]+/)
+      .map(function (t) { return t.replace(/^[.\-+']+|[.\-+']+$/g, ''); }).filter(Boolean);
+  }
+  function tokSet(text, set) {
+    normText(text).forEach(function (t) {
+      set[t] = 1; set[stem(t)] = 1;
+      t.split('-').forEach(function (p) { if (p) set[p] = 1; });
+      var c = compact(t); if (c.length > 2) set[c] = 1;
+    });
+    return set;
+  }
+
+  function buildIndex(data) {
+    var f = data.f, vocab = {};
+    var docs = data.items.map(function (row) {
+      var it = {};
+      f.forEach(function (k, j) { it[k] = row[j]; });
+      var main = tokSet(it.n + ' ' + (it.b || '') + ' ' + (it.k || ''), {});
+      var extra = tokSet(it.x || '', {});
+      var nameToks = normText(it.n), codes = [];
+      nameToks.forEach(function (t, j) {
+        if (/[a-z]/.test(t) && /\d/.test(t)) codes.push(compact(t));
+        if (j + 1 < nameToks.length) { var pr = compact(t + nameToks[j + 1]); if (/\d/.test(pr) && /[a-z]/.test(pr)) codes.push(pr); }
+      });
+      if (it.c) codes.push(compact(it.c));
+      Object.keys(main).forEach(function (t) { vocab[t] = 1; });
+      return { it: it, toks: Object.keys(main), xt: Object.keys(extra), first: stem(nameToks[0] || ''), len: it.n.length, codes: codes, cat: lower(it.k) };
+    });
+    return { docs: docs, vocab: vocab, vocabList: Object.keys(vocab) };
+  }
+
+  function dl(a, b, max) {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    var d = [], i, j;
+    for (i = 0; i <= a.length; i++) d[i] = [i];
+    for (j = 0; j <= b.length; j++) d[0][j] = j;
+    for (i = 1; i <= a.length; i++) {
+      var best = 99;
+      for (j = 1; j <= b.length; j++) {
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+        if (d[i][j] < best) best = d[i][j];
+      }
+      if (best > max) return max + 1;
+    }
+    return d[a.length][b.length];
+  }
+
+  function alternatives(q, idx) {
+    var alts = [], seen = {};
+    function add(t, w) { if (t && !seen[t]) { seen[t] = 1; alts.push({ t: t, w: w }); } }
+    add(q, 1); add(stem(q), 0.95);
+    (SYN[q] || SYN[stem(q)] || []).forEach(function (s) { normText(s).forEach(function (x) { add(x, 0.9); add(stem(x), 0.85); }); });
+    if (/^[a-z]+$/.test(q) && q.length > 2) add(lat2cyr(q), 0.8);
+    if (/^[а-яіїєґ]+$/.test(q) && q.length > 2) { var l = cyr2lat(q); add(l, 0.8); add(l.replace(/y/g, 'i'), 0.75); add(l.replace(/h/g, 'g'), 0.7); }
+    if ((/[a-z]/.test(q) && /\d/.test(q)) || (q.length >= 5 && /\d/.test(q))) add(compact(q), 1);
+    var lf = layoutFix(q);
+    if (lf && lf.length > 2 && !idx.vocab[q]) {
+      var hit = idx.vocab[lf] || idx.vocabList.some(function (v) { return v.indexOf(lf) === 0; });
+      if (hit) { add(lf, 0.85); (SYN[lf] || []).forEach(function (s) { add(s, 0.8); }); }
+    }
+    return alts;
+  }
+
+  function matchIn(toks, t) {
+    var best = 0;
+    for (var k = 0; k < toks.length; k++) {
+      var d = toks[k];
+      if (d === t) return 1;
+      if (t.length >= 2 && d.indexOf(t) === 0) best = /\d/.test(t) ? 0.9 : 0.8;
+    }
+    return best;
+  }
+
+  function tokenScore(alts, doc, q) {
+    var best = 0;
+    for (var a = 0; a < alts.length; a++) {
+      var t = alts[a].t, w = alts[a].w;
+      best = Math.max(best, w * matchIn(doc.toks, t), w * 0.6 * matchIn(doc.xt, t));
+      if (t.length >= 4 && /\d/.test(t)) for (var c = 0; c < doc.codes.length; c++) {
+        var p = doc.codes[c].indexOf(t);
+        if (p >= 0) best = Math.max(best, w * (p === 0 ? 1 : 0.85));
+      }
+      if (best >= w) return best;
+    }
+    if (best) return best;
+    if (q.length >= 4 && !/\d/.test(q)) {                 // опечатки — лише слова без цифр
+      var max = q.length >= 8 ? 2 : 1;
+      for (var m = 0; m < doc.toks.length; m++) {
+        var dt = doc.toks[m];
+        if (/\d/.test(dt)) continue;
+        if (dl(q, dt.length > q.length + 1 ? dt.slice(0, q.length) : dt, max) <= max) return 0.6;
+      }
+    }
+    return 0;
+  }
+
+  function search(idx, query) {
+    var qt = normText(query).filter(function (t) { return !STOP[t]; });
+    if (!qt.length) return { total: 0, items: [] };
+    var alts = qt.map(function (q) { return alternatives(q, idx); });
+    var res = [];
+    idx.docs.forEach(function (doc) {
+      var sum = 0, hit = 0;
+      for (var i = 0; i < qt.length; i++) { var s = tokenScore(alts[i], doc, qt[i]); if (s) { hit++; sum += s; } }
+      if (!hit) return;
+      var score = sum / qt.length + (hit === qt.length ? 1 : 0);
+      if (alts[0].some(function (a) { return doc.first === a.t || doc.first.indexOf(stem(a.t)) === 0; })) score += 0.35;
+      if (alts.some(function (al) { return al.some(function (a) { return a.t.length > 3 && doc.cat.indexOf(a.t) >= 0; }); })) score += 0.15;
+      if (doc.it.s) score += 0.25;
+      res.push({ doc: doc, score: score, full: hit === qt.length });
+    });
+    var full = res.filter(function (r) { return r.full; });
+    var list = full.length ? full : (qt.length > 1 ? res.filter(function (r) { return r.score > 0.9; }) : []);
+    list.sort(function (a, b) { return b.score - a.score || a.doc.len - b.doc.len; });
+    return { total: list.length, partial: !full.length && list.length > 0, items: list.map(function (r) { return r.doc.it; }) };
+  }
+
+  /* ---------- завантаження індексу ---------- */
+  var IDX = null, loading = null, waiters = [];
+  function load(cb) {
+    if (IDX) return cb(IDX);
+    waiters.push(cb);
+    if (loading) return;
+    loading = fetch(SC_SEARCH_INDEX).then(function (r) { if (!r.ok) throw new Error('index ' + r.status); return r.json(); })
+      .then(scSafe(37, function (data) {
+        IDX = buildIndex(data);
+        document.documentElement.classList.add('sc-srch');
+        waiters.splice(0).forEach(function (f) { f(IDX); });
+      }))['catch'](function (e) { loading = null; scErr(37, e); });
+  }
+
+  function ga(q, n, place) {
+    try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_search', { search_term: String(q).slice(0, 100), results: n, place: place }); } catch (x) {}
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function price(p) { return String(p).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' грн'; }
+  function resultsUrl(q) { return '/katalog/search/?q=' + encodeURIComponent(q); }
+
+  scStyle('sc37-css', [
+    'html.sc-srch .search-results{display:none!important}',
+    '.sc37-dd{position:absolute;z-index:10050;background:#fff;border:1px solid #e3e3e3;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);overflow:auto;font-size:14px;line-height:1.3;text-align:left}',
+    '.sc37-dd a{display:flex;align-items:center;gap:10px;padding:8px 12px;color:#222;text-decoration:none;border-bottom:1px solid #f1f1f1}',
+    '.sc37-dd a:hover,.sc37-dd a.is-active{background:#f3f8f3}',
+    '.sc37-dd img{width:44px;height:44px;object-fit:contain;flex:0 0 44px}',
+    '.sc37-dd .sc37-n{flex:1;min-width:0}',
+    '.sc37-dd .sc37-p{font-weight:700;white-space:nowrap;margin-top:2px}',
+    '.sc37-dd .sc37-out{color:#999;font-weight:400;font-size:12px;margin-left:6px}',
+    '.sc37-dd .sc37-all{justify-content:center;font-weight:600;color:#2a9d4a;border-bottom:0}',
+    '.sc37-dd .sc37-none{padding:12px;color:#666}',
+    '.sc37-res{margin:0 0 30px}',
+    '.sc37-res__bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:0 0 14px;color:#555}',
+    '.sc37-res__bar label{display:flex;gap:6px;align-items:center;cursor:pointer}',
+    '.sc37-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}',
+    '.sc37-card{display:flex;flex-direction:column;border:1px solid #e6e6e6;border-radius:8px;padding:10px;color:#222;text-decoration:none;background:#fff}',
+    '.sc37-card:hover{border-color:#2a9d4a}',
+    '.sc37-card img{width:100%;aspect-ratio:1/1;object-fit:contain;margin-bottom:8px}',
+    '.sc37-card .sc37-b{font-size:12px;color:#888}',
+    '.sc37-card .sc37-t{font-size:14px;line-height:1.3;margin:4px 0 8px;flex:1}',
+    '.sc37-card .sc37-pr{font-weight:700;font-size:16px}',
+    '.sc37-card .sc37-st{font-size:12px;margin-top:4px;color:#2a9d4a}',
+    '.sc37-card .sc37-st.is-out{color:#999}',
+    '.sc37-more{display:block;margin:16px auto 0;padding:10px 24px;border:1px solid #2a9d4a;border-radius:6px;background:#fff;color:#2a9d4a;font-weight:600;cursor:pointer}',
+    '.sc37-note{margin:0 0 12px;color:#666}',
+    '@media (max-width:767px){.sc37-grid{grid-template-columns:repeat(2,1fr);gap:8px}.sc37-card{padding:8px}.sc37-dd{position:fixed;left:0!important;right:0;width:auto!important;border-radius:0}}'
+  ].join('\n'));
+
+  /* ---------- підказки під полем ---------- */
+  var dd = null, ddInput = null, active = -1, lastQ = '', timer = 0;
+  function hide() { if (dd) dd.style.display = 'none'; active = -1; }
+  function place(input) {
+    var r = input.getBoundingClientRect(), mobile = window.innerWidth < 768;
+    if (mobile) { dd.style.top = (r.bottom + 4) + 'px'; dd.style.maxHeight = (window.innerHeight - r.bottom - 8) + 'px'; }
+    else {
+      var form = input.closest('form') || input;
+      var fr = form.getBoundingClientRect();
+      dd.style.left = (fr.left + window.pageXOffset) + 'px';
+      dd.style.top = (fr.bottom + window.pageYOffset + 4) + 'px';
+      dd.style.width = Math.max(fr.width, 520) + 'px';
+      dd.style.maxHeight = '70vh';
+    }
+  }
+  function render(input, q) {
+    if (!dd) {
+      dd = document.createElement('div');
+      dd.className = 'sc37-dd';
+      document.body.appendChild(dd);
+      dd.addEventListener('mousedown', function (e) { e.preventDefault(); });   // не втрачати фокус поля
+      dd.addEventListener('click', scSafe(37, function (e) {
+        var a = e.target.closest('a[data-i]');
+        if (a) try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_search_click', { search_term: lastQ.slice(0, 100), position: +a.getAttribute('data-i') + 1, place: 'dropdown' }); } catch (x) {}
+      }));
+    }
+    ddInput = input;
+    var r = search(IDX, q), top = r.items.slice(0, 8), html = '';
+    top.forEach(function (it, i) {
+      html += '<a href="' + esc(it.u) + '" data-i="' + i + '">' + (it.i ? '<img src="' + esc(it.i) + '" alt="" loading="lazy">' : '<span style="width:44px"></span>') +
+        '<span class="sc37-n">' + esc(it.n) + '<div class="sc37-p">' + price(it.p) + (it.s ? '' : '<span class="sc37-out">немає в наявності</span>') + '</div></span></a>';
+    });
+    if (top.length) html += '<a class="sc37-all" href="' + resultsUrl(q) + '">Усі результати (' + r.total + ') →</a>';
+    else html = '<div class="sc37-none">Нічого не знайшли за «' + esc(q) + '». Спробуйте інакше або <a class="sc37-all" href="' + resultsUrl(q) + '" style="display:inline;padding:0">шукати по всьому сайту</a>.</div>';
+    dd.innerHTML = html;
+    dd.style.display = 'block';
+    active = -1;
+    place(input);
+    if (q !== lastQ) { lastQ = q; clearTimeout(render.t); render.t = setTimeout(function () { ga(q, r.total, 'dropdown'); }, 1500); }
+  }
+  function onInput(e) {
+    var input = e.target;
+    if (!input.matches || !input.matches('input[name="q"]')) return;
+    var q = input.value.trim();
+    clearTimeout(timer);
+    if (q.length < 2) return hide();
+    timer = setTimeout(function () { load(scSafe(37, function () { if (input.value.trim() === q) render(input, q); })); }, 120);
+  }
+  document.addEventListener('focusin', scSafe(37, function (e) {
+    if (e.target.matches && e.target.matches('input[name="q"]')) { load(function () {}); if (e.target.value.trim().length >= 2 && IDX) render(e.target, e.target.value.trim()); }
+  }));
+  document.addEventListener('input', scSafe(37, onInput), true);
+  document.addEventListener('focusout', function (e) { if (e.target === ddInput) setTimeout(hide, 150); });
+  document.addEventListener('keydown', scSafe(37, function (e) {
+    if (!dd || dd.style.display === 'none' || e.target !== ddInput) return;
+    var links = dd.querySelectorAll('a');
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      active = (active + (e.key === 'ArrowDown' ? 1 : -1) + links.length) % links.length;
+      [].forEach.call(links, function (a, i) { a.classList.toggle('is-active', i === active); });
+    } else if (e.key === 'Enter') {
+      e.preventDefault(); e.stopPropagation();
+      var q = ddInput.value.trim();
+      location.href = active >= 0 && links[active] ? links[active].getAttribute('href') : resultsUrl(q);
+    } else if (e.key === 'Escape') hide();
+  }), true);
+  window.addEventListener('resize', function () { if (dd && dd.style.display !== 'none' && ddInput) place(ddInput); });
+
+  /* ---------- сторінка результатів ---------- */
+  if (/^\/katalog\/search\/?$/.test(location.pathname)) {
+    var q = (new URLSearchParams(location.search).get('q') || '').trim();
+    if (!q) return;
+    load(scSafe(37, function () {
+      var r = search(IDX, q);
+      ga(q, r.total, 'page');
+      if (!r.total) return;                        // нічого — лишаємо результати Хорошопу
+      if (document.querySelector('.sc37-res')) return;
+      // ПК: ховаємо .catalog__middle (фільтри + сітка), заголовок лишається; мобільна: у section.catalog
+      // ховаємо все, крім заголовка й хлібних крихт
+      var hideEls = [], anchor = null, mid = document.querySelector('.catalog__middle');
+      if (mid) { hideEls = [mid]; anchor = mid; }
+      else {
+        var cat = document.querySelector('section.catalog, .catalog'), h1 = cat && cat.querySelector('h1');
+        if (!cat) return;
+        [].forEach.call(cat.children, function (ch) { if (!ch.querySelector('h1') && ch.tagName !== 'H1' && !/breadcrumb/.test(ch.className)) hideEls.push(ch); });
+        anchor = hideEls[0];
+        if (!anchor) return;
+      }
+      var box = document.createElement('div');
+      box.className = 'sc37-res';
+      var onlyStock = false, shown = 0, list = r.items, PAGE = 24;
+      function cards(from, to, arr) {
+        return arr.slice(from, to).map(function (it, i) {
+          return '<a class="sc37-card" href="' + esc(it.u) + '" data-i="' + (from + i) + '">' + (it.i ? '<img src="' + esc(it.i) + '" alt="' + esc(it.n) + '" loading="lazy">' : '') +
+            (it.b ? '<span class="sc37-b">' + esc(it.b) + '</span>' : '') + '<span class="sc37-t">' + esc(it.n) + '</span>' +
+            '<span class="sc37-pr">' + price(it.p) + '</span><span class="sc37-st' + (it.s ? '' : ' is-out') + '">' + (it.s ? 'В наявності' : 'Немає в наявності') + '</span></a>';
+        }).join('');
+      }
+      function draw() {
+        var arr = onlyStock ? list.filter(function (it) { return it.s; }) : list;
+        shown = Math.min(PAGE, arr.length);
+        box.innerHTML = (r.partial ? '<p class="sc37-note">Точного збігу немає — схожі товари:</p>' : '') +
+          '<div class="sc37-res__bar"><span>Знайдено: ' + arr.length + '</span><label><input type="checkbox"' + (onlyStock ? ' checked' : '') + '> лише в наявності</label></div>' +
+          '<div class="sc37-grid">' + cards(0, shown, arr) + '</div>' + (arr.length > shown ? '<button type="button" class="sc37-more">Показати ще</button>' : '');
+        box._arr = arr;
+      }
+      box.addEventListener('change', scSafe(37, function (e) { if (e.target.type === 'checkbox') { onlyStock = e.target.checked; draw(); } }));
+      box.addEventListener('click', scSafe(37, function (e) {
+        if (e.target.classList.contains('sc37-more')) {
+          var arr = box._arr, grid = box.querySelector('.sc37-grid');
+          grid.insertAdjacentHTML('beforeend', cards(shown, shown + PAGE, arr));
+          shown = Math.min(shown + PAGE, arr.length);
+          if (shown >= arr.length) e.target.remove();
+          return;
+        }
+        var a = e.target.closest('a[data-i]');
+        if (a) try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_search_click', { search_term: q.slice(0, 100), position: +a.getAttribute('data-i') + 1, place: 'page' }); } catch (x) {}
+      }));
+      draw();
+      anchor.parentElement.insertBefore(box, anchor);
+      hideEls.forEach(function (el) { el.style.display = 'none'; });
+    }));
+  }
+});
+
+/* =====================================================================
  * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
  *     Хорошоп змінив шаблон — блоки мовчки перестають з'являтися. Раз за перегляд, через ~5 с після
  *     завантаження (сторінка дорисована), перевіряємо те, без чого блоки не працюють, і надсилаємо звіт
