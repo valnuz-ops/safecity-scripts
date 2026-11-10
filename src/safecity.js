@@ -5009,22 +5009,29 @@ scModule(37, function () {
       if (!box) return;
       input._scMic = 1;
       if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
-      // праворуч від поля вже може бути кнопка «шукати» — стаємо лівіше від неї
-      var right = 4, ir = input.getBoundingClientRect();
-      [].forEach.call(box.querySelectorAll('button, [type=submit]'), function (b) {
-        var br = b.getBoundingClientRect();
-        if (br.width && br.left >= ir.left + ir.width / 2 && br.right <= ir.right + 2) right = Math.max(right, Math.round(ir.right - br.left) + 2);
-      });
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'sc37-mic';
       btn.setAttribute('aria-label', 'Голосовий пошук');
       btn.title = 'Голосовий пошук';
-      btn.style.right = right + 'px';
       btn.innerHTML = MIC;
       box.appendChild(btn);
-      var pr = parseInt(getComputedStyle(input).paddingRight, 10) || 0;
-      if (pr < right + 30) input.style.paddingRight = (right + 32) + 'px';
+      var pr0 = parseInt(getComputedStyle(input).paddingRight, 10) || 0;
+      // праворуч від поля бувають кнопки «шукати» і «очистити» (на мобільній — хрестик з'являється, коли є текст),
+      // тож місце перераховуємо при кожному введенні: мікрофон завжди лівіше від них
+      var place = function () {
+        var right = 4, ir = input.getBoundingClientRect();
+        [].forEach.call(box.parentNode.querySelectorAll('button, [type=submit]'), function (b) {
+          if (b === btn) return;
+          var br = b.getBoundingClientRect();
+          if (br.width && br.top < ir.bottom && br.bottom > ir.top && br.left >= ir.left + ir.width / 2 && br.right <= ir.right + 2) right = Math.max(right, Math.round(ir.right - br.left) + 2);
+        });
+        var br0 = box.getBoundingClientRect();
+        btn.style.right = (right + Math.round(br0.right - ir.right)) + 'px';
+        input.style.paddingRight = Math.max(pr0, right + 32) + 'px';
+      };
+      place();
+      ['input', 'focus', 'keyup'].forEach(function (ev) { input.addEventListener(ev, function () { setTimeout(place, 0); }); });
       btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
       btn.addEventListener('click', scSafe(37, function (e) {
         e.preventDefault(); e.stopPropagation();
