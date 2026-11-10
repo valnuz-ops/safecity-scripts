@@ -8,9 +8,18 @@ jobs:
     steps:
       - run: |
           UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
-          for u in "https://safecity.in.ua/aksesuary-dlia-starlinka/" "https://safecity.in.ua/kabel-zhyvlennia-ta-peredachi-danykh-2-v-1-dcethernet-dlia-starlink-mini-z-perekhidnykom-type-c-5m/" "https://safecity.in.ua/katalog/search/?q=starlink" "https://safecity.in.ua/aksesuary-dlia-starlinka/page-2/"; do
-            curl -sS -A "$UA" -H "Accept-Language: uk" -o p.html -w "%{http_code} %{size_download} $u\n" "$u"
-            echo "cards: $(grep -c 'catalogCard-availability' p.html)  avail-texts: $(grep -o 'catalogCard-availability[^<]*<[^<]*' p.html | head -3 | tr '\n' ' ')"
-            grep -o 'product-header__availability[^<]*<[^<]*' p.html | head -2
-            grep -o '<title>[^<]*' p.html | head -1
-          done
+          t() { curl -sS -A "$UA" -o p.html -w "%{http_code} %{size_download} $1\n" "$1"; echo "  cards=$(grep -c 'catalogCard-availability' p.html) found=$(grep -o 'Знайдено[^<]*' p.html | head -1) pager=$(grep -o 'page-[0-9]*' p.html | sort -u | tail -3 | tr '\n' ' ')"; python3 - <<'PY'
+          import re
+          h=open('p.html',encoding='utf-8',errors='ignore').read()
+          cards=re.findall(r'catalogCard-availability[^>]*>\s*([^<]+)',h)
+          links=re.findall(r'class="catalogCard-image"\s+href="([^"]+)"',h) or re.findall(r'<a[^>]+href="(/[^"]+/)"[^>]*class="catalogCard',h)
+          print('   avail sample:',[c.strip() for c in cards[:4]],'links:',len(links),links[:2])
+          m=re.search(r'(\d+)\s*(?:товар|результат)',h); print('   count text:', m.group(0) if m else None)
+          PY
+          }
+          t "https://safecity.in.ua/katalog/search/?q=a"
+          t "https://safecity.in.ua/katalog/search/?q=%D0%B0"
+          t "https://safecity.in.ua/katalog/search/page-2/?q=starlink"
+          t "https://safecity.in.ua/katalog/search/?q=starlink&page=2"
+          t "https://safecity.in.ua/katalog/search/?q=73-01018"
+          t "https://safecity.in.ua/katalog/search/?q=starlink&limit=200"
