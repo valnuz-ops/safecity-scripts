@@ -99,9 +99,11 @@ function esc_(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
 
 /* ---------- Telegram ---------- */
 function tgSend_(text) {
+  // токен і чат — ті ж, що в «сторожі»: константи TG_TOKEN / TG_CHAT у Code.gs або властивості скрипту
   var p = PropertiesService.getScriptProperties();
-  var token = p.getProperty('TG_TOKEN'), chat = p.getProperty('TG_CHAT');
-  if (!token || !chat) throw new Error('Немає TG_TOKEN / TG_CHAT у властивостях скрипту');
+  var token = (typeof TG_TOKEN !== 'undefined' && TG_TOKEN) || p.getProperty('TG_TOKEN');
+  var chat = (typeof TG_CHAT !== 'undefined' && TG_CHAT) || p.getProperty('TG_CHAT');
+  if (!token || !chat) throw new Error('Немає TG_TOKEN / TG_CHAT (у Code.gs або у властивостях скрипту)');
   if (text.length > 4000) text = text.slice(0, 3990) + '\n…';
   UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
     method: 'post',
