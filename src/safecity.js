@@ -4354,6 +4354,8 @@ scModule(37, function () {
     [R(N + '(?:mah|маг|ма·год|мач|ма·ч|ма год)\\b>'), '$1mah'],
     [R(N + '(?:kwh|квт·год|квт\\*год|квт год|квтг|квтч)\\b>'), '$1kwh'],
     [R(N + '(?:wh|вт·год|вт\\*год|вт год|втг|втч)\\b>'), '$1wh'],
+    [R(N + '(?:kva|ква)\\b>'), '$1kva'],
+    [R(N + '(?:va|ва)\\b>'), '$1va'],
     [R(N + '(?:kw|квт|кв)\\b>'), '$1kw'],
     [R(N + '(?:w|вт|vt|ват\\S*)\\b>'), '$1w'],
     [R(N + '(?:v|в|вольт\\S*)\\b>'), '$1v'],
@@ -4673,32 +4675,99 @@ scModule(37, function () {
   var QUERY_FIX = [
     [/(?:^|\s)(?:акб|акум\S*|аккум\S*|батаре\S*|живлення|питание)\s+(?:для|на)\s+(роутер\S*|маршрутизатор\S*|модем\S*|onu|ону|термінал\S*)/i, ' дбж для $1']
   ];
-  // «доводчик на двері 30 кг»: вага — не слово для назви, а умова. Шукаємо без неї і лишаємо товари,
-  // у діапазон яких (поле r індексу, «Маса дверного полотна» постачальника) ця вага потрапляє.
-  // Якщо серед знайденого діапазонів немає («замок 280 кг») — звичайний пошук із «280 кг» у назві.
-  var WEIGHT_RE = /(?:^|\s)(?:на\s+|до\s+|вагою\s+|весом\s+)?(\d{1,3}(?:[.,]\d)?)\s*(?:кг|kg|кілограм\S*|килограм\S*)(?=[\s.,]|$)/i;
+  /* ---------- пошук за числовими характеристиками (10.11.2026) ----------
+   * «доводчик на двері 30 кг», «ДБЖ для котла 150 Вт», «реєстратор на 6 камер», «камера 50 м», «кабель hdmi 15 м»…
+   * Число з одиницею — умова, а не слово з назви. Шукаємо без нього, а серед знайденого лишаємо товари,
+   * у яких характеристика підходить. Дані: поля r (діапазон ваги дверей) і q («pw:600,ch:8») індексу — з фіду
+   * постачальника; якщо там порожньо — з назви (600W, 100Ah, 8-канальний, 15м). Якщо серед знайденого такої
+   * характеристики майже ні в кого немає («жорсткий диск 8 тб», «замок 280 кг» без даних) — звичайний пошук. */
+  // одиниця з запиту → характеристики, які можуть під неї підходити (береться та, що є в більшості знайденого);
+  // mode: min — «від N» (найближче більше — першим), eq — рівно N, range — N у діапазоні товару
+  var QTY = {
+    w: { keys: ['pw'], mul: 1 }, kw: { keys: ['pw'], mul: 1000 }, va: { keys: ['va', 'pw'], mul: 1 }, kva: { keys: ['va', 'pw'], mul: 1000 },
+    wh: { keys: ['wh'], mul: 1 }, kwh: { keys: ['wh'], mul: 1000 }, ah: { keys: ['ah'], mul: 1 }, mah: { keys: ['mah'], mul: 1 },
+    a: { keys: ['ai', 'al', 'ao'], mul: 1 }, канал: { keys: ['ch'], mul: 1 }, tb: { keys: ['hdd'], mul: 1 },
+    м: { keys: ['ir', 'boom', 'len'], mul: 1 }, kg: { keys: ['r', 'hold', 'kg'], mul: 1 }, ab: { keys: ['ab'], mul: 1 }
+  };
+  var QTY_EQ = { ai: 1 };                                   // номінал автомата: 25 А — саме 25 А
+  var QTY_TXT = {
+    pw: 'потужність від {} Вт', va: 'потужність від {} ВА', wh: 'ємність від {} Вт·год', ah: 'ємність від {} Ah', mah: 'ємність від {} mAh',
+    ai: 'номінальний струм {} А', al: 'струм навантаження від {} А', ao: 'вихідний струм від {} А', ch: 'від {} каналів',
+    hdd: 'підтримка дисків від {} ТБ', ir: 'ІЧ-підсвічування від {} м', boom: 'стріла від {} м', len: 'довжина від {} м',
+    r: 'для дверей вагою {} кг', hold: 'сила утримання від {} кг', kg: 'навантаження від {} кг', ab: 'від {} абонентів'
+  };
+  // значення характеристики товару: з фіду постачальника, інакше з назви
+  function qtyOf(it, key) {
+    if (!it._q) {
+      var q = {};
+      String(it.q || '').split(',').forEach(function (kv) { var p = kv.split(':'); if (p[1]) q[p[0]] = parseFloat(p[1]); });
+      String(it.wn || '').split(' ').forEach(function (t) {
+        var m = t.match(/^(\d+(?:\.\d+)?)(kw|w|wh|kwh|ah|mah|канал|м)$/);
+        if (!m) return;
+        var v = parseFloat(m[1]), u = m[2];
+        if (u === 'kw' && !q.pw) q.pw = v * 1000;
+        else if (u === 'w' && !q.pw) q.pw = v;
+        else if ((u === 'wh' || u === 'kwh') && !q.wh) q.wh = v * (u === 'kwh' ? 1000 : 1);
+        else if (u === 'ah' && !q.ah) q.ah = v;
+        else if (u === 'mah' && !q.mah) q.mah = v;
+        else if (u === 'канал') q.ch = v;                   // «16-канальний» у назві точніше за «Кількість каналів IP»
+        else if (u === 'м' && !q.len) q.len = v;
+      });
+      if (it.r) { var rr = String(it.r).split('-'); q.r = [parseFloat(rr[0]), parseFloat(rr[1])]; }
+      it._q = q;
+    }
+    return it._q[key];
+  }
+  // умови з запиту: [{ key: одиниця з QTY, v: число, raw: слова запиту }]
+  function parseQty(query) {
+    var toks = normText(query), conds = [], rest = [];
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i], m = t.match(/^(\d+(?:\.\d+)?)(kw|w|va|kva|wh|kwh|ah|mah|a|канал|tb|м|kg)$/), nx = toks[i + 1] || '';
+      if (m) { conds.push({ key: m[2], v: parseFloat(m[1]), raw: t }); continue; }
+      // «на 6 камер», «на 4 квартири / абоненти»
+      if (/^\d{1,3}$/.test(t) && /^(?:камер|кам$|відеокамер)/.test(nx)) { conds.push({ key: 'канал', v: +t, raw: t + ' ' + nx }); i++; continue; }
+      if (/^\d{1,3}$/.test(t) && /^(?:квартир|абонент|кварт)/.test(nx)) { conds.push({ key: 'ab', v: +t, raw: t + ' ' + nx }); i++; continue; }
+      rest.push(t);
+    }
+    return { conds: conds, rest: rest };
+  }
   function search(idx, query) {
     query = String(query);
     QUERY_FIX.forEach(function (f) { query = query.replace(f[0], f[1]); });
-    var wm = query.match(WEIGHT_RE);
-    if (wm) {
-      var W = parseFloat(wm[1].replace(',', '.')), rest = query.replace(wm[0], ' ');
-      var r0 = searchCore(idx, rest);
-      if (r0.items.some(function (it) { return it.r; })) {
-        var width = function (it) { var m = String(it.r).split('-'); return parseFloat(m[1]) - parseFloat(m[0]); };
-        var items = r0.items.filter(function (it) {
-          if (!it.r) return false;
-          var m = String(it.r).split('-');
-          return W >= parseFloat(m[0]) && W <= parseFloat(m[1]);
-        });
-        // спершу в наявності, далі — вужчий діапазон (25–45 кг для 30 кг точніше, ніж 25–150 кг)
-        items = items.map(function (it, i) { return [it, i]; }).sort(function (a, b) {
-          return (b[0].s - a[0].s) || (width(a[0]) - width(b[0])) || (a[1] - b[1]);
-        }).map(function (x) { return x[0]; });
-        return { total: items.length, partial: r0.partial, items: items, cats: facet(items, 'k'), brands: facet(items, 'b'), fixed: r0.fixed, weight: W };
-      }
+    var pq = parseQty(query);
+    if (!pq.conds.length || !pq.rest.length) return searchCore(idx, query);
+    var base = searchCore(idx, pq.rest.join(' '));
+    // для кожної умови — перша за порядком характеристика, яка є в помітної частини знайденого
+    // (щонайменше 5 товарів або 30 %): «1000 ВА» — ВА, а не Вт; «15 м» у кабелів — довжина, у камер — ІЧ
+    var use = [], back = [];
+    pq.conds.forEach(function (c) {
+      var pick = null;
+      QTY[c.key].keys.some(function (k) {
+        var n = 0;
+        base.items.forEach(function (it) { if (qtyOf(it, k) != null) n++; });
+        if (n >= 2 && (n >= 5 || n >= base.items.length * 0.3)) { pick = k; return true; }
+        return false;
+      });
+      if (pick) use.push({ k: pick, v: c.v * QTY[c.key].mul, raw: c.raw });
+      else back.push(c.raw);
+    });
+    if (!use.length) return searchCore(idx, query);
+    if (back.length) base = searchCore(idx, pq.rest.concat(back).join(' '));
+    function ok(it, u) {
+      var x = qtyOf(it, u.k);
+      if (x == null) return false;
+      if (u.k === 'r') return u.v >= x[0] && u.v <= x[1];
+      return QTY_EQ[u.k] ? Math.abs(x - u.v) < 0.01 : x >= u.v - 1e-9;
     }
-    return searchCore(idx, query);
+    var main = use[0];
+    function dist(it) { var x = qtyOf(it, main.k); return main.k === 'r' ? x[1] - x[0] : x - main.v; }
+    var items = base.items.filter(function (it) { return use.every(function (u) { return ok(it, u); }); });
+    // найближче до потрібного — першим, серед однакових — у наявності
+    items = items.map(function (it, i) { return [it, i, dist(it)]; }).sort(function (a, b) {
+      return (a[2] - b[2]) || (b[0].s - a[0].s) || (a[1] - b[1]);
+    }).map(function (x) { return x[0]; });
+    var note = use.map(function (u) { return QTY_TXT[u.k].replace('{}', String(+u.v.toFixed(2)).replace('.', ',')); }).join(', ');
+    return { total: items.length, partial: base.partial, items: items, cats: facet(items, 'k'), brands: facet(items, 'b'), fixed: base.fixed, qnote: note };
   }
   function searchCore(idx, query) {
     var qt = [];
@@ -4957,7 +5026,7 @@ scModule(37, function () {
     }
     var fx = top.length ? fixedText(q, r) : '';
     if (fx) html += '<div class="sc37-fix">Показано для: <b>' + esc(fx) + '</b></div>';
-    if (r.weight && top.length) html += '<div class="sc37-fix">Підходять для дверей вагою <b>' + esc(r.weight) + ' кг</b></div>';
+    if (r.qnote && top.length) html += '<div class="sc37-fix">Підходять: <b>' + esc(r.qnote) + '</b></div>';
     top.forEach(function (it, i) {
       html += '<a class="sc37-nav" href="' + esc(it.u) + '" data-i="' + i + '">' + (it.i ? '<img src="' + esc(it.i) + '" alt="" loading="lazy">' : '<span class="sc37-noimg"></span>') +
         '<span class="sc37-n">' + esc(it.n) + '<div class="sc37-p">' + price(it.p) + (it.s ? '' : '<span class="sc37-out">немає в наявності</span>') + '</div></span></a>';
@@ -5201,7 +5270,7 @@ scModule(37, function () {
         shown = Math.min(PAGE, arr.length);
         var fx = fixedText(q, r);
         box.innerHTML = (fx ? '<p class="sc37-note">Показано результати для «<b>' + esc(fx) + '</b>»</p>' : '') +
-          (r.weight ? '<p class="sc37-note">Лише ті, що підходять для дверей вагою <b>' + esc(r.weight) + ' кг</b> (за паспортом)</p>' : '') +
+          (r.qnote ? '<p class="sc37-note">Лише ті, що підходять: <b>' + esc(r.qnote) + '</b> (за характеристиками виробника)</p>' : '') +
           (r.partial ? '<p class="sc37-note">Точного збігу немає — схожі товари:</p>' : '') +
           chips('Категорія', 'k', facet(byBrand, 'k'), selCat) + chips('Бренд', 'b', facet(byCat, 'b'), selBrand) + attrRows() +
           '<div class="sc37-res__bar"><span>Знайдено: ' + arr.length + '</span><label><input type="checkbox"' + (onlyStock ? ' checked' : '') + '> лише в наявності</label>' +

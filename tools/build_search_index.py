@@ -25,6 +25,50 @@ FLAG_KEYS = {'PoE': 'PoE', 'Wi-Fi': 'Wi-Fi', 'Мікрофон': 'мікрофо
 # діапазон ваги, під який підходить товар (поле r індексу): «доводчик на двері 30 кг» → лише ті, де 30 кг у діапазоні
 RANGE_KEYS = {'Маса дверного полотна'}
 
+# числові характеристики для пошуку «від N» (поле q індексу, «pw:600,va:1000,ch:8»): «ДБЖ для котла 150 Вт»,
+# «реєстратор на 6 камер», «камера 50 м», «кабель hdmi 15 м»… Ключ: (параметр постачальника, що з нього брати)
+def _nums(v):
+    return [float(x.replace(',', '.')) for x in re.findall(r'\d+(?:[.,]\d+)?', v)]
+def _unit(v, units, mult=1):
+    """найбільше число, за яким іде одиниця з units (регулярний вираз), помножене на mult"""
+    vals = [float(m.group(1).replace(',', '.')) * mult for m in re.finditer(r'(\d+(?:[.,]\d+)?)\s*(?:' + units + r')(?![а-яa-z])', v, re.I)]
+    return max(vals) if vals else None
+QTY_RULES = [
+    # (ключ, параметри у порядку пріоритету, функція)
+    ('pw', ['Номінальна потужність', 'Потужність', 'Вихід змінного струму (AC)', 'Максимальна потужність', 'Вихідна потужність'],
+        lambda v: _unit(v, 'квт|kw', 1000) or _unit(v, 'вт|w')),
+    ('va', ['Потужність', 'Максимальна потужність'], lambda v: _unit(v, 'ква|kva', 1000) or _unit(v, 'ва|va')),
+    ('wh', ['Ємність', 'Максимальна енергоємність'], lambda v: _unit(v, r'квт\s?[*·]?\s?год|kwh', 1000) or _unit(v, r'вт\s?[*·]?\s?год|втг|wh')),
+    ('ah', ['Ємність акумулятора'], lambda v: _unit(v, r'ah|аг|а\s?[*·]?\s?год')),
+    ('mah', ['Ємність батареї'], lambda v: _unit(v, r'mah|ма\s?[*·]?\s?год|маг')),
+    ('ao', ['Вихідний струм'], lambda v: _unit(v, 'а|a')),
+    ('al', ['Максимальний струм навантаження'], lambda v: _unit(v, 'а|a')),
+    ('ai', ['Номінальний струм'], lambda v: _unit(v, 'а|a')),
+    ('ch', ['Кількість каналів IP'], lambda v: (_nums(v) or [None])[0]),
+    ('ir', ['Дальність підсвічування'], lambda v: _unit(v, 'м|m')),
+    ('hdd', ['Внутрішні HDD'], lambda v: _unit(v, 'тб|tb')),
+    ('kg', ['Навантаження'], lambda v: _unit(v, 'кг|kg')),
+    ('hold', ['Сила утримання'], lambda v: _unit(v, 'кг|kg')),
+    ('ab', ['Кількість абонентів'], lambda v: (_nums(v) or [None])[0]),
+    ('boom', ['Довжина стріли'], lambda v: _unit(v, 'м|m')),
+    ('len', ['Довжина кабелю', 'Довжина'], lambda v: _unit(v, 'м|m')),
+]
+def qty_of(params):
+    out = []
+    for key, names, fn in QTY_RULES:
+        for n in names:
+            v = params.get(n)
+            if not v:
+                continue
+            try:
+                x = fn(v)
+            except Exception:
+                x = None
+            if x:
+                out.append('%s:%g' % (key, x))
+                break
+    return ','.join(out)
+
 
 # --- нормалізація тексту — ТОЧНА копія normText() з модуля 37 safecity.js (PHRASES) ---
 # Робимо її тут, щоб браузер не ганяв ~20 регулярних виразів по кожному з 4,6 тис. товарів (≈1 с на ПК, кілька — на телефоні).
@@ -40,6 +84,8 @@ PHRASES = [
     (_R(_N + r'(?:mah|маг|ма·год|мач|ма·ч|ма год)\b>'), r'\1mah'),
     (_R(_N + r'(?:kwh|квт·год|квт\*год|квт год|квтг|квтч)\b>'), r'\1kwh'),
     (_R(_N + r'(?:wh|вт·год|вт\*год|вт год|втг|втч)\b>'), r'\1wh'),
+    (_R(_N + r'(?:kva|ква)\b>'), r'\1kva'),
+    (_R(_N + r'(?:va|ва)\b>'), r'\1va'),
     (_R(_N + r'(?:kw|квт|кв)\b>'), r'\1kw'),
     (_R(_N + r'(?:w|вт|vt|ват\S*)\b>'), r'\1w'),
     (_R(_N + r'(?:v|в|вольт\S*)\b>'), r'\1v'),
@@ -97,15 +143,16 @@ def main():
         except Exception as e:
             print('google feed failed:', e)
 
-    specs, ranges = {}, {}
+    specs, ranges, qtys = {}, {}, {}
     try:
         sroot = ET.fromstring(get(SUPPLIER, 300))
         for o in sroot.iter('offer'):
-            vals = []
+            vals, params = [], {}
             for p in o.findall('param'):
                 n, v = p.get('name', '').strip(), (p.text or '').strip()
                 if not v or v == '-':
                     continue
+                params.setdefault(n, v)
                 if n in RANGE_KEYS:                           # «25-60 кг» → '25-60', «180 кг» → '0-180'
                     m = re.match(r'^\s*(?:(\d+(?:[.,]\d+)?)\s*[-–]\s*)?(\d+(?:[.,]\d+)?)\s*кг', v)
                     if m:
@@ -125,6 +172,9 @@ def main():
                     if part and k not in seen:
                         seen.add(k); out.append(part)
             specs[o.get('id')] = ' '.join(out)[:200]
+            q = qty_of(params)
+            if q:
+                qtys[o.get('id')] = q
     except Exception as e:
         print('supplier feed failed:', e)
 
@@ -153,13 +203,14 @@ def main():
         it_.append(norm_text((it_[5] or '') + ' ' + (it_[6] or '')))    # wo — бренд + розділ
         it_.append(norm_text(it_[8]))                                   # wx — характеристики
         it_.append(ranges.get(code, ''))                                # r — діапазон ваги дверей, кг («25-60»)
+        it_.append(qtys.get(code, ''))                                  # q — числові характеристики («pw:600,va:1000»)
     if len(items) < 1000:
         sys.exit('too few items (%d) — keeping old index' % len(items))
-    data = {'v': 2, 'f': ['n', 'u', 'p', 's', 'i', 'b', 'k', 'c', 'x', 'wn', 'wo', 'wx', 'r'], 'items': items}
+    data = {'v': 2, 'f': ['n', 'u', 'p', 's', 'i', 'b', 'k', 'c', 'x', 'wn', 'wo', 'wx', 'r', 'q'], 'items': items}
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
-    print('items', len(items), 'without code', nocode, 'with ranges', sum(1 for i in items if i[12]), 'with specs', sum(1 for i in items if i[8]), 'bytes', os.path.getsize(OUT))
+    print('items', len(items), 'without code', nocode, 'with ranges', sum(1 for i in items if i[12]), 'with qty', sum(1 for i in items if i[13]), 'with specs', sum(1 for i in items if i[8]), 'bytes', os.path.getsize(OUT))
 
 
 if __name__ == '__main__':
