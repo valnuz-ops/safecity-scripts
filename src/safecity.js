@@ -4696,6 +4696,7 @@ scModule(37, function () {
     var unitOnly = qt.map(function (q) {
       return /^\d{2,4}$/.test(q) && qt.length > 1 && idx.docs.some(function (d) { return numHit(d, q); });
     });
+    var wantAcc = alts.some(function (al) { return al.some(function (a) { return ACC_RE.test(a.t); }); });
     var res = [];
     idx.docs.forEach(function (doc) {
       var sum = 0, hit = 0;
@@ -4711,6 +4712,8 @@ scModule(37, function () {
       if (alts.some(function (al) { return al.some(function (a) { return a.t.length > 3 && doc.cat.indexOf(a.t) >= 0; }); })) score += 0.3;
       if (doc.it.s) score += 0.4;   // у наявності — вище за «тип у назві» (0.35)
       if (qt.length > 1 && inName === qt.length) score += 0.3;   // усі слова в назві — вище, ніж збіг лише за характеристиками
+      // аксесуари (кронштейни, коробки, корпуси, кріплення) — нижче, якщо їх не шукали: «дахуа», «ajax» → спершу самі пристрої
+      if (!wantAcc && ACC_RE.test(doc.cat + ' ' + doc.first.join(' '))) score -= 0.45;
       res.push({ doc: doc, score: score, hit: hit, full: hit === qt.length });
     });
     var full = res.filter(function (r) { return r.full; }), list = full;
@@ -4749,6 +4752,7 @@ scModule(37, function () {
     ATTR_FLAGS.forEach(function (fl) { for (var i = 0; i < fl.length; i++) if (i !== 1 && all[fl[i]]) { a.f[fl[0]] = 1; break; } });
     return (it._a = a);
   }
+  var ACC_RE = /аксесуар(?!и для старлінк)|задн|накладн|модул|піддаш|рамк|чохол|кронштейн|монтажн|коробк|кріплен|корпус|бокс|адаптер|козирок|тримач|smartbracket|dummybox|кліпс/;
   // категорії / бренди серед знайденого: що частіше у верхніх результатах — вище
   function facet(items, key) {
     var w = {}, n = {};
