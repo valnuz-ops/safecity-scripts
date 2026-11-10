@@ -4396,13 +4396,20 @@ scModule(37, function () {
   function tokSet(toks, set) {
     (typeof toks === 'string' ? normText(toks) : toks).forEach(function (t) {
       set[t] = 1; set[stem(t)] = 1;
-      t.split('-').forEach(function (p) { if (p) set[p] = 1; });
+      t.split(/[-+]/).forEach(function (p) { if (p) set[p] = 1; });   // «em-marine+mifare» → em, marine, mifare
       var c = compact(t); if (c.length > 2) set[c] = 1;
     });
     return set;
   }
 
   // Збирає індекс частинами по ~30 мс, віддаючи браузеру керування між ними, — сторінка не «замерзає» (на телефоні збірка ≈1 с)
+  // наступна порція — через MessageChannel (setTimeout у фонових вкладках гальмується до 1 с)
+  var later = (function () {
+    if (!window.MessageChannel) return function (fn) { setTimeout(fn, 0); };
+    var ch = new MessageChannel(), q = [];
+    ch.port1.onmessage = function () { var f = q.shift(); if (f) f(); };
+    return function (fn) { q.push(fn); ch.port2.postMessage(0); };
+  })();
   function buildIndex(data, done) {
     var f = data.f, vocab = {}, rows = data.items, docs = [], i = 0;
     function one(row) {
@@ -4431,7 +4438,7 @@ scModule(37, function () {
     (function chunk() {
       var t0 = Date.now();
       while (i < rows.length && Date.now() - t0 < 30) docs.push(one(rows[i++]));
-      if (i < rows.length) return setTimeout(scSafe(37, chunk), 0);
+      if (i < rows.length) return later(scSafe(37, chunk));
       var byUrl = {};
       docs.forEach(function (d) { byUrl[d.it.u] = d.it; });
       done({ docs: docs, vocab: vocab, vocabList: Object.keys(vocab), byUrl: byUrl });
@@ -4784,12 +4791,13 @@ scModule(39, function () {
     switch (k) {
       case 'Відеокамери':
         if (/wi-?fi|imou|ezviz/i.test(n)) return [R("карта пам'яті microsd", 2, NOTE.sd)];
-        if (/^IP/.test(n)) return [noSwitch && R('poe-комутатор некерований', 1, NOTE.poe), R('кабель вита пара utp cat5e', 1, NOTE.utp), R('патч-корд мережевий utp', 1, NOTE.patch), R("карта пам'яті microsd", 1, NOTE.sd)];
+        if (/^IP/.test(n)) return [b === 'Ajax' && !has(cart, /nvr|реєстратор/i) && R('відеореєстратор ajax nvr', 1, 'Запис камер Ajax'), noSwitch && R('poe-комутатор некерований', 1, NOTE.poe), R('кабель вита пара utp cat5e', 1, NOTE.utp), R('патч-корд мережевий utp', 1, NOTE.patch)];
         return [R('блок живлення 12v', 1, 'Живлення камер 12 В'), R('кабель коаксіальний rg-59', 1, 'Кабель від камери до реєстратора')];
       case 'Відеореєстратори':
         if (/^Нагрудний/.test(n)) return [];
         return [R('жорсткий диск purple', 2, NOTE.hdd), ip && !/poe/i.test(n) && noSwitch && R('poe-комутатор некерований', 1, NOTE.poe), R('кабель hdmi 2.0', 1, NOTE.hdmi)];
       case 'Відеодомофони':
+        if (/^відеодзвінок|дзвінок/i.test(n)) return [];   // відеодзвінок сам по собі, замок і панель йому не потрібні
         return [R('відеопанель ' + b, 2, 'Панель того ж бренду', function (x) { return /^IP-/.test(x.n) === ip && x.k === 'Відеопанелі'; }),
           noLock && R('замок електромагнітний', 1, NOTE.lock), R("карта пам'яті microsd", 1, 'Запис відвідувачів (якщо є слот microSD)')];
       case 'Відеопанелі':
