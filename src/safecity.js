@@ -4507,7 +4507,7 @@ scModule(37, function () {
       if (!hit) return;
       var score = sum / qt.length + (hit === qt.length ? 1 : 0);
       // слово-тип (відеокамера, комутатор…) з будь-якого місця запиту = перше слово назви
-      if (alts.some(function (al) { return al.some(function (a) { return a.t.length > 3 && doc.first.some(function (f) { return f === a.t || f.indexOf(stem(a.t)) === 0; }); }); })) score += 0.35;
+      if (alts.some(function (al) { return al.some(function (a) { return a.t.length >= 3 && doc.first.some(function (f) { return f === a.t || f.indexOf(stem(a.t)) === 0; }); }); })) score += 0.35;
       if (alts.some(function (al) { return al.some(function (a) { return a.t.length > 3 && doc.cat.indexOf(a.t) >= 0; }); })) score += 0.3;
       if (doc.it.s) score += 0.4;   // у наявності — вище за «тип у назві» (0.35)
       res.push({ doc: doc, score: score, full: hit === qt.length });
