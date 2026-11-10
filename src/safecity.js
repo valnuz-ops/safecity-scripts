@@ -5709,8 +5709,16 @@ scModule(39, function () {
   // (inject нічого не робить, коли кошик закритий або блок для цього набору товарів уже стоїть).
   var pend = 0;
   scIdle(scSafe(39, function () {
-    new MutationObserver(function () {
-      if (!pend) pend = setTimeout(function () { pend = 0; scSafe(39, inject)(); }, 400);
+    new MutationObserver(function (recs) {
+      if (pend) return;
+      // лише зміни всередині кошика (слайдер на головній тощо не будять inject і не змушують перераховувати макет)
+      for (var i = 0; i < recs.length; i++) {
+        var t = recs[i].target;
+        if (t.closest && t.closest('#cart, #cart-drawer, .j-cart-body, #checkout-container')) {
+          pend = setTimeout(function () { pend = 0; scSafe(39, inject)(); }, 400);
+          return;
+        }
+      }
     }).observe(document.body, { childList: true, subtree: true });
   }));
 });
