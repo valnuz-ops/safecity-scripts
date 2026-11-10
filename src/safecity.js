@@ -4163,9 +4163,26 @@ scModule(36, function () {
   // збіг з точністю до округлення поля (22.5 Вт у тексті → 23 у полі)
   function same(x, v) { return Math.abs(x - v) < 0.01 || Math.round(x) === v; }
 
+  // «Застосування» з фіду постачальника, яке звужує або плутає призначення (HDMI-кабель «Для проєкторів»)
+  var APPLY_HIDE = { 'кабель hdmi': 1 };
+
+  function hideApply(rows) {
+    var type = '';
+    [].forEach.call(rows, function (r) {
+      var c = cells(r);
+      if (c && /^тип пристрою$/i.test(c[0].textContent.replace(/\s+/g, ' ').trim())) type = c[1].textContent.replace(/\s+/g, ' ').trim().toLowerCase();
+    });
+    if (!APPLY_HIDE[type]) return;
+    [].forEach.call(rows, function (r) {
+      var c = cells(r);
+      if (c && /^застосування$/i.test(c[0].textContent.replace(/\s+/g, ' ').trim())) r.style.display = 'none';
+    });
+  }
+
   function init() {
     var rows = document.querySelectorAll('.product-features__row');
     if (!rows.length) return;
+    hideApply(rows);
     [].forEach.call(rows, function (r) {
       if (r.getAttribute('data-sc-num')) return;
       var c = cells(r);
