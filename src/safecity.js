@@ -4416,7 +4416,13 @@ scModule(37, function () {
       if (it.c) codes.push(compact(it.c));
       Object.keys(main).forEach(function (t) { vocab[t] = 1; });
       var first = [];
-      nameToks.slice(0, 4).forEach(function (t, j) { if (j === 0) first.push(stem(t)); if (/[а-яіїєґ]{4}/.test(t)) t.split('-').forEach(function (p) { if (p.length > 3) first.push(stem(p)); }); });
+      // слово-тип — серед перших слів назви до «для / з / під» («ДБЖ для роутера» — це ДБЖ, не роутер)
+      for (var j = 0; j < Math.min(4, nameToks.length); j++) {
+        var t = nameToks[j];
+        if (/^(для|з|із|під|на|та|і)$/.test(t)) break;
+        if (j === 0) first.push(stem(t));
+        if (/[а-яіїєґ]{4}/.test(t)) t.split('-').forEach(function (p) { if (p.length > 3) first.push(stem(p)); });
+      }
       return { it: it, toks: Object.keys(main), xt: Object.keys(extra), first: first, len: it.n.length, codes: codes, cat: lower(it.k) };
     });
     var byUrl = {};
@@ -4471,7 +4477,7 @@ scModule(37, function () {
     var best = 0;
     for (var a = 0; a < alts.length; a++) {
       var t = alts[a].t, w = alts[a].w;
-      best = Math.max(best, w * matchIn(doc.toks, t), w * 0.6 * matchIn(doc.xt, t));
+      best = Math.max(best, w * matchIn(doc.toks, t), w * 0.45 * matchIn(doc.xt, t));
       if (t.length >= 4 && /\d/.test(t)) for (var c = 0; c < doc.codes.length; c++) {
         var p = doc.codes[c].indexOf(t);
         if (p >= 0) best = Math.max(best, w * (p === 0 ? 1 : 0.85));
