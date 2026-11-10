@@ -5720,7 +5720,8 @@ scModule(40, function () {
 
   // стан кошика з шапки й прихованого вікна кошика Хорошопу
   function cart() {
-    var q = document.querySelector('.j-basket-quantity'), s = document.querySelector('.j-basket-total-sum');
+    var q = document.querySelector('.j-basket-quantity, .j-mini-cart-quantity'),        // ПК / мобільна
+        s = document.querySelector('.j-basket-total-sum, .j-mini-cart-total');
     var n = q ? parseInt(q.textContent.replace(/\D/g, ''), 10) || 0 : 0;
     if (!n) return null;
     var li = document.querySelector('#cart .j-cart-product');
@@ -5733,6 +5734,7 @@ scModule(40, function () {
     };
   }
   function cartOpen() {
+    if (/mm-wrapper_opened|mm-opened/.test(document.documentElement.className + ' ' + document.body.className)) return true;   // мобільне меню/кошик
     var c = document.getElementById('cart');
     return !!(c && c.offsetParent !== null && c.getBoundingClientRect().height > 50);
   }
