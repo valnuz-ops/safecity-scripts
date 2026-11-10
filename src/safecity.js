@@ -4393,7 +4393,7 @@ scModule(37, function () {
     for (var k = 0; k < toks.length; k++) {
       var d = toks[k];
       if (d === t) return 1;
-      if (t.length >= 2 && d.indexOf(t) === 0) best = /\d/.test(t) ? 0.9 : 0.8;
+      if ((t.length >= 2 || /\d/.test(t)) && d.indexOf(t) === 0) best = /\d/.test(t) ? 0.9 : 0.8;
     }
     return best;
   }
