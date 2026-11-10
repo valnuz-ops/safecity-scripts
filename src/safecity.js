@@ -315,6 +315,39 @@ function scCheckout() { return document.getElementById('checkout-container') || 
 // Текст обраного пункту <select>
 function scOptText(s) { return s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].textContent.trim() : ''; }
 
+/* --- Доставка Новою поштою з Києва (блоки 1 — картка товару, 11 — оформлення) ---
+ * Тарифи «Посилки до 30 кг» (між відділеннями, за кожне місце), жовтень 2026 */
+var SC_NP = {
+  freeFrom: 3000,               // від цієї суми доставка безкоштовна (блок 5)
+  maxKg: 30,                    // більше — «вартість уточнимо»
+  defaultKg: 1,                 // вага товару, якщо в характеристиках немає «Вага»
+  local: [[2, 70], [10, 115], [30, 180]],     // Київ → Київ
+  ukraine: [[2, 90], [10, 135], [30, 200]],   // Київ → інші міста
+  village: 30,                  // доставка в селище / село
+  postomat: 10,                 // доставка в поштомат
+  courier: 60,                  // адресна доставка кур'єром (тарифи НП 2026: +60 грн до тарифу відділення)
+  insFree: 500, insPct: 0.005,  // оголошена вартість: до 500 грн включно — без доплати, далі 0,5%
+  extra: 15,                    // службова надбавка (не показується окремо)
+  roundTo: 5
+};
+// Вага з тексту: «1,5 кг» → 1.5, «800 г» → 0.8; немає — 0
+function scKg(s) {
+  var m = String(s).replace(',', '.').match(/(\d+(?:\.\d+)?)\s*(кг|kg|г|g)(?![a-zа-яіїєґ])/i);
+  if (!m) return 0;
+  var v = parseFloat(m[1]);
+  return /^(г|g)$/i.test(m[2]) ? v / 1000 : v;
+}
+// Орієнтовна вартість: вага посилки, сума замовлення, Київ чи ні, доплати (село, кур'єр…); понад 30 кг — 0
+function scNpPrice(kg, sum, local, add) {
+  var t = local ? SC_NP.local : SC_NP.ukraine, p = 0;
+  for (var i = 0; i < t.length; i++) if (kg <= t[i][0]) { p = t[i][1]; break; }
+  if (!p) return 0;
+  p += add || 0;
+  if (sum > SC_NP.insFree) p += sum * SC_NP.insPct;
+  p += SC_NP.extra;
+  return Math.round(p / SC_NP.roundTo) * SC_NP.roundTo;   // до найближчих 5 грн
+}
+
 /* --- Блоки «підберіть до товару» з картками товарів (2, 3, 9, 19) --- */
 // Товар із переліку підбору (url відносно мови сайту) → дані для картки, або null, якщо ok(p) відхилив
 function scPickLoad(pick, ok) {
@@ -664,12 +697,36 @@ scModule(1, function () {
     return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());
   };
 
+  // Вартість доставки одразу на картці (до кошика): «Нова пошта ≈ 105 грн · від 3000 грн — безкоштовно».
+  // Вага — з характеристик картки, ціна — зі schema.org; тариф «Київ → інші міста» (блок 11 рахує точніше за містом)
+  var dlvLine = null;
+  function deliveryLine() {
+    if (dlvLine !== null) return dlvLine;
+    var pm = document.querySelector('[itemprop="offers"] [itemprop="price"], .product-card__price [itemprop="price"]');
+    var price = pm ? parseFloat(pm.getAttribute('content')) : 0;
+    if (!price) return '';                                   // ціна ще не намальована — спробуємо наступного разу
+    var kg = 0;
+    [].some.call(document.querySelectorAll('tr'), function (tr) {
+      if (tr.children.length === 2 && /^\s*вага\s*$/i.test(tr.children[0].textContent)) { kg = scKg(tr.children[1].textContent); return kg > 0; }
+      return false;
+    });
+    var free = scNum(SC_NP.freeFrom).toLocaleString('uk-UA');
+    if (price >= SC_NP.freeFrom) dlvLine = 'Доставка Новою поштою — <b>безкоштовно</b>';
+    else {
+      var p = scNpPrice(kg || SC_NP.defaultKg, price, false, 0);
+      dlvLine = p ? 'Доставка Новою поштою ≈ ' + p + ' грн · від ' + free + ' грн — безкоштовно'
+                  : 'Доставка Новою поштою за тарифами перевізника · від ' + free + ' грн — безкоштовно';
+    }
+    return dlvLine;
+  }
+
   function render(box) {
     var t = buildText();
+    var dl = deliveryLine();
     var html =
       '<span class="ship-info__icon" aria-hidden="true">🚚</span> ' +
       '<strong>' + t.main + '</strong>' +
-      t.lines.map(function (l) {
+      t.lines.concat(dl ? [dl] : []).map(function (l) {
         return '<div class="ship-info__sub">' + l + '</div>';
       }).join('');
     // щохвилинне оновлення: не перемальовуємо без змін (зайві мутації будять спостерігачі блоків 1 і 5)
@@ -2189,28 +2246,11 @@ scModule(11, function () {
   'use strict';
   if (location.pathname.indexOf('/checkout') === -1) return;
 
-  var CFG = {
-    defaultKg: 1,                 // вага товару, якщо в характеристиках немає «Вага»
-    maxKg: 30,                    // більше — «вартість уточнимо»
-    freeFrom: 3000,               // від цієї суми доставка безкоштовна (блок 5)
-    local: [[2, 70], [10, 115], [30, 180]],     // Київ → Київ
-    ukraine: [[2, 90], [10, 135], [30, 200]],   // Київ → інші міста
-    village: 30,                  // доставка в селище / село
-    postomat: 10,                 // доставка в поштомат
-    courier: 60,                  // адресна доставка кур'єром (тарифи НП 2026: +60 грн до тарифу відділення)
-    insFree: 500, insPct: 0.005,  // оголошена вартість: до 500 грн включно — без доплати, далі 0,5%
-    extra: 15,                    // службова надбавка (не показується окремо)
-    roundTo: 5
-  };
+  var CFG = SC_NP;              // тарифи — загальні з карткою товару (блок 1)
 
   /* ---- вага товару з картки (кеш у браузері на 7 днів) ---- */
   var wMem = {};
-  function parseKg(s) {
-    var m = String(s).replace(',', '.').match(/(\d+(?:\.\d+)?)\s*(кг|kg|г|g)(?![a-zа-яіїєґ])/i);
-    if (!m) return 0;
-    var v = parseFloat(m[1]);
-    return /^(г|g)$/i.test(m[2]) ? v / 1000 : v;
-  }
+  var parseKg = scKg;
   function weightOf(url) {
     if (wMem[url]) return wMem[url];
     try {
@@ -2248,7 +2288,6 @@ scModule(11, function () {
     var t = document.querySelector('.j-total-sum');
     return t ? scSum(t.textContent) : 0;
   }
-  function tier(table, kg) { for (var i = 0; i < table.length; i++) if (kg <= table[i][0]) return table[i][1]; return 0; }
 
   var CSS = '#sc-co-dlv-aside{margin:-2px 0 10px;padding:0 24px;text-align:right;font-size:13px;color:#5f6b78;list-style:none}' +
     'li#sc-co-dlv-aside{margin-top:-14px;padding-right:0}' +
@@ -2299,14 +2338,12 @@ scModule(11, function () {
       list.forEach(function (it, n) { kg += (ws[n] || CFG.defaultKg) * it.qty; });
       if (kg > CFG.maxKg) { window.scDlvPrice = 0; return render(lastText = 'Доставка Новою поштою: вартість для посилки понад 30 кг уточнимо після оформлення.', lastShort = 'вартість уточнимо'); }
       var local = /^(м\.\s*)?Київ$/i.test(city.replace(/\s*\(.*\)\s*$/, ""));
-      var price = tier(local ? CFG.local : CFG.ukraine, kg);
-      if (!local && /^(с\.|смт|сел\.|с-ще|селище)/i.test(city)) price += CFG.village;
+      var add = 0;
+      if (!local && /^(с\.|смт|сел\.|с-ще|селище)/i.test(city)) add += CFG.village;
       var courier = /кур/i.test(typeText);
-      if (courier) price += CFG.courier;
-      else if (/поштомат/i.test(typeText) || /поштомат/i.test(whText)) price += CFG.postomat;
-      if (sum > CFG.insFree) price += sum * CFG.insPct;
-      price += CFG.extra;
-      price = Math.round(price / CFG.roundTo) * CFG.roundTo;   // до найближчих 5 грн
+      if (courier) add += CFG.courier;
+      else if (/поштомат/i.test(typeText) || /поштомат/i.test(whText)) add += CFG.postomat;
+      var price = scNpPrice(kg, sum, local, add);
       window.scDlvPrice = price;
       render(lastText = (courier ? 'Доставка кур’єром Нової пошти' : 'Доставка Новою поштою') + ' — орієнтовно ' + price + ' грн, оплачується при отриманні за тарифами перевізника.', lastShort = 'орієнтовно ≈ ' + price + ' грн');
     }, function () { busy = false; });
@@ -5657,6 +5694,108 @@ scModule(39, function () {
     [400, 1200, 2500].forEach(function (t) { setTimeout(scSafe(39, inject), t); });
   }), true);
   scIdle(scSafe(39, inject));   // сторінка /checkout або відкритий кошик після перезавантаження
+});
+
+
+/* =====================================================================
+ * 40. «Ваш кошик чекає» — нагадування гостям про незавершене замовлення (10.11.2026)
+ *     Лист Хорошопу про покинутий кошик ходить лише зареєстрованим з e-mail (Horoshop Club t/492),
+ *     а більшість купує без реєстрації. Кошик Хорошоп зберігає на сервері, тож при поверненні він на місці:
+ *     - повернувся на сайт через ≥ 1 год після останнього перегляду з товарами в кошику → плашка внизу
+ *       «У кошику 2 товари на 4 350 грн · Оформити замовлення»;
+ *     - ПК: курсор пішов за верх вікна (закрити вкладку / перейти) — та сама плашка, раз за сеанс,
+ *       не раніше ніж через 20 с на сайті.
+ *     Не показуємо на оформленні, сторінці «замовлення отримано» й коли відкрите вікно кошика.
+ *     Закрили ✕ — до наступного повернення. GA4: sc_cartrem_view / sc_cartrem_click (why: return | exit).
+ * ===================================================================== */
+scModule(40, function () {
+  'use strict';
+  if (/\/checkout/i.test(location.pathname)) return;
+  var LS = 'sc40', SS = 'sc40-shown', GAP = 3600e3, EXIT_AFTER = 20e3, t0 = Date.now();
+
+  function ga(ev, p) { try { if (typeof window.gtag === 'function') window.gtag('event', ev, p); } catch (x) {} }
+  function get(st, k) { try { return st.getItem(k); } catch (e) { return null; } }
+  function set(st, k, v) { try { st.setItem(k, v); } catch (e) {} }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  // стан кошика з шапки й прихованого вікна кошика Хорошопу
+  function cart() {
+    var q = document.querySelector('.j-basket-quantity'), s = document.querySelector('.j-basket-total-sum');
+    var n = q ? parseInt(q.textContent.replace(/\D/g, ''), 10) || 0 : 0;
+    if (!n) return null;
+    var li = document.querySelector('#cart .j-cart-product');
+    var a = li && (li.querySelector('.cart-title a, .cart-item__title a, .order-i-title a') || li.querySelector('a[href^="/"]'));
+    var img = li && li.querySelector('img');
+    return {
+      n: n, sum: s ? scSum(s.textContent) : 0,
+      name: a ? a.textContent.replace(/\s+/g, ' ').trim() : '',
+      img: img ? img.getAttribute('src') || img.getAttribute('data-src') || '' : ''
+    };
+  }
+  function cartOpen() {
+    var c = document.getElementById('cart');
+    return !!(c && c.offsetParent !== null && c.getBoundingClientRect().height > 50);
+  }
+
+  var CSS =
+    '#sc40{position:fixed;z-index:360;left:50%;bottom:16px;transform:translate(-50%,140%);width:min(460px,calc(100% - 24px));box-sizing:border-box;' +
+    'display:flex;align-items:center;gap:12px;padding:12px 40px 12px 12px;background:#fff;border:1px solid #cfe5cf;border-radius:12px;' +
+    'box-shadow:0 8px 28px rgba(0,0,0,.16);transition:transform .25s ease;font-size:14px;line-height:1.35;color:#1d2733}' +
+    '#sc40.on{transform:translate(-50%,0)}' +
+    '#sc40.top{bottom:auto;top:16px;transform:translate(-50%,-140%)}#sc40.top.on{transform:translate(-50%,0)}' +
+    'body.sc-sticky-pad #sc40{bottom:84px}' +
+    '#sc40 img{flex:0 0 52px;width:52px;height:52px;object-fit:contain;border-radius:6px;background:#f6f8f6}' +
+    '#sc40 .sc40-t{flex:1;min-width:0}' +
+    '#sc40 .sc40-h{font-weight:700;font-size:15px}' +
+    '#sc40 .sc40-n{display:block;color:#5f6b78;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}' +
+    '#sc40 .sc40-go{display:inline-block;margin-top:7px;padding:7px 14px;border-radius:8px;background:#2a9d4a;color:#fff;font-weight:600;text-decoration:none}' +
+    '#sc40 .sc40-go:hover{background:#1f7a39;color:#fff}' +
+    '#sc40 .sc40-x{position:absolute;top:6px;right:6px;width:30px;height:30px;border:0;background:none;font-size:20px;line-height:30px;color:#8a95a1;cursor:pointer;padding:0}';
+
+  function show(why) {
+    var c = cart();
+    if (!c || document.getElementById('sc40') || cartOpen() || get(sessionStorage, SS)) return;
+    set(sessionStorage, SS, why);
+    scStyle('sc40-css', CSS);
+    var box = document.createElement('div');
+    box.id = 'sc40';
+    if (why === 'exit') box.className = 'top';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', 'Ваш кошик');
+    var goods = c.n + ' ' + (c.n % 10 === 1 && c.n % 100 !== 11 ? 'товар' : c.n % 10 >= 2 && c.n % 10 <= 4 && (c.n % 100 < 10 || c.n % 100 >= 20) ? 'товари' : 'товарів');
+    box.innerHTML = (c.img ? '<img src="' + esc(c.img) + '" alt="">' : '') +
+      '<div class="sc40-t"><div class="sc40-h">' + (why === 'exit' ? 'Не забудьте про кошик' : 'Ваш кошик чекає') + '</div>' +
+      '<span class="sc40-n">' + goods + (c.sum ? ' на ' + Math.round(c.sum).toLocaleString('uk-UA') + ' грн' : '') +
+      (c.name ? ' · ' + esc(c.name) : '') + '</span>' +
+      '<a class="sc40-go" href="' + SC_LANG + '/checkout/">Оформити замовлення →</a></div>' +
+      '<button type="button" class="sc40-x" aria-label="Закрити">×</button>';
+    box.querySelector('.sc40-x').addEventListener('click', function () { box.classList.remove('on'); setTimeout(function () { box.remove(); }, 300); });
+    box.querySelector('.sc40-go').addEventListener('click', function () { ga('sc_cartrem_click', { why: why, items: c.n, value: c.sum }); });
+    document.body.appendChild(box);
+    setTimeout(function () { box.classList.add('on'); }, 30);
+    ga('sc_cartrem_view', { why: why, items: c.n, value: c.sum, non_interaction: true });
+  }
+
+  function start() {
+    if (/checkout.*complete|complete.*order/i.test(location.pathname)) { set(localStorage, LS, ''); return; }
+    var prev = parseInt(get(localStorage, LS), 10) || 0;
+    var c = cart();
+    set(localStorage, LS, c ? String(Date.now()) : '');            // останній перегляд із товарами в кошику
+    if (c && prev && Date.now() - prev >= GAP) setTimeout(scSafe(40, function () { show('return'); }), 2500);
+
+    // ПК: курсор вийшов за верх вікна
+    if (window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      document.addEventListener('mouseout', scSafe(40, function (e) {
+        if (e.relatedTarget || e.clientY > 0 || Date.now() - t0 < EXIT_AFTER) return;
+        show('exit');
+      }));
+    }
+    // кошик змінився на цій сторінці — оновлюємо мітку часу
+    document.addEventListener('click', function () {
+      setTimeout(function () { if (cart()) set(localStorage, LS, String(Date.now())); }, 2500);
+    }, true);
+  }
+  scIdle(scSafe(40, start));
 });
 
 /* =====================================================================
