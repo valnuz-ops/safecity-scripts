@@ -1,0 +1,16 @@
+name: live-test
+on:
+  push:
+    branches: [live-test]
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+          for u in "https://safecity.in.ua/aksesuary-dlia-starlinka/" "https://safecity.in.ua/kabel-zhyvlennia-ta-peredachi-danykh-2-v-1-dcethernet-dlia-starlink-mini-z-perekhidnykom-type-c-5m/" "https://safecity.in.ua/katalog/search/?q=starlink" "https://safecity.in.ua/aksesuary-dlia-starlinka/page-2/"; do
+            curl -sS -A "$UA" -H "Accept-Language: uk" -o p.html -w "%{http_code} %{size_download} $u\n" "$u"
+            echo "cards: $(grep -c 'catalogCard-availability' p.html)  avail-texts: $(grep -o 'catalogCard-availability[^<]*<[^<]*' p.html | head -3 | tr '\n' ' ')"
+            grep -o 'product-header__availability[^<]*<[^<]*' p.html | head -2
+            grep -o '<title>[^<]*' p.html | head -1
+          done
