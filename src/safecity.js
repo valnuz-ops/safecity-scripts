@@ -4326,6 +4326,10 @@ scModule(36, function () {
  *     • у підказках — категорії й бренди знайденого (ведуть на сторінку результатів з фільтром &k= / &b=);
  *     • порожнє поле — «Ви шукали» (6 останніх запитів, localStorage sc37-hist, кнопка «Очистити»);
  *     • сторінка результатів — фільтри «Категорія» і «Бренд» (у посиланні), GA4: sc_search_facet.
+ *     • з реальних запитів (GA4 sc_search + Search Console): англійські слова (battery, inverter…), русизми,
+ *       слова через дефіс; «Показано для: камера» при виправленні; фільтри за характеристиками
+ *       (Мп, канали, порти, Ah / mAh, Вт, PoE, Wi-Fi, вулична…, &a=); голосовий пошук (мікрофон у полі);
+ *       GA4: sc_search_zero / sc_search_partial / sc_search_fixed / sc_search_voice — для тижневого звіту.
  * ===================================================================== */
 var SC_SEARCH_ON = true;    // true — для всіх відвідувачів
 var SC_SEARCH_INDEX = 'https://valnuz-ops.github.io/safecity-scripts/search/index.json';
@@ -4442,10 +4446,22 @@ scModule(37, function () {
     'старлинк': ['starlink'], 'старлінк': ['starlink'], 'starlink': ['starlink'], 'мини': ['mini'], 'міні': ['mini'], 'тарелка': ['starlink'], 'кейс': ['кейс', 'чохол', 'сумка'], 'чехол': ['чохол', 'кейс'], 'чохол': ['чохол', 'кейс'],
     'жесткие': ['жорсткий'], 'жорсткі': ['жорсткий'], 'терабайт': ['tb'], 'гигабайт': ['gb']
   };
+  // з реальних запитів: пошук на сайті (GA4 sc_search) і Google (Search Console), 10.11.2026
+  var SYN4 = {
+    'battery': ['акумулятор'], 'batteries': ['акумулятор'], 'batteria': ['акумулятор'], 'lithium': ['lifepo4', 'li-ion', 'літієвий'], 'iron': ['lifepo4'], 'lifepo': ['lifepo4'],
+    'inverter': ['інвертор'], 'cable': ['кабель'], 'monitor': ['монітор'], 'monitors': ['монітор'], 'мониторы': ['монітор'], 'siren': ['сирена'], 'card': ['карта'], 'micro': ['microsd', 'microsdxc'], 'sdxc': ['microsdxc'], 'microsdxc': ['microsdxc'],
+    'lock': ['замок'], 'charger': ['зарядний'], 'bracket': ['кронштейн'], 'camera': ['відеокамера'], 'recorder': ['відеореєстратор'], 'intercom': ['домофон'], 'doorbell': ['відеодзвінок'], 'sensor': ['датчик'], 'detector': ['датчик'],
+    'solar': ['сонячна'], 'panel': ['панель'], 'station': ['зарядна'], 'adapter': ['адаптер', 'перехідник'], 'mount': ['кріплення', 'кронштейн'], 'case': ['кейс', 'чохол'], 'speaker': ['гучномовець'],
+    'розподільчий': ['розподільна'], 'розподільча': ['розподільна'], 'розподільчу': ['розподільна'], 'розподільчі': ['розподільна'], 'распределительный': ['розподільна'], 'распределительная': ['розподільна'],
+    'коммутационная': ['комутаційна', 'монтажна', 'розподільна'], 'коммутационный': ['комутаційна', 'монтажна'], 'комутаційний': ['комутаційна', 'монтажна'], 'комутаційна': ['комутаційна', 'монтажна'],
+    'екранований': ['ftp', 'екранований'], 'экранированный': ['ftp', 'екранований'], 'перекидний': ['перемикач', 'авр'], 'перекидной': ['перемикач', 'авр'], 'виносний': ['кронштейн'], 'выносной': ['кронштейн'],
+    'прикурювач': ['прикурювач'], 'прикуриватель': ['прикурювач'], 'прикулювач': ['прикурювач'], 'триподы': ['трипод'], 'турникеты': ['турнікет'], 'напряжения': ['напруги'], 'защиты': ['захисту'], 'нагрудный': ['нагрудний']
+  };
+  Object.keys(SYN4).forEach(function (k) { SYN3[k] = SYN3[k] ? SYN3[k].concat(SYN4[k]) : SYN4[k]; });
   Object.keys(SYN3).forEach(function (k) { SYN2[k] = SYN2[k] ? SYN2[k].concat(SYN3[k]) : SYN3[k]; });
   Object.keys(SYN2).forEach(function (k) { SYN[k] = SYN[k] ? SYN[k].concat(SYN2[k].filter(function (x) { return SYN[k].indexOf(x) < 0; })) : SYN2[k]; });
   var SYN_KEYS = Object.keys(SYN).filter(function (k) { return k.length >= 4 && /^[a-zа-яіїєґ']+$/.test(k); });
-  var STOP = { 'для': 1, 'і': 1, 'и': 1, 'та': 1, 'з': 1, 'с': 1, 'на': 1, 'в': 1, 'у': 1, 'до': 1, 'по': 1, 'от': 1, 'від': 1, 'купити': 1, 'купить': 1, 'ціна': 1, 'цена': 1 };
+  var STOP = { 'для': 1, 'і': 1, 'и': 1, 'та': 1, 'з': 1, 'с': 1, 'на': 1, 'в': 1, 'у': 1, 'до': 1, 'по': 1, 'от': 1, 'від': 1, 'купити': 1, 'купить': 1, 'ціна': 1, 'цена': 1, 'price': 1, 'buy': 1, 'ціни': 1, 'цены': 1, 'недорого': 1 };
   var ENDINGS = ['ями', 'ами', 'ові', 'ого', 'ому', 'ими', 'ій', 'ий', 'их', 'ів', 'ах', 'ям', 'ам', 'ою', 'ею', 'ой', 'ая', 'яя', 'ое', 'ые', 'ие', 'а', 'я', 'и', 'і', 'у', 'ю', 'е', 'о', 'ь', 'ы'];
   var L2C = { q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з', '[': 'х', ']': 'ї', a: 'ф', s: 'і', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д', ';': 'ж', "'": 'є', z: 'я', x: 'ч', c: 'с', v: 'м', b: 'и', n: 'т', m: 'ь', ',': 'б', '.': 'ю' };
   var C2L = {};
@@ -4571,12 +4587,15 @@ scModule(37, function () {
     var lf = layoutFix(q);
     if (lf && lf.length > 2 && !idx.vocab[q]) {
       var hit = idx.vocab[lf] || hasPrefix(idx, lf);
-      if (hit) { add(lf, 0.85); (SYN[lf] || []).forEach(function (s) { add(s, 0.8); }); }
+      if (hit) { add(lf, 0.85); (SYN[lf] || []).forEach(function (s) { add(s, 0.8); }); alts.fix = lf; }
     }
     // опечатки (10.11.2026): жоден варіант не знайшовся в словнику — шукаємо найближчі слова словника
     // і ключі синонімів («камрера» → камера → відеокамера), а не порівнюємо з кожним товаром
     if (q.length >= 4 && !/\d/.test(q) && !alts.some(function (x) { return idx.vocab[x.t] || hasPrefix(idx, x.t); })) {
-      fuzzyWords(idx, q).forEach(function (f) {
+      var fw = fuzzyWords(idx, q);
+      // показуємо покупцеві слово, як він його мав написати: ключ синонімів («камера»), інакше слово з назв
+      if (fw.length) alts.fix = (fw.filter(function (f) { return SYN[f.t]; })[0] || fw[0]).t;
+      fw.forEach(function (f) {
         var w = f.d === 1 ? 0.62 : 0.5;
         add(f.t, w); add(stem(f.t), w - 0.02);
         (SYN[f.t] || SYN[stem(f.t)] || []).forEach(function (s) { normText(s).forEach(function (x) { add(x, w - 0.04); add(stem(x), w - 0.06); }); });
@@ -4652,10 +4671,16 @@ scModule(37, function () {
       if (STOP[t]) return;
       // «wgp103» → «wgp» + «103», якщо літерна частина — відоме слово (бренд, серія)
       var m = t.match(/^([a-z]{2,6})(\d[a-z0-9]*)$/);
-      if (m && idx.vocab[m[1]] && !idx.vocab[t]) qt.push(m[1], m[2]); else qt.push(t);
+      if (m && idx.vocab[m[1]] && !idx.vocab[t]) qt.push(m[1], m[2]);
+      // слова через дефіс, яких немає в назвах: «mc4-запобіжники», «турникеты-триподы» → окремі слова
+      else if (/-/.test(t) && !idx.vocab[t] && !hasPrefix(idx, t) && /[a-zа-яіїєґ]{3}/.test(t)) t.split('-').forEach(function (p) { if (p.length > 1 && !STOP[p]) qt.push(p); });
+      else qt.push(t);
     });
     if (!qt.length) return { total: 0, items: [] };
     var alts = qt.map(function (q) { return alternatives(q, idx); });
+    // виправлені слова (опечатка / розкладка) — для рядка «Показано для: …»
+    var fixed = [];
+    alts.forEach(function (al, i) { if (al.fix) fixed.push([qt[i], al.fix]); });
     var res = [];
     idx.docs.forEach(function (doc) {
       var sum = 0, hit = 0;
@@ -4678,7 +4703,31 @@ scModule(37, function () {
     }
     list.sort(function (a, b) { return b.score - a.score || a.doc.len - b.doc.len; });
     var items = list.map(function (r) { return r.doc.it; });
-    return { total: items.length, partial: !full.length && items.length > 0, items: items, cats: facet(items, 'k'), brands: facet(items, 'b') };
+    return { total: items.length, partial: !full.length && items.length > 0, items: items, cats: facet(items, 'k'), brands: facet(items, 'b'), fixed: items.length ? fixed : [] };
+  }
+  // характеристики для фільтрів на сторінці результатів — з уже нормалізованих слів індексу (wn — назва,
+  // wx — характеристики постачальника), тож індекс не росте; рахуються лише для знайдених товарів
+  var ATTR_NUM = [
+    { id: 'mp', label: 'Мегапікселі', re: /^(\d+(?:\.\d+)?)mp$/, fmt: function (v) { return v + ' Мп'; } },
+    { id: 'ch', label: 'Канали', re: /^(\d+)канал/, fmt: function (v) { return v + ' кан.'; } },
+    { id: 'pt', label: 'Порти', re: /^(\d+)порт/, fmt: function (v) { return v + ' порт.'; } },
+    { id: 'ah', label: 'Ємність', re: /^(\d+(?:\.\d+)?)ah$/, fmt: function (v) { return v + ' Ah'; } },
+    { id: 'mah', label: 'Ємність', re: /^(\d+)mah$/, fmt: function (v) { return v + ' mAh'; } },
+    { id: 'w', label: 'Потужність', re: /^(\d+(?:\.\d+)?)(k?)w$/, val: function (m) { return String(+(parseFloat(m[1]) * (m[2] ? 1000 : 1)).toFixed(1)); },
+      fmt: function (v) { return v >= 1000 ? (v / 1000) + ' кВт' : v + ' Вт'; } }
+  ];
+  var ATTR_FLAGS = [['poe', 'PoE'], ['wifi', 'Wi-Fi'], ['4g', '4G'], ['вуличне', 'Вулична', 'вулична'], ['внутрішнє', 'Внутрішня', 'внутрішня'],
+    ['мікрофон', 'З мікрофоном', 'мікрофоном'], ['купольна', 'Купольна'], ['циліндрична', 'Циліндрична'], ['ptz', 'PTZ', 'ptz-відеокамера'],
+    ['lifepo4', 'LiFePO4'], ['agm', 'AGM'], ['gel', 'GEL'], ['бездротовий', 'Бездротові', 'бездротова', 'бездротове']];
+  function attrs(it) {
+    if (it._a) return it._a;
+    var a = { f: {} }, nt = String(it.wn || '').split(' '), xt = String(it.wx || '').split(' '), all = {};
+    nt.concat(xt).forEach(function (t) { all[t] = 1; t.split('-').forEach(function (p) { all[p] = 1; }); });
+    ATTR_NUM.forEach(function (g) {
+      for (var i = 0; i < nt.length; i++) { var m = nt[i].match(g.re); if (m) { a[g.id] = g.val ? g.val(m) : m[1]; break; } }
+    });
+    ATTR_FLAGS.forEach(function (fl) { for (var i = 0; i < fl.length; i++) if (i !== 1 && all[fl[i]]) { a.f[fl[0]] = 1; break; } });
+    return (it._a = a);
   }
   // категорії / бренди серед знайденого: що частіше у верхніх результатах — вище
   function facet(items, key) {
@@ -4711,13 +4760,29 @@ scModule(37, function () {
   };
   // для перевірки з консолі: SC_SEARCH_TEST('павербанк') → перші 10 назв
   window.SC_SEARCH_TEST = function (q, n) { return IDX ? search(IDX, q).items.slice(0, n || 10).map(function (it) { return (it.s ? '+ ' : '- ') + it.n; }) : (load(function () {}), 'індекс ще вантажиться'); };
-  function ga(q, n, place) {
-    try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_search', { search_term: String(q).slice(0, 100), results: n, place: place }); } catch (x) {}
+  // r — результат search(); окремі події для «нічого не знайшли» і «лише схожі» — їх тижневий звіт
+  // (apps-script/health/search-report.gs) бере з GA4 без власних вимірів
+  function ga(q, r, place) {
+    try {
+      if (typeof window.gtag !== 'function') return;
+      var p = { search_term: String(q).slice(0, 100), results: r.total, place: place };
+      window.gtag('event', 'sc_search', p);
+      if (!r.total) window.gtag('event', 'sc_search_zero', p);
+      else if (r.partial) window.gtag('event', 'sc_search_partial', p);
+      if (r.fixed && r.fixed.length) window.gtag('event', 'sc_search_fixed', p);
+    } catch (x) {}
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function price(p) { return String(p).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' грн'; }
   // k — категорія, b — бренд (фільтри нашої сторінки результатів; Хорошоп їх ігнорує)
-  function resultsUrl(q, k, b) { return '/katalog/search/?q=' + encodeURIComponent(q) + (k ? '&k=' + encodeURIComponent(k) : '') + (b ? '&b=' + encodeURIComponent(b) : ''); }
+  // «Показано для: камера» — запит з виправленими словами (опечатка / розкладка)
+  function fixedText(q, r) {
+    if (!r.fixed || !r.fixed.length) return '';
+    var map = {};
+    r.fixed.forEach(function (f) { map[f[0]] = f[1]; });
+    return normText(q).map(function (t) { return map[t] || t; }).join(' ');
+  }
+  function resultsUrl(q, k, b, a) { return '/katalog/search/?q=' + encodeURIComponent(q) + (k ? '&k=' + encodeURIComponent(k) : '') + (b ? '&b=' + encodeURIComponent(b) : '') + (a ? '&a=' + encodeURIComponent(a) : ''); }
 
   /* ---------- «Ви шукали» — останні запити в цьому браузері ---------- */
   var HIST_KEY = 'sc37-hist';
@@ -4769,6 +4834,7 @@ scModule(37, function () {
     '.sc37-dd a.sc37-hist{padding:7px 12px;color:#444}',
     '.sc37-dd a.sc37-hist:before{content:"\\21BA";color:#bbb;margin-right:2px}',
     '.sc37-res .sc37-chips{margin:0 0 10px}',
+    '.sc37-dd .sc37-fix{padding:7px 12px;font-size:13px;color:#666;background:#fafafa;border-bottom:1px solid #f1f1f1}',
     '.sc37-res .sc37-lbl{color:#888;font-size:13px;margin-right:2px;align-self:center}',
     '@media (max-width:767px){.sc37-grid{grid-template-columns:repeat(2,1fr);gap:8px}.sc37-card{padding:8px}.sc37-dd{position:fixed;left:0!important;right:0;width:auto!important;border-radius:0}',
     '.sc37-chips{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}.sc37-chips::-webkit-scrollbar{display:none}}'
@@ -4829,6 +4895,8 @@ scModule(37, function () {
         html += '</div>';
       }
     }
+    var fx = top.length ? fixedText(q, r) : '';
+    if (fx) html += '<div class="sc37-fix">Показано для: <b>' + esc(fx) + '</b></div>';
     top.forEach(function (it, i) {
       html += '<a class="sc37-nav" href="' + esc(it.u) + '" data-i="' + i + '">' + (it.i ? '<img src="' + esc(it.i) + '" alt="" loading="lazy">' : '<span style="width:44px"></span>') +
         '<span class="sc37-n">' + esc(it.n) + '<div class="sc37-p">' + price(it.p) + (it.s ? '' : '<span class="sc37-out">немає в наявності</span>') + '</div></span></a>';
@@ -4840,7 +4908,7 @@ scModule(37, function () {
     dd.style.display = 'block';
     active = -1;
     place(input);
-    if (q !== lastQ) { lastQ = q; clearTimeout(render.t); render.t = setTimeout(function () { ga(q, r.total, 'dropdown'); }, 1500); }
+    if (q !== lastQ) { lastQ = q; clearTimeout(render.t); render.t = setTimeout(function () { ga(q, r, 'dropdown'); }, 1500); }
   }
   function onInput(e) {
     var input = e.target;
@@ -4888,15 +4956,89 @@ scModule(37, function () {
   }), true);
   window.addEventListener('resize', function () { if (dd && dd.style.display !== 'none' && ddInput) place(ddInput); });
 
+  /* ---------- голосовий пошук (10.11.2026) ----------
+   * Кнопка-мікрофон у полі пошуку — лише там, де браузер уміє розпізнавати мову (Chrome / Android,
+   * Safari на iPhone з увімкненою диктовкою). Розпізнає українську (і російську — браузер сам).
+   * Сказане → сторінка результатів. Нічого не вантажить, поки не натиснули. GA4: sc_search_voice. */
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR) {
+    scStyle('sc37-mic-css', [
+      '.sc37-mic{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:30px;height:30px;padding:0;margin:0;border:0;border-radius:50%;background:transparent;color:#8a8a8a;cursor:pointer;display:flex;align-items:center;justify-content:center}',
+      '.sc37-mic:hover{color:#2a9d4a}',
+      '.sc37-mic svg{width:18px;height:18px;fill:currentColor}',
+      '.sc37-mic.is-on{color:#fff;background:#d6322b;animation:sc37pulse 1.2s infinite}',
+      '@keyframes sc37pulse{0%{box-shadow:0 0 0 0 rgba(214,50,43,.5)}100%{box-shadow:0 0 0 10px rgba(214,50,43,0)}}'
+    ].join('\n'));
+    var MIC = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>';
+    var rec = null, recBtn = null;
+    var addMic = function (input) {
+      if (!input || input._scMic || !input.offsetParent) return;
+      var box = input.parentElement;
+      if (!box) return;
+      input._scMic = 1;
+      if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+      // праворуч від поля вже може бути кнопка «шукати» — стаємо лівіше від неї
+      var right = 4, ir = input.getBoundingClientRect();
+      [].forEach.call(box.querySelectorAll('button, [type=submit]'), function (b) {
+        var br = b.getBoundingClientRect();
+        if (br.width && br.left >= ir.left + ir.width / 2 && br.right <= ir.right + 2) right = Math.max(right, Math.round(ir.right - br.left) + 2);
+      });
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sc37-mic';
+      btn.setAttribute('aria-label', 'Голосовий пошук');
+      btn.title = 'Голосовий пошук';
+      btn.style.right = right + 'px';
+      btn.innerHTML = MIC;
+      box.appendChild(btn);
+      var pr = parseInt(getComputedStyle(input).paddingRight, 10) || 0;
+      if (pr < right + 30) input.style.paddingRight = (right + 32) + 'px';
+      btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      btn.addEventListener('click', scSafe(37, function (e) {
+        e.preventDefault(); e.stopPropagation();
+        if (rec) { rec.stop(); return; }
+        rec = new SR();
+        rec.lang = /^ru/i.test(document.documentElement.lang || '') ? 'ru-RU' : 'uk-UA';
+        rec.interimResults = true;
+        rec.maxAlternatives = 1;
+        recBtn = btn;
+        btn.classList.add('is-on');
+        var said = '';
+        rec.onresult = function (ev) {
+          said = '';
+          for (var i = 0; i < ev.results.length; i++) said += ev.results[i][0].transcript;
+          input.value = said;
+        };
+        rec.onerror = function () { said = ''; };
+        rec.onend = scSafe(37, function () {
+          btn.classList.remove('is-on');
+          rec = null; recBtn = null;
+          said = said.replace(/[.?!]+$/, '').trim();
+          if (said.length < 2) return;
+          try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_search_voice', { search_term: said.slice(0, 100) }); } catch (x) {}
+          histAdd(said);
+          location.href = resultsUrl(said);
+        });
+        try { rec.start(); } catch (x) { btn.classList.remove('is-on'); rec = null; }
+      }));
+    };
+    var addMics = function () { [].forEach.call(document.querySelectorAll('input[name="q"]'), addMic); };
+    scReady(scSafe(37, addMics));
+    setTimeout(scSafe(37, addMics), 2000);                      // Хорошоп дорендерює шапку
+    document.addEventListener('focusin', scSafe(37, function (e) { if (e.target.matches && e.target.matches('input[name="q"]')) addMic(e.target); }));
+  }
+
   /* ---------- сторінка результатів ---------- */
   if (/^\/katalog\/search\/?$/.test(location.pathname)) {
     var sp = new URLSearchParams(location.search);
     var q = (sp.get('q') || '').trim(), selCat = sp.get('k') || '', selBrand = sp.get('b') || '';
+    var selA = {}, selF = {};                                   // характеристики: &a=mp:4,f:poe
+    (sp.get('a') || '').split(',').forEach(function (x) { var p = x.split(':'); if (p.length === 2 && p[1]) { if (p[0] === 'f') selF[p[1]] = 1; else selA[p[0]] = p[1]; } });
     if (!q) return;
     histAdd(q);
     load(scSafe(37, function () {
       var r = search(IDX, q);
-      ga(q, r.total, 'page');
+      ga(q, r, 'page');
       if (!r.total) return;                        // нічого — лишаємо результати Хорошопу
       if (document.querySelector('.sc37-res')) return;
       // ПК: ховаємо .catalog__middle (фільтри + сітка), заголовок лишається; мобільна: у section.catalog
@@ -4932,16 +5074,58 @@ scModule(37, function () {
             return '<button type="button" class="sc37-chip' + (x.name === sel ? ' is-on' : '') + '" data-' + key + '="' + esc(x.name) + '">' + esc(x.name) + ' <i>' + x.count + '</i></button>';
           }).join('') + '</div>';
       }
+      // чи проходить товар усі фільтри, крім групи skip (щоб у кожній групі рахувати з урахуванням інших)
+      function pass(it, skip) {
+        if (skip !== 'k' && selCat && it.k !== selCat) return false;
+        if (skip !== 'b' && selBrand && it.b !== selBrand) return false;
+        if (onlyStock && !it.s) return false;
+        var a = attrs(it);
+        for (var g in selA) if (skip !== g && a[g] !== selA[g]) return false;
+        for (var f in selF) if (skip !== 'f:' + f && !a.f[f]) return false;
+        return true;
+      }
+      function aParam() {
+        var p = [];
+        Object.keys(selA).forEach(function (g) { p.push(g + ':' + selA[g]); });
+        Object.keys(selF).forEach(function (f) { p.push('f:' + f); });
+        return p.join(',');
+      }
+      // рядки фільтрів за характеристиками: лише ті, що справді ділять знайдене
+      function attrRows() {
+        var html = '';
+        ATTR_NUM.forEach(function (g) {
+          var base = list.filter(function (it) { return pass(it, g.id); }), cnt = {}, have = 0;
+          base.forEach(function (it) { var v = attrs(it)[g.id]; if (v) { cnt[v] = (cnt[v] || 0) + 1; have++; } });
+          var vals = Object.keys(cnt);
+          if (!selA[g.id] && (vals.length < 2 || have < base.length * 0.4)) return;
+          vals = vals.sort(function (a, b) { return cnt[b] - cnt[a]; }).slice(0, 10).sort(function (a, b) { return a - b; });
+          html += '<div class="sc37-chips"><span class="sc37-lbl">' + g.label + ':</span>' + vals.map(function (v) {
+            return '<button type="button" class="sc37-chip' + (selA[g.id] === v ? ' is-on' : '') + '" data-a="' + g.id + ':' + esc(v) + '">' + esc(g.fmt(v)) + ' <i>' + cnt[v] + '</i></button>';
+          }).join('') + '</div>';
+        });
+        var fl = [];
+        ATTR_FLAGS.forEach(function (f) {
+          var base = list.filter(function (it) { return pass(it, 'f:' + f[0]); }), c = 0;
+          base.forEach(function (it) { if (attrs(it).f[f[0]]) c++; });
+          if (selF[f[0]] || (c >= 2 && c <= base.length * 0.95 && c >= base.length * 0.05)) fl.push([f[0], f[1], c]);
+        });
+        if (fl.length) html += '<div class="sc37-chips"><span class="sc37-lbl">Особливості:</span>' + fl.slice(0, 8).map(function (f) {
+          return '<button type="button" class="sc37-chip' + (selF[f[0]] ? ' is-on' : '') + '" data-a="f:' + f[0] + '">' + f[1] + ' <i>' + f[2] + '</i></button>';
+        }).join('') + '</div>';
+        return html;
+      }
       function draw() {
-        // кількість у фільтрах — з урахуванням іншого фільтра (категорія ↔ бренд)
-        var byBrand = selBrand ? list.filter(function (it) { return it.b === selBrand; }) : list;
-        var byCat = selCat ? list.filter(function (it) { return it.k === selCat; }) : list;
-        var arr = list.filter(function (it) { return (!selCat || it.k === selCat) && (!selBrand || it.b === selBrand) && (!onlyStock || it.s); });
+        // кількість у фільтрах — з урахуванням інших фільтрів
+        var byBrand = list.filter(function (it) { return pass(it, 'k'); });
+        var byCat = list.filter(function (it) { return pass(it, 'b'); });
+        var arr = list.filter(function (it) { return pass(it); });
         if (sort === 'asc') arr.sort(function (a, b) { return a.p - b.p; });
         else if (sort === 'desc') arr.sort(function (a, b) { return b.p - a.p; });
         shown = Math.min(PAGE, arr.length);
-        box.innerHTML = (r.partial ? '<p class="sc37-note">Точного збігу немає — схожі товари:</p>' : '') +
-          chips('Категорія', 'k', facet(byBrand, 'k'), selCat) + chips('Бренд', 'b', facet(byCat, 'b'), selBrand) +
+        var fx = fixedText(q, r);
+        box.innerHTML = (fx ? '<p class="sc37-note">Показано результати для «<b>' + esc(fx) + '</b>»</p>' : '') +
+          (r.partial ? '<p class="sc37-note">Точного збігу немає — схожі товари:</p>' : '') +
+          chips('Категорія', 'k', facet(byBrand, 'k'), selCat) + chips('Бренд', 'b', facet(byCat, 'b'), selBrand) + attrRows() +
           '<div class="sc37-res__bar"><span>Знайдено: ' + arr.length + '</span><label><input type="checkbox"' + (onlyStock ? ' checked' : '') + '> лише в наявності</label>' +
           '<select aria-label="Сортування"><option value="rel">За відповідністю</option><option value="asc">Спочатку дешевші</option><option value="desc">Спочатку дорожчі</option></select></div>' +
           '<div class="sc37-grid">' + cards(0, shown, arr) + '</div>' + (arr.length > shown ? '<button type="button" class="sc37-more">Показати ще</button>' : '');
@@ -4956,11 +5140,18 @@ scModule(37, function () {
       box.addEventListener('click', scSafe(37, function (e) {
         var chip = e.target.closest('button.sc37-chip');
         if (chip) {
-          if (chip.hasAttribute('data-k')) selCat = chip.getAttribute('data-k');
-          else selBrand = chip.getAttribute('data-b');
+          var facetName;
+          if (chip.hasAttribute('data-k')) { selCat = chip.getAttribute('data-k'); facetName = 'cat'; }
+          else if (chip.hasAttribute('data-b')) { selBrand = chip.getAttribute('data-b'); facetName = 'brand'; }
+          else {                                                    // характеристика: повторне натискання знімає
+            var p = chip.getAttribute('data-a').split(':');
+            facetName = p[0] === 'f' ? p[1] : p[0];
+            if (p[0] === 'f') { if (selF[p[1]]) delete selF[p[1]]; else selF[p[1]] = 1; }
+            else if (selA[p[0]] === p[1]) delete selA[p[0]]; else selA[p[0]] = p[1];
+          }
           // фільтр — у посиланні: «Назад» з товару повертає до того ж списку
-          try { history.replaceState(history.state, '', resultsUrl(q, selCat, selBrand)); } catch (x) {}
-          try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_search_facet', { search_term: q.slice(0, 100), facet: chip.hasAttribute('data-k') ? 'cat' : 'brand', place: 'page' }); } catch (x) {}
+          try { history.replaceState(history.state, '', resultsUrl(q, selCat, selBrand, aParam())); } catch (x) {}
+          try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_search_facet', { search_term: q.slice(0, 100), facet: facetName, place: 'page' }); } catch (x) {}
           draw();
           return;
         }
