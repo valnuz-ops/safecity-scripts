@@ -4392,8 +4392,9 @@ scModule(37, function () {
     return s.replace(/[^a-z0-9а-яіїєґ.\-+/' ]/g, ' ').split(/[\s/]+/)
       .map(function (t) { return t.replace(/^[.\-+']+|[.\-+']+$/g, ''); }).filter(Boolean);
   }
-  function tokSet(text, set) {
-    normText(text).forEach(function (t) {
+  // toks — уже нормалізовані слова (з індексу: wn/wo/wx, їх готує tools/build_search_index.py) або текст
+  function tokSet(toks, set) {
+    (typeof toks === 'string' ? normText(toks) : toks).forEach(function (t) {
       set[t] = 1; set[stem(t)] = 1;
       t.split('-').forEach(function (p) { if (p) set[p] = 1; });
       var c = compact(t); if (c.length > 2) set[c] = 1;
@@ -4406,9 +4407,10 @@ scModule(37, function () {
     var docs = data.items.map(function (row) {
       var it = {};
       f.forEach(function (k, j) { it[k] = row[j]; });
-      var main = tokSet(it.n + ' ' + (it.b || '') + ' ' + (it.k || ''), {});
-      var extra = tokSet(it.x || '', {});
-      var nameToks = normText(it.n), codes = [];
+      var pre = typeof it.wn === 'string';
+      var nameToks = pre ? (it.wn ? it.wn.split(' ') : []) : normText(it.n), codes = [];
+      var main = tokSet(nameToks.concat(pre ? (it.wo ? it.wo.split(' ') : []) : normText((it.b || '') + ' ' + (it.k || ''))), {});
+      var extra = tokSet(pre ? (it.wx ? it.wx.split(' ') : []) : (it.x || ''), {});
       nameToks.forEach(function (t, j) {
         if (/[a-z]/.test(t) && /\d/.test(t)) codes.push(compact(t));
         if (j + 1 < nameToks.length) { var pr = compact(t + nameToks[j + 1]); if (/\d/.test(pr) && /[a-z]/.test(pr)) codes.push(pr); }

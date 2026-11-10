@@ -24,6 +24,41 @@ SPEC_KEYS = ['Тип пристрою', 'Встановлення', 'Тип вс
 FLAG_KEYS = {'PoE': 'PoE', 'Wi-Fi': 'Wi-Fi', 'Мікрофон': 'мікрофон', 'Підтримка PoE': 'PoE'}
 
 
+# --- нормалізація тексту — ТОЧНА копія normText() з модуля 37 safecity.js (PHRASES) ---
+# Робимо її тут, щоб браузер не ганяв ~20 регулярних виразів по кожному з 4,6 тис. товарів (≈1 с на ПК, кілька — на телефоні).
+_W = '0-9a-zа-яіїєґ'
+_B, _E, _N = '(?<![' + _W + '])', '(?![' + _W + '])', r'(\d+(?:[.,]\d+)?)\s?'
+def _R(src): return re.compile(src.replace('\\b<', _B).replace('\\b>', _E))
+PHRASES = [
+    (_R(r'\b<(?:power ?bank|павер ?банк|повер ?банк|пауер ?банк)\S*'), 'повербанк'),
+    (_R(r'\b<(?:wi[\s-]?fi|вай[\s-]?фай|вифи|віфі)\b>'), 'wifi'),
+    (_R(r'\b<(?:ip|іп)[\s-]?камер'), 'ip камер'),
+    (_R(_N + r'(?:мп|mp|мегапікс\S*|мегапикс\S*|mpx)\b>'), r'\1mp'),
+    (_R(_N + r'(?:ah|аг|а·год|а\*год|ач|а год|ампер ?год\S*)\b>'), r'\1ah'),
+    (_R(_N + r'(?:mah|маг|ма·год|мач|ма год)\b>'), r'\1mah'),
+    (_R(_N + r'(?:kwh|квт·год|квт\*год|квт год|квтг|квтч)\b>'), r'\1kwh'),
+    (_R(_N + r'(?:wh|вт·год|вт\*год|вт год|втг|втч)\b>'), r'\1wh'),
+    (_R(_N + r'(?:kw|квт|кв)\b>'), r'\1kw'),
+    (_R(_N + r'(?:w|вт|ват\S*)\b>'), r'\1w'),
+    (_R(_N + r'(?:v|в|вольт\S*)\b>'), r'\1v'),
+    (_R(_N + r'(?:a|а|ампер\S*)\b>'), r'\1a'),
+    (_R(_N + r'(?:mm|мм)\b>'), r'\1мм'),
+    (_R(_N + r'(?:cm|см)\b>'), r'\1см'),
+    (_R(_N + r'(?:m|м|метр\S*)\b>'), r'\1м'),
+    (_R(r'(\d+)\s?-?\s?(?:х\s?)?(?:канал\S*|кан|ch|channel\S*)\b>'), r'\1канал'),
+    (_R(r'(\d+)\s?-?\s?(?:порт\S*|port\S*)\b>'), r'\1порт'),
+    (_R(r'(\d+)\s?(?:tb|тб)\b>'), r'\1tb'), (_R(r'(\d+)\s?(?:gb|гб)\b>'), r'\1gb'),
+]
+def norm_text(s):
+    s = ' ' + re.sub('[’`ʼ]', "'", (s or '').lower()).replace('ё', 'е') + ' '
+    s = re.sub(r'(\d),(\d)', r'\1.\2', s)
+    for rx, rep in PHRASES:
+        s = rx.sub(rep, s)
+    s = re.sub(r"[^a-z0-9а-яіїєґ.\-+/' ]", ' ', s)
+    toks = [re.sub(r"^[.\-+']+|[.\-+']+$", '', t) for t in re.split(r'[\s/]+', s)]
+    return ' '.join(t for t in toks if t)
+
+
 def get(url, timeout=180):
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (compatible; SafeCitySearchIndex/1.0)'})
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -100,9 +135,13 @@ def main():
             code,
             specs.get(code, ''),
         ])
+        it_ = items[-1]
+        it_.append(norm_text(it_[0]))                                   # wn — назва, нормалізована
+        it_.append(norm_text((it_[5] or '') + ' ' + (it_[6] or '')))    # wo — бренд + розділ
+        it_.append(norm_text(it_[8]))                                   # wx — характеристики
     if len(items) < 1000:
         sys.exit('too few items (%d) — keeping old index' % len(items))
-    data = {'v': 1, 'f': ['n', 'u', 'p', 's', 'i', 'b', 'k', 'c', 'x'], 'items': items}
+    data = {'v': 2, 'f': ['n', 'u', 'p', 's', 'i', 'b', 'k', 'c', 'x', 'wn', 'wo', 'wx'], 'items': items}
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
