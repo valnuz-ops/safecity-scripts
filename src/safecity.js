@@ -4476,7 +4476,9 @@ scModule(37, function () {
     '.sc37-dd .sc37-none{padding:12px;color:#666}',
     '.sc37-res{margin:0 0 30px}',
     '.sc37-res__bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:0 0 14px;color:#555}',
-    '.sc37-res__bar label{display:flex;gap:6px;align-items:center;cursor:pointer}',
+    '.sc37-res__bar label{display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap}',
+    '.sc37-res__bar input[type=checkbox]{appearance:auto;-webkit-appearance:checkbox;position:static;opacity:1;width:16px;height:16px;margin:0}',
+    '.sc37-res__bar select{padding:6px 8px;border:1px solid #ddd;border-radius:6px;background:#fff;font-size:14px}',
     '.sc37-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}',
     '.sc37-card{display:flex;flex-direction:column;border:1px solid #e6e6e6;border-radius:8px;padding:10px;color:#222;text-decoration:none;background:#fff}',
     '.sc37-card:hover{border-color:#2a9d4a}',
@@ -4581,7 +4583,8 @@ scModule(37, function () {
       }
       var box = document.createElement('div');
       box.className = 'sc37-res';
-      var onlyStock = false, shown = 0, list = r.items, PAGE = 24;
+      var onlyStock = false, sort = 'rel', shown = 0, list = r.items, PAGE = 24;
+      [].forEach.call(document.querySelectorAll('.catalog__top-col--right'), function (el) { el.style.visibility = 'hidden'; });   // сортування Хорошопу не діє на наш список
       function cards(from, to, arr) {
         return arr.slice(from, to).map(function (it, i) {
           return '<a class="sc37-card" href="' + esc(it.u) + '" data-i="' + (from + i) + '">' + (it.i ? '<img src="' + esc(it.i) + '" alt="' + esc(it.n) + '" loading="lazy">' : '') +
@@ -4590,14 +4593,22 @@ scModule(37, function () {
         }).join('');
       }
       function draw() {
-        var arr = onlyStock ? list.filter(function (it) { return it.s; }) : list;
+        var arr = onlyStock ? list.filter(function (it) { return it.s; }) : list.slice();
+        if (sort === 'asc') arr.sort(function (a, b) { return a.p - b.p; });
+        else if (sort === 'desc') arr.sort(function (a, b) { return b.p - a.p; });
         shown = Math.min(PAGE, arr.length);
         box.innerHTML = (r.partial ? '<p class="sc37-note">Точного збігу немає — схожі товари:</p>' : '') +
-          '<div class="sc37-res__bar"><span>Знайдено: ' + arr.length + '</span><label><input type="checkbox"' + (onlyStock ? ' checked' : '') + '> лише в наявності</label></div>' +
+          '<div class="sc37-res__bar"><span>Знайдено: ' + arr.length + '</span><label><input type="checkbox"' + (onlyStock ? ' checked' : '') + '> лише в наявності</label>' +
+          '<select aria-label="Сортування"><option value="rel">За відповідністю</option><option value="asc">Спочатку дешевші</option><option value="desc">Спочатку дорожчі</option></select></div>' +
           '<div class="sc37-grid">' + cards(0, shown, arr) + '</div>' + (arr.length > shown ? '<button type="button" class="sc37-more">Показати ще</button>' : '');
+        box.querySelector('select').value = sort;
         box._arr = arr;
       }
-      box.addEventListener('change', scSafe(37, function (e) { if (e.target.type === 'checkbox') { onlyStock = e.target.checked; draw(); } }));
+      box.addEventListener('change', scSafe(37, function (e) {
+        if (e.target.type === 'checkbox') onlyStock = e.target.checked;
+        else if (e.target.tagName === 'SELECT') sort = e.target.value;
+        draw();
+      }));
       box.addEventListener('click', scSafe(37, function (e) {
         if (e.target.classList.contains('sc37-more')) {
           var arr = box._arr, grid = box.querySelector('.sc37-grid');
