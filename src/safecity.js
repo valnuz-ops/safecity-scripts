@@ -4352,7 +4352,9 @@ scModule(37, function () {
       Object.keys(main).forEach(function (t) { vocab[t] = 1; });
       return { it: it, toks: Object.keys(main), xt: Object.keys(extra), first: stem(nameToks[0] || ''), len: it.n.length, codes: codes, cat: lower(it.k) };
     });
-    return { docs: docs, vocab: vocab, vocabList: Object.keys(vocab) };
+    var byUrl = {};
+    docs.forEach(function (d) { byUrl[d.it.u] = d.it; });
+    return { docs: docs, vocab: vocab, vocabList: Object.keys(vocab), byUrl: byUrl };
   }
 
   function dl(a, b, max) {
@@ -4456,6 +4458,12 @@ scModule(37, function () {
       }))['catch'](function (e) { loading = null; scErr(37, e); });
   }
 
+  // для блоку 39 (доповнення в кошику)
+  window.scSearchApi = {
+    load: load,
+    search: function (q) { return search(IDX, q); },
+    byUrl: function (u) { return IDX && IDX.byUrl[u]; }
+  };
   // для перевірки з консолі: SC_SEARCH_TEST('павербанк') → перші 10 назв
   window.SC_SEARCH_TEST = function (q, n) { return IDX ? search(IDX, q).items.slice(0, n || 10).map(function (it) { return (it.s ? '+ ' : '- ') + it.n; }) : (load(function () {}), 'індекс ще вантажиться'); };
   function ga(q, n, place) {
@@ -4627,6 +4635,183 @@ scModule(37, function () {
       hideEls.forEach(function (el) { el.style.display = 'none'; });
     }));
   }
+});
+
+/* =====================================================================
+ * 38. Швидкість відповіді сервера у реальних відвідувачів (10.11.2026)
+ *     На форумі Хорошопу (club.horoshop.ua/t/497): один із двох серверів (51.68.107.5) відповідає 5–7 с
+ *     замість 0,2 с; наш домен якраз на ньому і на 51.68.97.214. Браузер обирає сервер навмання,
+ *     тож у частини відвідувачів білий екран. Міряємо час від запиту до першого байта сторінки і
+ *     надсилаємо в GA4 подією з кошиком у назві (звіт «Події» без налаштувань):
+ *     sc_ttfb_fast (< 1 с), sc_ttfb_slow (1–3 с), sc_ttfb_vslow (≥ 3 с); параметр ttfb_ms — точне значення.
+ * ===================================================================== */
+scModule(38, function () {
+  'use strict';
+  scIdle(scSafe(38, function () {
+    var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+    if (!nav || !nav.responseStart || nav.type === 'back_forward' || nav.transferSize === 0) return;   // з кешу — не показово
+    var ms = Math.round(nav.responseStart - nav.requestStart);
+    if (!(ms >= 0 && ms < 120000)) return;
+    var bucket = ms < 1000 ? 'fast' : ms < 3000 ? 'slow' : 'vslow';
+    var send = function () {
+      if (typeof window.gtag !== 'function') return false;
+      window.gtag('event', 'sc_ttfb_' + bucket, { ttfb_ms: ms, page_kind: document.querySelector('[itemtype*="schema.org/Product"]') ? 'product' : 'other', non_interaction: true });
+      return true;
+    };
+    if (!send()) setTimeout(send, 3000);
+  }));
+});
+
+
+/* =====================================================================
+ * 39. Кошик → «До цього знадобиться» (10.11.2026)
+ *     Щойно покупець натиснув «Купити», у вікні кошика (ПК і мобільна) над «Рекомендуємо придбати»
+ *     Хорошопу (там схожі товари) показуємо доповнення до того, що вже в кошику: до реєстратора —
+ *     жорсткий диск, до IP-камери — PoE-комутатор і кабель, до Wi-Fi-камери — карту пам'яті, до хаба
+ *     Ajax — датчики того ж кольору, до відеодомофону — панель того ж бренду й типу (IP / аналог)…
+ *     Товари — з індексу пошуку (блок 37), лише в наявності, яких ще немає в кошику, до 4 шт.
+ *     «До кошика» — штатний AjaxCart.appendProduct Хорошопу; id товару беремо зі сторінки товару
+ *     (j-buy-button-widget-<id>) у мить натискання. Не вийшло — відкриваємо сторінку товару.
+ *     GA4: sc_upsell_view, sc_upsell_add.
+ * ===================================================================== */
+scModule(39, function () {
+  'use strict';
+  var MAX = 4;
+
+  function color(n) { return /чорн|black|graphite|графіт/i.test(n) ? 'чорний' : 'білий'; }
+  // що запропонувати до товару: [запит до пошуку, скільки взяти, фільтр]
+  function rules(it) {
+    var n = it.n, k = it.k, ip = /^IP-/.test(n);
+    if (k === 'Відеокамери') {
+      if (/wi-?fi|imou|ezviz/i.test(n)) return [["карта пам'яті microsd", 2]];
+      if (/^IP/.test(n)) return [['poe-комутатор', 1], ['кабель вита пара utp', 1], ['патч-корд мережевий', 1]];
+      return [['блок живлення 12v', 1], ['кабель коаксіальний', 1]];
+    }
+    if (k === 'Відеореєстратори') return [['жорсткий диск purple', 2]].concat(ip ? [['poe-комутатор', 1]] : []).concat([['кабель hdmi 2.0', 1]]);
+    if (k === 'Відеодомофони') {
+      return [['відеопанель ' + it.b, 2, function (x) { return /^IP-/.test(x.n) === ip; }], ['замок електромагнітний', 1]];
+    }
+    if (k === 'Відеопанелі') return [['відеодомофон ' + it.b, 2, function (x) { return /^IP-/.test(x.n) === ip && x.k === 'Відеодомофони'; }]];
+    if (k === 'Електромагнітні замки' || k === 'Електрозащіпки') return [['кнопка виходу', 1], ['блок живлення 12v', 1]];
+    if (k === 'ДБЖ 12-24V') {
+      var ah = (n.match(/під АКБ\s*(\d+(?:\.\d+)?)Ah/i) || [])[1];
+      return ah ? [['акумулятор 12v ' + ah + 'ah', 1]] : [];
+    }
+    if (k === 'Маршрутизатори' && /маршрутизатор|роутер/i.test(n)) return [['дбж для роутера', 1]];
+    if (k === 'Комутатори') return [['патч-корд мережевий', 1], ['кабель вита пара utp', 1]];
+    if (k === 'Сигналізація Ajax' && /\bhub\b|централь/i.test(n)) {
+      var c = color(n);
+      return [['ajax motionprotect ' + c, 1], ['ajax doorprotect ' + c, 1], ['ajax homesiren ' + c, 1]];
+    }
+    return [];
+  }
+
+  function pick(api, inCart) {
+    var have = {}, out = [];
+    inCart.forEach(function (it) { have[it.u] = 1; });
+    inCart.forEach(function (it) {
+      rules(it).forEach(function (r) {
+        var res = api.search(r[0]);
+        if (res.partial) return;
+        var got = 0;
+        for (var i = 0; i < res.items.length && got < r[1] && out.length < MAX; i++) {
+          var x = res.items[i];
+          if (!x.s || have[x.u] || (r[2] && !r[2](x))) continue;
+          have[x.u] = 1; out.push(x); got++;
+        }
+      });
+    });
+    return out;
+  }
+
+  // id товару для AjaxCart — зі сторінки товару (читаємо потік до першої появи j-buy-button-widget-<id>)
+  var ids = {};
+  function productId(url) {
+    if (ids[url]) return Promise.resolve(ids[url]);
+    return fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/html' } }).then(function (r) {
+      if (!r.body || !r.body.getReader || !window.TextDecoder) return r.text().then(function (h) { return (h.match(/j-buy-button-widget-(\d+)/) || [])[1]; });
+      var reader = r.body.getReader(), dec = new TextDecoder('utf-8'), html = '';
+      return (function step() {
+        return reader.read().then(function (c) {
+          if (c.done) return (html.match(/j-buy-button-widget-(\d+)/) || [])[1];
+          html += dec.decode(c.value, { stream: true });
+          var m = html.match(/j-buy-button-widget-(\d+)/);
+          if (m) { try { var p = reader.cancel(); if (p && p.catch) p.catch(function () {}); } catch (e) {} return m[1]; }
+          return step();
+        });
+      })();
+    }).then(function (id) { if (id) ids[url] = id; return id; });
+  }
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function price(p) { return String(p).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' грн'; }
+  function ga(ev, p) { try { if (typeof window.gtag === 'function') window.gtag('event', ev, p); } catch (x) {} }
+
+  scStyle('sc39-css', [
+    '.sc39{margin:12px 0 16px}',
+    '.sc39__h{font-weight:700;font-size:16px;margin:0 0 10px}',
+    '.sc39__row{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}',
+    '.sc39__c{flex:0 0 150px;display:flex;flex-direction:column;border:1px solid #e6e6e6;border-radius:8px;padding:8px;background:#fff}',
+    '.sc39__c img{width:100%;height:90px;object-fit:contain}',
+    '.sc39__n{font-size:13px;line-height:1.3;color:#222;text-decoration:none;margin:6px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;flex:1}',
+    '.sc39__p{font-weight:700;font-size:14px;margin-bottom:6px}',
+    '.sc39__b{border:0;border-radius:6px;background:#2a9d4a;color:#fff;font-weight:600;font-size:13px;padding:7px 6px;cursor:pointer}',
+    '.sc39__b[disabled]{opacity:.7;cursor:default}'
+  ].join('\n'));
+
+  function inject() {
+    var api = window.scSearchApi;
+    if (!api) return;
+    [].forEach.call(document.querySelectorAll('.j-cart-additional'), function (anchor) {
+      if (!anchor.offsetParent) return;                     // кошик закритий
+      var cart = anchor.closest('.cart, .cart__container, #cart') || anchor.parentElement;
+      var links = cart.querySelectorAll('.j-cart-product a[href]'), seen = {}, urls = [];
+      [].forEach.call(links, function (a) {
+        var u = (a.getAttribute('href') || '').replace(/^https?:\/\/[^/]+/, '').replace(/[?#].*$/, '');
+        if (u && !seen[u]) { seen[u] = 1; urls.push(u); }
+      });
+      var key = urls.join('|');
+      var old = cart.querySelector('.sc39');
+      if (old && old.getAttribute('data-key') === key) return;
+      api.load(scSafe(39, function () {
+        var inCart = urls.map(api.byUrl).filter(Boolean);
+        var items = pick(api, inCart);
+        var cur = cart.querySelector('.sc39');
+        if (cur) cur.remove();
+        if (!items.length) return;
+        var box = document.createElement('div');
+        box.className = 'sc39';
+        box.setAttribute('data-key', key);
+        box.innerHTML = '<div class="sc39__h">До цього знадобиться</div><div class="sc39__row">' + items.map(function (x) {
+          return '<div class="sc39__c">' + (x.i ? '<img src="' + esc(x.i) + '" alt="" loading="lazy">' : '') +
+            '<a class="sc39__n" href="' + esc(x.u) + '">' + esc(x.n) + '</a><div class="sc39__p">' + price(x.p) + '</div>' +
+            '<button type="button" class="sc39__b" data-u="' + esc(x.u) + '">До кошика</button></div>';
+        }).join('') + '</div>';
+        anchor.parentElement.insertBefore(box, anchor);
+        ga('sc_upsell_view', { items: items.length, for_category: (inCart[0] || {}).k || '' });
+      }));
+    });
+  }
+
+  document.addEventListener('click', scSafe(39, function (e) {
+    var b = e.target.closest && e.target.closest('.sc39__b');
+    if (b) {
+      e.preventDefault(); e.stopPropagation();
+      if (b.disabled) return;
+      var u = b.getAttribute('data-u');
+      b.disabled = true; b.textContent = 'Додаємо…';
+      productId(u).then(function (id) {
+        if (!id || typeof window.AjaxCart === 'undefined') throw new Error('no id');
+        window.AjaxCart.getInstance().appendProduct({ type: 'product', id: +id }, undefined, true);
+        ga('sc_upsell_add', { item_url: u });
+        [900, 2200].forEach(function (t) { setTimeout(scSafe(39, inject), t); });   // кошик перемальовується
+      })['catch'](function () { location.href = u; });
+      return;
+    }
+    // будь-який клік (Купити, іконка кошика) — кошик може з'явитися/оновитися
+    [400, 1200, 2500].forEach(function (t) { setTimeout(scSafe(39, inject), t); });
+  }), true);
+  scIdle(scSafe(39, inject));   // сторінка /checkout або відкритий кошик після перезавантаження
 });
 
 /* =====================================================================
