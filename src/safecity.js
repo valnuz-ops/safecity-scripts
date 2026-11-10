@@ -4335,6 +4335,7 @@ scModule(36, function () {
  * ===================================================================== */
 var SC_SEARCH_ON = true;    // true — для всіх відвідувачів
 var SC_SEARCH_INDEX = 'https://valnuz-ops.github.io/safecity-scripts/search/index.json';
+var SC_SEARCH_STOCK = 'https://valnuz-ops.github.io/safecity-scripts/search/stock.json';   // наявність, щогодини
 
 scModule(37, function () {
   'use strict';
@@ -4872,17 +4873,26 @@ scModule(37, function () {
     if (IDX) return cb(IDX);
     waiters.push(cb);
     if (loading) return;
+    // наявність (stock.json, щогодини з фідів) — паралельно з індексом; не вдалося — лишається нічна з індексу
+    var stockP = fetch(SC_SEARCH_STOCK + '?h=' + Math.floor(Date.now() / 6e5), { cache: 'no-cache' })
+      .then(function (r) { return r.ok ? r.json() : null; })['catch'](function () { return null; });
     loading = fetch(SC_SEARCH_INDEX).then(function (r) { if (!r.ok) throw new Error('index ' + r.status); return r.json(); })
       .then(scSafe(37, function (data) {
         buildIndex(data, scSafe(37, function (idx) {
-          IDX = idx;
-          applyLive(IDX);                                      // наявність «наживо» замість фіду
-          document.documentElement.classList.add('sc-srch');
-          waiters.splice(0).forEach(function (f) { f(IDX); });
+          stockP.then(scSafe(37, function (st) {
+            IDX = idx;
+            if (st && st['in'] && Date.now() - Date.parse(st.t) < 36 * 3600e3) {
+              var inS = {};
+              st['in'].forEach(function (u) { inS[u] = 1; });
+              idx.docs.forEach(function (d) { d.it.s = inS[d.it.u] ? 1 : 0; });
+            }
+            applyLive(IDX);                                    // з карток сайту — найсвіжіше, поверх stock.json
+            document.documentElement.classList.add('sc-srch');
+            waiters.splice(0).forEach(function (f) { f(IDX); });
+          }));
         }));
       }))['catch'](function (e) { loading = null; scErr(37, e); });
   }
-
   // для блоку 39 (доповнення в кошику)
   window.scSearchApi = {
     load: load,

@@ -15,10 +15,10 @@ jobs:
         env:
           FB_FEED_URL: https://safecity.in.ua/marketplace-integration/facebook/5584cb56ae2c5129756bfa9736f0ff71?langId=3
           GOOGLE_FEED_URL: https://safecity.in.ua/marketplace-integration/google-feed/b573742161465e3a2deba881f9129298?langId=3
-        run: python3 tools/build_search_index.py
+        run: python3 tools/build_search_index.py && python3 tools/build_stock.py
       - name: Commit
         run: |
           git config user.name "search-index-bot"
           git config user.email "search-index-bot@users.noreply.github.com"
-          git add search/index.json
+          git add search/index.json search/stock.json
           git diff --cached --quiet && echo "no changes" || (git commit -m "search: оновлено індекс пошуку" && for i in 1 2 3; do git pull --rebase -q && git push && break; sleep 5; done)

@@ -1,0 +1,25 @@
+name: search-stock
+# Наявність для пошуку на сайті (search/stock.json) — щогодини вдень. Індекс (search-index.yml) — раз на ніч.
+on:
+  schedule:
+    - cron: '23 4-20 * * *'   # щогодини ~06:23–22:23 за Києвом
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: search-index
+jobs:
+  stock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build stock
+        env:
+          FB_FEED_URL: https://safecity.in.ua/marketplace-integration/facebook/5584cb56ae2c5129756bfa9736f0ff71?langId=3
+          GOOGLE_FEED_URL: https://safecity.in.ua/marketplace-integration/google-feed/b573742161465e3a2deba881f9129298?langId=3
+        run: python3 tools/build_stock.py
+      - name: Commit
+        run: |
+          git config user.name "search-index-bot"
+          git config user.email "search-index-bot@users.noreply.github.com"
+          git add search/stock.json
+          git diff --cached --quiet && echo "no changes" || (git commit -m "search: наявність" && for i in 1 2 3; do git pull --rebase -q && git push && break; sleep 5; done)

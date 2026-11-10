@@ -134,12 +134,13 @@ def main():
         sys.exit('FB_FEED_URL not set')
     codes = json.load(open(CODES, encoding='utf-8')) if os.path.exists(CODES) else {}
 
-    link2code = {}
+    link2code, g_stock = {}, {}   # g_stock: наявність із Google-фіду — він свіжіший за Facebook-фід (10.11: 73-01018)
     if g_url:
         try:
             groot = ET.fromstring(get(g_url))
             for it in groot.iter('item'):
                 link2code[text(it, 'link')] = text(it, 'id')
+                g_stock[text(it, 'link')] = text(it, 'availability') == 'in stock'
         except Exception as e:
             print('google feed failed:', e)
 
@@ -191,7 +192,7 @@ def main():
             text(it, 'title'),
             re.sub(r'^https?://[^/]+', '', link),
             int(round(float(price))),
-            1 if text(it, 'availability') == 'in stock' else 0,
+            1 if g_stock.get(link, text(it, 'availability') == 'in stock') else 0,
             thumb(text(it, 'image_link')),
             text(it, 'brand'),
             cat,
