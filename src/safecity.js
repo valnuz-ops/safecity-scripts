@@ -4330,6 +4330,8 @@ scModule(36, function () {
  *       слова через дефіс; «Показано для: камера» при виправленні; фільтри за характеристиками
  *       (Мп, канали, порти, Ah / mAh, Вт, PoE, Wi-Fi, вулична…, &a=); голосовий пошук (мікрофон у полі);
  *       GA4: sc_search_zero / sc_search_partial / sc_search_fixed / sc_search_voice — для тижневого звіту.
+ *     • «від N» за характеристиками (поле q індексу), доводчики за вагою дверей (поле r);
+ *       наявність «наживо» з карток каталогу й товару (localStorage sc37-live, 12 год) — фід оновлюється раз на добу.
  * ===================================================================== */
 var SC_SEARCH_ON = true;    // true — для всіх відвідувачів
 var SC_SEARCH_INDEX = 'https://valnuz-ops.github.io/safecity-scripts/search/index.json';
@@ -4673,7 +4675,9 @@ scModule(37, function () {
 
   // запити з реального пошуку, які означають інший товар: «акб для роутера» — це ДБЖ для роутера
   var QUERY_FIX = [
-    [/(?:^|\s)(?:акб|акум\S*|аккум\S*|батаре\S*|живлення|питание)\s+(?:для|на)\s+(роутер\S*|маршрутизатор\S*|модем\S*|onu|ону|термінал\S*)/i, ' дбж для $1']
+    [/(?:^|\s)(?:акб|акум\S*|аккум\S*|батаре\S*|живлення|питание)\s+(?:для|на)\s+(роутер\S*|маршрутизатор\S*|модем\S*|onu|ону|термінал\S*)/i, ' дбж для $1'],
+    // «2в1», «3 in 1» — як у назвах: «2 в 1»
+    [/(^|[^0-9])([2-9])\s*(?:в|in|v)\s*1(?![0-9])/gi, '$1$2 в 1']
   ];
   /* ---------- пошук за числовими характеристиками (10.11.2026) ----------
    * «доводчик на двері 30 кг», «ДБЖ для котла 150 Вт», «реєстратор на 6 камер», «камера 50 м», «кабель hdmi 15 м»…
@@ -4872,6 +4876,7 @@ scModule(37, function () {
       .then(scSafe(37, function (data) {
         buildIndex(data, scSafe(37, function (idx) {
           IDX = idx;
+          applyLive(IDX);                                      // наявність «наживо» замість фіду
           document.documentElement.classList.add('sc-srch');
           waiters.splice(0).forEach(function (f) { f(IDX); });
         }));
@@ -4909,6 +4914,54 @@ scModule(37, function () {
     return normText(q).map(function (t) { return map[t] || t; }).join(' ');
   }
   function resultsUrl(q, k, b, a) { return '/katalog/search/?q=' + encodeURIComponent(q) + (k ? '&k=' + encodeURIComponent(k) : '') + (b ? '&b=' + encodeURIComponent(b) : '') + (a ? '&a=' + encodeURIComponent(a) : ''); }
+
+  /* ---------- наявність «наживо» (10.11.2026) ----------
+   * Індекс збирається з фіду Хорошопу, а фід оновлюється раз на добу — товар, що з'явився вдень, у пошуку був
+   * «немає в наявності». Тому беремо наявність зі сторінок, які покупець і так відкриває: картки каталогу
+   * (категорії, сторінка пошуку Хорошопу) і сама картка товару. Пам'ятаємо 12 год у localStorage (sc37-live)
+   * і підставляємо в результати пошуку замість даних фіду. Жодних додаткових запитів. */
+  var LIVE_KEY = 'sc37-live', LIVE_TTL = 12 * 3600e3, live = null;
+  function liveLoad() {
+    if (live) return live;
+    try { live = JSON.parse(localStorage.getItem(LIVE_KEY) || '{}') || {}; } catch (e) { live = {}; }
+    var now = Date.now();
+    Object.keys(live).forEach(function (u) { if (!live[u] || now - live[u][1] > LIVE_TTL) delete live[u]; });
+    return live;
+  }
+  function liveSave() { try { localStorage.setItem(LIVE_KEY, JSON.stringify(live)); } catch (e) {} }
+  function stockText(t) {
+    t = lower(t || '');
+    if (!t) return null;
+    if (/немає|відсутн|нет в наличии|под заказ|під замовлення|очікується|ожидается/.test(t)) return 0;
+    if (/в наявності|є в наявності|закінчується|в наличии|заканчивается|достатньо/.test(t)) return 1;
+    return null;
+  }
+  function pathOf(href) { try { return new URL(href, location.href).pathname; } catch (e) { return ''; } }
+  // зібрати наявність з карток каталогу і картки товару на поточній сторінці
+  function harvestLive() {
+    liveLoad();
+    var now = Date.now(), n = 0;
+    [].forEach.call(document.querySelectorAll('.catalogCard, .catalog-card, .productsSlider-item, .product-card'), function (c) {
+      if (c.closest('.sc37-res, .sc37-dd')) return;
+      var a = c.querySelector('a[href]'), av = c.querySelector('[class*="availability"], [class*="Availability"]');
+      var s = av ? stockText(av.textContent) : null, u = a ? pathOf(a.getAttribute('href')) : '';
+      if (u && s != null) { live[u] = [s, now]; n++; }
+    });
+    var pa = document.querySelector('.product-header__availability, .product__availability, [class*="product"][class*="availability"]');
+    if (pa && !pa.closest('.catalogCard, .catalog-card')) {
+      var cs = stockText(pa.textContent), cu = pathOf((document.querySelector('link[rel=canonical]') || {}).href || location.href);
+      if (cs != null && cu) { live[cu] = [cs, now]; n++; }
+    }
+    if (n) { liveSave(); if (IDX) applyLive(IDX); }
+    return n;
+  }
+  // підставити свіжу наявність у товари індексу (до пошуку — щоб «в наявності» й піднімало вище)
+  function applyLive(idx) {
+    if (!idx) return;
+    liveLoad();
+    Object.keys(live).forEach(function (u) { var d = idx.byUrl && idx.byUrl[u]; if (d) d.s = live[u][0]; });
+  }
+  scReady(scSafe(37, function () { harvestLive(); setTimeout(scSafe(37, harvestLive), 2500); }));
 
   /* ---------- «Ви шукали» — останні запити в цьому браузері ---------- */
   var HIST_KEY = 'sc37-hist';
@@ -5183,6 +5236,7 @@ scModule(37, function () {
     if (!q) return;
     histAdd(q);
     load(scSafe(37, function () {
+      harvestLive(); applyLive(IDX);                           // картки Хорошопу на цій сторінці — найсвіжіша наявність
       var r = search(IDX, q);
       ga(q, r, 'page');
       if (!r.total) return;                        // нічого — лишаємо результати Хорошопу
