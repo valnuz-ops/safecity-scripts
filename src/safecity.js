@@ -5555,6 +5555,17 @@ scModule(39, function () {
 
   function color(n) { return /чорн|black|graphite|графіт/i.test(n) ? 'чорний' : 'білий'; }
   function R(q, n, note, f) { return { q: q, n: n, note: note, f: f }; }
+  // 11.11.2026: замок до панелі / кнопки / зчитувача — накладний на 280–300 кг (універсальний для вхідних дверей),
+  // а не перший у пошуку (врізний вологозахищений)
+  function lockR(note) { return R('замок електромагнітний накладний', 1, note, function (x) { return /\b(?:280|300)\s?kg\b/i.test(x.n) && !/\(DS\)/i.test(x.n); }); }
+  // PoE-комутатор: до 1–2 IP-камер у кошику — малий (4 порти PoE), інакше перший у пошуку (8 портів)
+  function poeR(cart) {
+    var cams = cart.filter(function (c) { return c.k === 'Відеокамери' && /(^|\s)IP[\s-]/.test(c.n); }).length;
+    return cams <= 2 ? R('poe-комутатор некерований', 1, 'PoE-комутатор на 4 камери: живлення й мережа одним кабелем', function (x) { return /(^|\D)[4-6]-портов/i.test(x.n); })
+      : R('poe-комутатор некерований', 1, NOTE.poe);
+  }
+  // ДБЖ для роутера: до недорогого роутера — найдешевший з наявних, а не перший у пошуку
+  function upsR(note, cheap) { var r = R('дбж для роутера', 1, note, function (x) { return x.k === 'ДБЖ для роутерів'; }); r.cheap = cheap; return r; }
   function has(cart, re) { return cart.some(function (it) { return re.test(it.k + ' ' + it.n); }); }
   // аксесуар у «чужій» категорії (кронштейн у «Точках доступу», піддашок у «Відеопанелях») — до нього нічого не пропонуємо
   var ACC = /^(?:кронштейн|кріплення|піддашок|козирок|рамка|накладка|планка|куточок|монтажна|панель для|модуль|блок розеток|полиця|тримач)/i;
@@ -5578,8 +5589,9 @@ scModule(39, function () {
     var noSwitch = !has(cart, /комутатор/i), noLock = !has(cart, /замок|защіпка/i), noPsu = !has(cart, /блок живлення/i);
     switch (k) {
       case 'Відеокамери':
-        if (/wi-?fi|imou|ezviz/i.test(n)) return [R("карта пам'яті microsd", 2, NOTE.sd)];
-        if (ip) return [b === 'Ajax' && !has(cart, /nvr|реєстратор/i) && R('відеореєстратор ajax nvr', 1, 'Запис камер Ajax'), noSwitch && R('poe-комутатор некерований', 1, NOTE.poe), R('кабель вита пара utp cat5e', 1, NOTE.utp), R('патч-корд мережевий utp', 1, NOTE.patch)];
+        if (/wi-?fi|imou|ezviz/i.test(n)) return [R("карта пам'яті microsd", 2, NOTE.sd),
+          !has(cart, /дбж для роутер/i) && upsR('Камера працює, поки працює роутер, — ДБЖ тримає Wi-Fi без світла', true)];
+        if (ip) return [b === 'Ajax' && !has(cart, /nvr|реєстратор/i) && R('відеореєстратор ajax nvr', 1, 'Запис камер Ajax'), noSwitch && poeR(cart), R('кабель вита пара utp cat5e', 1, NOTE.utp), R('патч-корд мережевий utp', 1, NOTE.patch)];
         return [R('блок живлення 12v', 1, 'Живлення камер 12 В'), R('кабель коаксіальний rg-59', 1, 'Кабель від камери до реєстратора')];
       case 'Відеореєстратори':
         if (/^Нагрудний/.test(n)) return [];
@@ -5587,13 +5599,13 @@ scModule(39, function () {
       case 'Відеодомофони':
         if (/^відеодзвінок|дзвінок/i.test(n)) return [];   // відеодзвінок сам по собі, замок і панель йому не потрібні
         return [R('відеопанель ' + b, 2, 'Панель того ж бренду', function (x) { return isIp(x) === ip && x.k === 'Відеопанелі' && !ACC.test(x.n); }),
-          noLock && R('замок електромагнітний', 1, NOTE.lock), R("карта пам'яті microsd", 1, 'Запис відвідувачів (якщо є слот microSD)')];
+          noLock && lockR(NOTE.lock), R("карта пам'яті microsd", 1, 'Запис відвідувачів (якщо є слот microSD)')];
       case 'Відеопанелі':
         if (ACC.test(n)) return [];                         // піддашок, рамка, панель для врізного монтажу — не сама панель
         return [R('відеодомофон ' + b, 2, 'Монітор того ж бренду', function (x) { return isIp(x) === ip && x.k === 'Відеодомофони'; }),
-          noLock && R('замок електромагнітний', 1, NOTE.lock), R('кнопка виходу', 1, NOTE.exitBtn)];
+          noLock && lockR(NOTE.lock), R('кнопка виходу', 1, NOTE.exitBtn)];
       case 'Комплекти відеодомофонів':
-        return [noLock && R('замок електромагнітний', 1, NOTE.lock), R('кнопка виходу', 1, NOTE.exitBtn), noPsu && R('блок живлення 12v', 1, NOTE.psu12)];
+        return [noLock && lockR(NOTE.lock), R('кнопка виходу', 1, NOTE.exitBtn), noPsu && R('блок живлення 12v', 1, NOTE.psu12)];
       case 'Електромагнітні замки': {
         // кронштейн під модель — та сама відповідність, що й у блоці 19 на картці замка
         if (ACC.test(n)) return [];                         // кронштейн / планка до замка — не сам замок
@@ -5607,20 +5619,20 @@ scModule(39, function () {
       case 'Електромеханічні замки': case 'Електрозащіпки':
         return [R('кнопка виходу', 1, NOTE.exitBtn), noPsu && R('блок живлення 12v', 1, NOTE.psu12)];
       case 'Кнопки виходу': case 'Кодові клавіатури':
-        return [noLock && R('замок електромагнітний', 1, 'Замок, яким керує кнопка / клавіатура'), noPsu && R('блок живлення 12v', 1, NOTE.psu12)];
+        return [noLock && lockR('Замок, яким керує кнопка / клавіатура'), noPsu && R('блок живлення 12v', 1, NOTE.psu12)];
       case 'Зчитувачі': case 'Контролери': {
         // ключі — лише коли стандарт названо в назві (UHF, Dahua / Akuvox без стандарту — не вгадуємо)
         var em = /em-?marine/i.test(n), mf = /mifare/i.test(n);
         var key = /uhf/i.test(n) ? null : mf && !em ? 'картка mifare' : mf ? 'ключ-брелок em-marine mifare' : em ? 'ключ-брелок em-marine' : null;
         if (/^модуль|ліфт/i.test(n)) return [];
-        return [key && R(key, 1, 'Ключі під стандарт зчитувача'), noLock && R('замок електромагнітний', 1, 'Замок, яким керує контролер'), R('кнопка виходу', 1, NOTE.exitBtn)];
+        return [key && R(key, 1, 'Ключі під стандарт зчитувача'), noLock && lockR('Замок, яким керує контролер'), R('кнопка виходу', 1, NOTE.exitBtn)];
       }
       case 'ДБЖ 12-24V': {
         var ah = (n.match(/під АКБ\s*(\d+(?:\.\d+)?)Ah/i) || [])[1];
         return ah ? [R('акумулятор 12v ' + ah + 'ah', 1, /\b24V\b/i.test(n) ? 'Для ДБЖ 24 В потрібні 2 такі акумулятори 12 В' : 'Акумулятор потрібної ємності — купується окремо')] : [];
       }
       case 'Маршрутизатори':
-        return /маршрутизатор|роутер/i.test(n) && !/4g|lte/i.test(n) ? [R('дбж для роутера', 1, 'Інтернет працює без світла')] : [];
+        return /маршрутизатор|роутер/i.test(n) && !/4g|lte/i.test(n) ? [upsR('Інтернет працює без світла', (+it.p || 0) < 3000)] : [];
       case 'Точки доступу':
         if (ACC.test(n)) return [];
         return [noSwitch && R('poe-інжектор', 1, 'Живлення точки доступу по кабелю'), R('патч-корд мережевий utp', 1, NOTE.patch)];
@@ -5631,8 +5643,32 @@ scModule(39, function () {
       case 'Шафи та стійки':
         if (!/^(?:комутаційна |серверна |телекомунікаційна |настінна |підлогова )*(?:шафа|стійка)/i.test(n)) return [];   // полиці, блоки розеток, замки — це вже доповнення
         return [R('серверна полиця', 1, 'Полиця для реєстратора / роутера'), R('патч-панель', 1, 'Акуратне підключення кабелів'), R('блок розеток', 1, 'Живлення обладнання в шафі')];
+      case 'Портативні зарядні станції': {
+        if (!/^портативна зарядна станція/i.test(n)) return [];
+        var model = (n.match(/\b([A-Z]{1,3}\d{3,4}[A-Z]?)\b/) || [])[1];
+        return [model && R('чохол для портативних зарядних станцій ' + (b || ''), 1, 'Чохол саме під цю станцію', function (x) { return new RegExp('(^|[^A-Za-z0-9])' + model + '([^A-Za-z0-9]|$)').test(x.n); }),
+          R('сонячна панель для зарядних станцій', 1, 'Заряджати станцію від сонця')];
+      }
+      case 'Аксесуари для Старлінка':
+        if (/прикурювач/i.test(n)) return [R('кронштейн на магнітах starlink mini', 1, 'Кріплення Starlink Mini на дах авто')];
+        if (/кронштейн на магнітах|кріплення на рейлінги/i.test(n)) return [R('кабель живлення starlink mini прикурювач', 1, 'Живлення Starlink Mini від прикурювача')];
+        if (/^(кабель живлення для starlink mini .*type-c|перехідник для живлення starlink mini)/i.test(n) && !has(cart, /повербанк/i))
+          return [R('повербанк 100w', 1, 'Живить Starlink Mini через цей кабель (потрібно від 65 Вт)', function (x) { return x.k === 'Повербанки'; })];
+        if (/^дата кабель .*gen2/i.test(n)) return [R('мережевий адаптер ethernet starlink gen2', 1, 'Підключити свій роутер до Starlink Gen2 кабелем')];
+        return [];
+      case 'Нагрудні відеореєстратори': {
+        if (!/^нагрудний відеореєстратор/i.test(n) || !/recoda/i.test(n)) return [];
+        var rm = (n.match(/\bM\d{3}/) || [])[0];
+        return [R('recoda', 2, 'Кріплення до реєстратора RECODA', function (x) {
+          if (x.k !== 'Нагрудні відеореєстратори' || /^нагрудний відеореєстратор/i.test(x.n)) return false;
+          var am = (x.n.match(/\bM\d{3}/) || [])[0];
+          return !am || am === rm;                            // «…для реєстратора RECODA M505» — лише до M505
+        })];
+      }
+      case 'Генератори':
+        return /^генератор/i.test(n) && !has(cart, /авр/i) ? [R('авр', 1, 'Автоматичне перемикання між мережею та генератором', function (x) { return /^АВР/i.test(x.n); })] : [];
       case 'Сигналізація Ajax':
-        if (/\bhub\b|централь/i.test(n)) {
+        if (/\bhub\b|централь|^комплект/i.test(n)) {
           var c = color(n), dev = function (x) { return !/smartbracket|кріпильна|кронштейн/i.test(x.n); };
           return [R('датчик руху ajax motionprotect ' + c, 1, 'Датчик руху в приміщення', dev), R('датчик відкриття ajax doorprotect ' + c, 1, 'На вхідні двері / вікна', dev),
             R('сирена ajax homesiren ' + c, 1, 'Гучне сповіщення в будинку', dev), R('клавіатура ajax keypad ' + c, 1, 'Ставити й знімати з охорони', dev)];
@@ -5687,9 +5723,9 @@ scModule(39, function () {
       }
       var res = api.search(r.q);
       if (res.partial) return;
-      var got = 0;
-      for (var i = 0; i < res.items.length && got < r.n && out.length < MAX; i++) {
-        var x = res.items[i];
+      var got = 0, list = r.cheap ? res.items.filter(function (x) { return x.s; }).sort(function (a, b) { return (+a.p || 0) - (+b.p || 0); }) : res.items;
+      for (var i = 0; i < list.length && got < r.n && out.length < MAX; i++) {
+        var x = list[i];
         if (!x.s || have[x.u] || kinds[kind(x.n)] || (r.f && !r.f(x))) continue;
         have[x.u] = 1; kinds[kind(x.n)] = 1; out.push({ it: x, note: r.note }); got++;
       }
