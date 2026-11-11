@@ -4625,10 +4625,13 @@ scModule(37, function () {
     return d[a.length][b.length];
   }
 
+  // 11.11.2026: LiFePO4 у назвах — 12.8 / 25.6 / 51.2 В, а шукають «12в», «24в», «48в» (і навпаки)
+  var VOLT = { '12v': '12.8v', '24v': '25.6v', '48v': '51.2v', '12.8v': '12v', '25.6v': '24v', '51.2v': '48v' };
   function alternatives(q, idx) {
     var alts = [], seen = {};
     function add(t, w) { if (t && !seen[t]) { seen[t] = 1; alts.push({ t: t, w: w }); } }
     add(q, 1); add(stem(q), 0.95);
+    if (VOLT[q]) add(VOLT[q], 0.9);   // «lifepo4 100ah 12v» → і 12.8V
     (SYN[q] || SYN[stem(q)] || []).forEach(function (s) { normText(s).forEach(function (x) { add(x, 0.9); add(stem(x), 0.85); }); });
     if (/^[a-z]+$/.test(q) && q.length > 2) add(lat2cyr(q), 0.8);
     // російське написання → українське: инвертор → інвертор, видеокамера → відеокамера
@@ -4722,7 +4725,11 @@ scModule(37, function () {
   var QUERY_FIX = [
     [/(?:^|\s)(?:акб|акум\S*|аккум\S*|батаре\S*|живлення|питание)\s+(?:для|на)\s+(роутер\S*|маршрутизатор\S*|модем\S*|onu|ону|термінал\S*)/i, ' дбж для $1'],
     // «2в1», «3 in 1» — як у назвах: «2 в 1»
-    [/(^|[^0-9])([2-9])\s*(?:в|in|v)\s*1(?![0-9])/gi, '$1$2 в 1']
+    [/(^|[^0-9])([2-9])\s*(?:в|in|v)\s*1(?![0-9])/gi, '$1$2 в 1'],
+    // 11.11.2026: «камера з сім картою», «роутер під симку», «sim» — у назвах це «4G»
+    [/(^|\s)(?:(?:з|с|із|під|под)\s+)?(?:сім|сим|sim)(?:[\s-]?карт[а-яіїєґ]*|к[а-яіїєґ]*)?(?=\s|$)/gi, '$1 4g'],
+    // «відеодомофон 7 дюймів» — у назвах «7"», лапки при розборі зникають
+    [/(\d)\s*(?:дюйм[а-яіїєґ]*|inch(?:es)?)(?=\s|$)/gi, '$1']
   ];
   /* ---------- пошук за числовими характеристиками (10.11.2026) ----------
    * «доводчик на двері 30 кг», «ДБЖ для котла 150 Вт», «реєстратор на 6 камер», «камера 50 м», «кабель hdmi 15 м»…
@@ -4807,6 +4814,13 @@ scModule(37, function () {
       if (x == null) return false;
       if (u.k === 'r') return u.v >= x[0] && u.v <= x[1];
       return QTY_EQ[u.k] ? Math.abs(x - u.v) < 0.01 : x >= u.v - 1e-9;
+    }
+    // 11.11.2026: умова відсіяла все («домофон на 2 квартири»: кількість абонентів указана лише в однієї
+    // частини товарів, і вона менша) — показуємо знайдене без умови як «схожі», а не порожній список
+    if (!base.items.some(function (it) { return use.every(function (u) { return ok(it, u); }); })) {
+      if (!base.total) return searchCore(idx, query);
+      base.partial = true;
+      return base;
     }
     var main = use[0];
     function dist(it) { var x = qtyOf(it, main.k); return main.k === 'r' ? x[1] - x[0] : x - main.v; }
@@ -4998,7 +5012,7 @@ scModule(37, function () {
     var now = Date.now(), n = 0;
     [].forEach.call(document.querySelectorAll('.catalogCard, .catalog-card, .productsSlider-item, .product-card'), function (c) {
       if (c.closest('.sc37-res, .sc37-dd')) return;
-      var a = c.querySelector('a[href]'), av = c.querySelector('[class*="availability"], [class*="Availability"]');
+      var a = c.querySelector('a[href]'), av = c.querySelector('[class*="availability"], [class*="Availability"], .catalog-card__presence');   // __presence — мобільна версія і шаблон «Альтернативна енергетика"
       var s = av ? stockText(av.textContent) : null, u = a ? pathOf(a.getAttribute('href')) : '';
       if (u && s != null) { live[u] = [s, now]; n++; }
     });
