@@ -5714,8 +5714,11 @@ scModule(39, function () {
     var queue = [];
     for (var round = 0; lists.some(function (l) { return l.length > round; }); round++)
       lists.forEach(function (l) { if (l[round]) queue.push(l[round]); });
+    var seenQ = {};
     queue.forEach(function (r) {
       if (!r || out.length >= MAX) return;
+      // 11.11.2026: той самий запит від кількох товарів кошика (4 IP-камери → 4 PoE-комутатори) — лише раз
+      if (r.q) { if (seenQ[r.q]) return; seenQ[r.q] = 1; }
       if (r.u) {                                        // конкретний товар за посиланням
         var y = api.byUrl(r.u);
         if (y && y.s && !have[y.u]) { have[y.u] = 1; kinds[kind(y.n)] = 1; out.push({ it: y, note: r.note }); }
