@@ -2818,6 +2818,10 @@ scModule(18, function () {
  *       Venus D: інверторний модуль MST-HI-2200 ↔ батареї MST-E2.5ST-D (1–6 шт.; без батареї модуль не працює);
  *       Venus E 3.0 / C / E Mini → мікроінвертор Marstek для панелей (купується окремо), E 3.0 і C — ще смартбокс DB63S;
  *       мікроінвертори Saturn-M → ці системи; лічильник CT002 ↔ Venus E 3.0, C, D, A; смартбокс DB63S → Venus E 3.0 і C.
+ *     • Нагрудні реєстратори RECODA ↔ кріплення під серію (з назв і поля «Сумісність» постачальника, 11.11.2026):
+ *       M502B → нагрудне кріплення, затискач на плече, кліпса M502; M505B → те саме для M505;
+ *       кронштейн на лобове скло — «для нагрудних реєстраторів RECODA» (за даними постачальника, гвинт 1/4″ UNC);
+ *       M508 / M530 — карти microSD (посилання на розділ); кріплення → реєстратори своєї серії.
  *     Товари вантажаться, лише коли покупець догортає до блоку (scNear), з кешем на 1 год (scProduct).
  * ===================================================================== */
 scModule(19, function () {
@@ -2900,6 +2904,23 @@ scModule(19, function () {
     m4:    { url: '/mikroinvertor-dlia-soniachnykh-panelei-2kw-marstek-m4-2000-saturn-m-4-mppt-on-grid/', note: 'Мікроінвертор 2 кВт · 4 панелі' },
     m2:    { url: '/mikroinvertor-dlia-soniachnykh-panelei-1kw-marstek-m2-1000-saturn-m-2-mppt-on-grid/', note: 'Мікроінвертор 1 кВт · 2 панелі' }
   };
+
+  // --- RECODA: нагрудні реєстратори і кріплення (сумісність — назви й поле «Сумісність» у постачальника) ---
+  var RC = {
+    chest502: { url: '/nahrudne-kriplennia-dlia-reiestratora-m502-recoda/', note: 'Ремені на груди, камера по центру' },
+    clamp502: { url: '/zazhym-dlia-kriplennia-na-pleche-recoda/', note: 'На погон чи лямку, поворот 360°' },
+    clip502:  { url: '/klipsa-dlia-kriplennia-m502-recoda/', note: 'Запасна кліпса M502' },
+    chest505: { url: '/nahrudne-kriplennia-dlia-reiestratora-recoda/', note: 'Ремені на груди, камера по центру' },
+    clamp505: { url: '/zazhym-dlia-kriplennia-na-pleche-dlia-nahrudnoho-videoreiestratora-m505b-recoda/', note: 'На погон чи лямку, поворот 360°' },
+    clip505:  { url: '/klipsa-dlia-kriplennia-m505-recoda/', note: 'Запасна кліпса M505' },
+    car:      { url: '/avtomobilnyi-kronshtein-dlia-lobovoho-skla-recoda/', note: 'Присоска на лобове скло, гвинт 1/4″' },
+    m502w:    { url: '/nahrudnyi-videoreiestrator-recoda-m502b-w-2k4mp-64gb-wi-fi/', note: '2K · 64 ГБ · Wi-Fi' },
+    m502wg:   { url: '/nahrudnyi-videoreiestrator-recoda-m502b-wg-2k4mp-128gb-gps-wi-fi/', note: '2K · 128 ГБ · GPS, Wi-Fi' },
+    m505w:    { url: '/nahrudnyi-videoreiestrator-recoda-m505b-w-2k-4mp-64gb-wi-fi/', note: '2K · 64 ГБ · Wi-Fi, ліхтар' },
+    m505wg:   { url: '/nahrudnyi-videoreiestrator-recoda-m505b-wg-2k4mp-128gb-gps-wi-fi/', note: '2K · 128 ГБ · GPS, ліхтар' },
+    m508:     { url: '/nahrudnyi-videoreiestrator-recoda-m508/', note: '1296p · microSD до 256 ГБ · 99 г' }
+  };
+  var RC_SD = [{ text: 'Карти пам’яті microSD →', url: '/nakopychuvachi/2297/filter/presence=1;tipPristrou=151/' }];   // без мовного префікса — його додає init()
 
   var num = scNum;
 
@@ -3033,6 +3054,41 @@ scModule(19, function () {
         list: [MS.ct]
       };
       return null;
+    },
+
+    // ---------- RECODA: реєстратори ↔ кріплення ----------
+    function (t) {
+      if (!/RECODA/i.test(t)) return null;
+      var rec = /відеореєстратор/i.test(t) && !/кріплен|затискач|кліпс|кронштейн/i.test(t);
+      if (rec && /\bM502/i.test(t)) return {
+        title: '🎽 Як носити M502B',
+        text: 'Кріплення RECODA саме під серію M502 — на груди, на плече або в авто:',
+        list: [RC.chest502, RC.clamp502, RC.car, RC.clip502]
+      };
+      if (rec && /\bM505/i.test(t)) return {
+        title: '🎽 Як носити M505B',
+        text: 'Кріплення RECODA саме під серію M505 — на груди, на плече або в авто:',
+        list: [RC.chest505, RC.clamp505, RC.car, RC.clip505]
+      };
+      if (rec && /\bM(508|530)/i.test(t)) return {
+        title: '💾 Карта пам’яті та кріплення',
+        text: /M508/i.test(t) ? 'Реєстратор пише на карту microSD до 256 ГБ — у комплект вона не входить. Для авто — кронштейн RECODA на лобове скло:'
+                              : 'Реєстратор пише на карту microSD до 256 ГБ (128 ГБ — у комплекті). Для авто — кронштейн RECODA на лобове скло:',
+        list: [RC.car], links: RC_SD
+      };
+      if (rec) return null;
+      if (/кронштейн/i.test(t)) return {
+        title: '🎥 Реєстратори RECODA',
+        text: 'Кронштейн розрахований на нагрудні реєстратори RECODA (за даними постачальника):',
+        list: [RC.m508, RC.m502w, RC.m505w, RC.m502wg, RC.m505wg]
+      };
+      var m = t.match(/\bM50([25])/i);
+      if (!m) return null;
+      return {
+        title: '🎥 Підходить до реєстраторів',
+        text: 'Кріплення саме під серію M50' + m[1] + ':',
+        list: m[1] === '2' ? [RC.m502w, RC.m502wg] : [RC.m505w, RC.m505wg]
+      };
     },
 
     // ---------- ІЧ-прожектори 12 В → блок живлення ----------
