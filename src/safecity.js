@@ -3769,7 +3769,8 @@ scModule(32, function () {
     '.sc-fpay{list-style:none;margin:6px 0 10px;padding:0;font-size:13px;line-height:1.5;color:#4A4F4C}' +
     '.sc-fpay li{position:relative;padding-left:14px}' +
     '.sc-fpay li:before{content:"";position:absolute;left:0;top:.6em;width:6px;height:6px;border-radius:50%;background:#2E9E4F}' +
-    '.sc-fpay-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px;max-width:330px}' +
+    '.sc-fpay-chips{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;margin:12px 0 10px;max-width:330px}' +
+    '.sc-fpay-chips img{height:22px;width:auto;display:block}' +
     '.sc-fpay-chips span{border:1px solid #cfd4d0;border-radius:6px;background:#fff;padding:3px 8px;font-size:12px;line-height:1.4;font-weight:600;color:#1E1F1E;white-space:nowrap}' +
     '.sc-fpay-note{font-size:12px;color:#4A4F4C;margin-top:4px}');
 
@@ -3848,12 +3849,18 @@ scModule(32, function () {
       ['Оплата при отриманні (NovaPay)', 'Рахунок для юросіб і ФОП'].forEach(function (s) {
         var li = document.createElement('li'); li.textContent = s; ul.appendChild(li);
       });
-      // 11.11.2026: способи оплати карткою — рядом плашок з назвами (не логотипи: файли логотипів платіжних
-      // систем власник може додати окремо, тоді тут замінити на <img>)
+      // 11.11.2026: способи оплати карткою — офіційні логотипи з брендбука monobank для інтернет-магазинів
+      // (monobank.ua/knowledge-base/acquiring/online/brandbook, архів «Логотипи платіжних систем», світла тема;
+      // файли без змін у img/pay/). Однакова висота, без рамок і ефектів — вимога платіжних систем.
+      // Картинка не завантажилась — замість неї плашка з назвою.
       var chips = document.createElement('div');
       chips.className = 'sc-fpay-chips';
-      ['Visa', 'Mastercard', 'Apple Pay', 'Google Pay', 'plata by mono'].forEach(function (s) {
-        var c = document.createElement('span'); c.textContent = s; chips.appendChild(c);
+      [['Visa', 'visa'], ['Mastercard', 'mc'], ['Apple Pay', 'apple-pay'], ['Google Pay', 'google-pay'], ['plata by mono', 'plata']].forEach(function (x) {
+        var im = document.createElement('img');
+        im.alt = x[0]; im.title = x[0]; im.loading = 'lazy'; im.height = 22;
+        im.onerror = function () { var c = document.createElement('span'); c.textContent = x[0]; if (im.parentNode) im.parentNode.replaceChild(c, im); };
+        im.src = SC_PAY_IMG + x[1] + '.svg';
+        chips.appendChild(im);
       });
       if (pay) { pay.parentNode.insertBefore(chips, pay); pay.parentNode.insertBefore(ul, pay); }
       else { anchor.parentNode.insertBefore(ul, anchor.nextSibling); anchor.parentNode.insertBefore(chips, ul); }
@@ -4388,6 +4395,7 @@ scModule(36, function () {
  *     • «від N» за характеристиками (поле q індексу), доводчики за вагою дверей (поле r);
  *       наявність «наживо» з карток каталогу й товару (localStorage sc37-live, 12 год) — фід оновлюється раз на добу.
  * ===================================================================== */
+var SC_PAY_IMG = 'https://valnuz-ops.github.io/safecity-scripts/img/pay/';   // логотипи способів оплати у футері (блок 32)
 var SC_SEARCH_ON = true;    // true — для всіх відвідувачів
 var SC_SEARCH_INDEX = 'https://valnuz-ops.github.io/safecity-scripts/search/index.json';
 var SC_SEARCH_STOCK = 'https://valnuz-ops.github.io/safecity-scripts/search/stock.json';   // наявність, щогодини
