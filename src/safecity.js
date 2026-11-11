@@ -3539,7 +3539,11 @@ scModule(27, function () {
   scStyle('sc-cardtitle-style',
     '.catalogCard-title{height:auto!important;max-height:90px!important;display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:5!important}' +
     // мобільна версія (?v=mobile): картки вужчі — до 6 рядків
-    '.catalog-card__title{height:auto!important;max-height:none!important;display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:6!important}');
+    '.catalog-card__title{height:auto!important;max-height:none!important;display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:6!important}' +
+    // мобільна версія (11.11.2026): стікер «Доставимо безкоштовно» заходив під кнопку «в обране» і обрізався
+    // («ДОСТАВИМО БЕЗКОШТОВ…»). Стікер закінчується перед кнопками (32 px + відступ), довгий текст — у два рядки.
+    '.catalog-card .product-sticker{right:auto!important;max-width:calc(100% - 36px)!important}' +
+    '.catalog-card .product-sticker__content{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;line-height:11px!important}');
 });
 
 scModule(26, function () {
