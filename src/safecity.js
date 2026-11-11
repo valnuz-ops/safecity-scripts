@@ -23,6 +23,7 @@ var SC_HEALTH_URL = 'https://script.google.com/macros/s/AKfycby4kTm_6M4ZBj5-5dQf
 var SC_TT_PIXEL = 'DBJI7JJC77U4J2JQPOCG';
 // Версія збірки: build.sh підставляє дату й час збірки (UTC) через esbuild --define; без збірки — 'dev'
 var SC_BUILD = typeof __SC_BUILD__ !== 'undefined' ? __SC_BUILD__ : 'dev';
+var SC_PAY_IMG = 'https://valnuz-ops.github.io/safecity-scripts/img/pay/';   // логотипи способів оплати у футері (блок 32)
 
 /* ===== Ізоляція блоків =====
  * Кожен блок запускається через scModule, а його обробники (таймери, спостерігачі, idle) — через scSafe:
@@ -4395,7 +4396,6 @@ scModule(36, function () {
  *     • «від N» за характеристиками (поле q індексу), доводчики за вагою дверей (поле r);
  *       наявність «наживо» з карток каталогу й товару (localStorage sc37-live, 12 год) — фід оновлюється раз на добу.
  * ===================================================================== */
-var SC_PAY_IMG = 'https://valnuz-ops.github.io/safecity-scripts/img/pay/';   // логотипи способів оплати у футері (блок 32)
 var SC_SEARCH_ON = true;    // true — для всіх відвідувачів
 var SC_SEARCH_INDEX = 'https://valnuz-ops.github.io/safecity-scripts/search/index.json';
 var SC_SEARCH_STOCK = 'https://valnuz-ops.github.io/safecity-scripts/search/stock.json';   // наявність, щогодини
