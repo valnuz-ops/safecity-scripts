@@ -5665,6 +5665,9 @@ scModule(39, function () {
       if (old && old.getAttribute('data-key') === key) return;
       if (!old && key === emptyKey) return;                  // для цього кошика нічого не знайшли — не рахуємо знову
       api.load(scSafe(39, function () {
+        // поки вантажився індекс, Хорошоп міг перемалювати кошик: старий anchor уже не на сторінці
+        // (parentElement = null → TypeError insertBefore). Тоді просто пробуємо ще раз зі свіжим DOM.
+        if (!anchor.isConnected || !anchor.parentElement) { setTimeout(scSafe(39, inject), 300); return; }
         var inCart = urls.map(api.byUrl).filter(Boolean);
         var items = pick(api, inCart);
         var cur = cart.querySelector('.sc39');
