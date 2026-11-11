@@ -3772,6 +3772,7 @@ scModule(32, function () {
     '.sc-fpay li:before{content:"";position:absolute;left:0;top:.6em;width:6px;height:6px;border-radius:50%;background:#2E9E4F}' +
     '.sc-fpay-chips{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;margin:12px 0 10px;max-width:330px}' +
     '.sc-fpay-chips img{height:22px;width:auto;display:block}' +
+    '.sc-fpay-chips img.sc-fpay-np{height:36px;margin:-7px -7px}' +
     '.sc-fpay-chips span{border:1px solid #cfd4d0;border-radius:6px;background:#fff;padding:3px 8px;font-size:12px;line-height:1.4;font-weight:600;color:#1E1F1E;white-space:nowrap}' +
     '.sc-fpay-note{font-size:12px;color:#4A4F4C;margin-top:4px}');
 
@@ -3847,7 +3848,7 @@ scModule(32, function () {
     if (anchor && !document.querySelector('.sc-fpay')) {
       var ul = document.createElement('ul');
       ul.className = 'sc-fpay';
-      ['Оплата при отриманні (NovaPay)', 'Рахунок для юросіб і ФОП'].forEach(function (s) {
+      ['Оплата при отриманні', 'Рахунок для юросіб і ФОП'].forEach(function (s) {
         var li = document.createElement('li'); li.textContent = s; ul.appendChild(li);
       });
       // 11.11.2026: способи оплати карткою — офіційні логотипи з брендбука monobank для інтернет-магазинів
@@ -3856,9 +3857,13 @@ scModule(32, function () {
       // Картинка не завантажилась — замість неї плашка з назвою.
       var chips = document.createElement('div');
       chips.className = 'sc-fpay-chips';
-      [['Visa', 'visa'], ['Mastercard', 'mc'], ['Apple Pay', 'apple-pay'], ['Google Pay', 'google-pay'], ['plata by mono', 'plata']].forEach(function (x) {
+      // NovaPay — основний логотип з брендбука NovaPay (novapay.ua/constructor/brandbook, «Лого в SVG»,
+      // novapay-logo_Logo_Symbol_Black.svg, без змін). У файлі вже є захисне поле навколо логотипа,
+      // тому картинка вища (36 px), а поле компенсуємо від'ємними відступами — видима висота як у решти.
+      [['Visa', 'visa'], ['Mastercard', 'mc'], ['Apple Pay', 'apple-pay'], ['Google Pay', 'google-pay'], ['plata by mono', 'plata'], ['NovaPay', 'novapay', 'sc-fpay-np']].forEach(function (x) {
         var im = document.createElement('img');
-        im.alt = x[0]; im.title = x[0]; im.loading = 'lazy'; im.height = 22;
+        im.alt = x[0]; im.title = x[0]; im.loading = 'lazy'; im.height = x[2] ? 36 : 22;
+        if (x[2]) im.className = x[2];
         im.onerror = function () { var c = document.createElement('span'); c.textContent = x[0]; if (im.parentNode) im.parentNode.replaceChild(c, im); };
         im.src = SC_PAY_IMG + x[1] + '.svg';
         chips.appendChild(im);
