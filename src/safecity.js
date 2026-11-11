@@ -3769,6 +3769,8 @@ scModule(32, function () {
     '.sc-fpay{list-style:none;margin:6px 0 10px;padding:0;font-size:13px;line-height:1.5;color:#4A4F4C}' +
     '.sc-fpay li{position:relative;padding-left:14px}' +
     '.sc-fpay li:before{content:"";position:absolute;left:0;top:.6em;width:6px;height:6px;border-radius:50%;background:#2E9E4F}' +
+    '.sc-fpay-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px;max-width:330px}' +
+    '.sc-fpay-chips span{border:1px solid #cfd4d0;border-radius:6px;background:#fff;padding:3px 8px;font-size:12px;line-height:1.4;font-weight:600;color:#1E1F1E;white-space:nowrap}' +
     '.sc-fpay-note{font-size:12px;color:#4A4F4C;margin-top:4px}');
 
   scReady(scSafe(32, function () {
@@ -3827,6 +3829,8 @@ scModule(32, function () {
       if (parts.length >= 4) {
         addr.textContent = '';
         for (var j = 0; j + 1 < parts.length; j += 2) {
+          // 11.11.2026 (рішення власника): юридична адреса (Миколаїв) — лише на сторінці «Контакти», у футері не показуємо
+          if (/Юридична адреса/.test(parts[j])) continue;
           var h = document.createElement('span'); h.className = 'sc-faddr-t'; h.textContent = parts[j].replace(':', '');
           addr.appendChild(h);
           addr.appendChild(document.createTextNode(parts[j + 1].replace(/\.$/, '').replace(/,(\S)/g, ', $1')));
@@ -3841,11 +3845,18 @@ scModule(32, function () {
     if (anchor && !document.querySelector('.sc-fpay')) {
       var ul = document.createElement('ul');
       ul.className = 'sc-fpay';
-      ['Оплата при отриманні', 'Карткою онлайн: Visa, Mastercard, Apple Pay, Google Pay', 'Безготівково для юросіб і ФОП'].forEach(function (s) {
+      ['Оплата при отриманні (NovaPay)', 'Рахунок для юросіб і ФОП'].forEach(function (s) {
         var li = document.createElement('li'); li.textContent = s; ul.appendChild(li);
       });
-      if (pay) pay.parentNode.insertBefore(ul, pay);
-      else anchor.parentNode.insertBefore(ul, anchor.nextSibling);
+      // 11.11.2026: способи оплати карткою — рядом плашок з назвами (не логотипи: файли логотипів платіжних
+      // систем власник може додати окремо, тоді тут замінити на <img>)
+      var chips = document.createElement('div');
+      chips.className = 'sc-fpay-chips';
+      ['Visa', 'Mastercard', 'Apple Pay', 'Google Pay', 'plata by mono'].forEach(function (s) {
+        var c = document.createElement('span'); c.textContent = s; chips.appendChild(c);
+      });
+      if (pay) { pay.parentNode.insertBefore(chips, pay); pay.parentNode.insertBefore(ul, pay); }
+      else { anchor.parentNode.insertBefore(ul, anchor.nextSibling); anchor.parentNode.insertBefore(chips, ul); }
       if (pay && pay.querySelector('a[href*="chast.monobank"]')) {
         var n = document.createElement('div'); n.className = 'sc-fpay-note'; n.textContent = 'Покупка частинами від monobank';
         pay.parentNode.insertBefore(n, pay.nextSibling);
@@ -4729,7 +4740,12 @@ scModule(37, function () {
     // 11.11.2026: «камера з сім картою», «роутер під симку», «sim» — у назвах це «4G»
     [/(^|\s)(?:(?:з|с|із|під|под)\s+)?(?:сім|сим|sim)(?:[\s-]?карт[а-яіїєґ]*|к[а-яіїєґ]*)?(?=\s|$)/gi, '$1 4g'],
     // «відеодомофон 7 дюймів» — у назвах «7"», лапки при розборі зникають
-    [/(\d)\s*(?:дюйм[а-яіїєґ]*|inch(?:es)?)(?=\s|$)/gi, '$1']
+    [/(\d)\s*(?:дюйм[а-яіїєґ]*|inch(?:es)?)(?=\s|$)/gi, '$1'],
+    // 11.11.2026: «камера 360» — поворотна; «камера 2К / 4К» — у назвах це 4 / 8 Мп (лише в запитах про камери)
+    [/^(?=.*(?:камер|kamer|camera)).*$/i, function (s) {
+      return s.replace(/(^|\s)360\s*(?:°|градус[а-яіїєґ]*)?(?=\s|$)/gi, '$1поворотна')
+        .replace(/(^|\s)2\s?[kк](?=\s|$)/gi, '$14мп').replace(/(^|\s)4\s?[kк](?=\s|$)/gi, '$18мп');
+    }]
   ];
   /* ---------- пошук за числовими характеристиками (10.11.2026) ----------
    * «доводчик на двері 30 кг», «ДБЖ для котла 150 Вт», «реєстратор на 6 камер», «камера 50 м», «кабель hdmi 15 м»…
@@ -5063,6 +5079,8 @@ scModule(37, function () {
     '.sc37-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}',
     '.sc37-card{display:flex;flex-direction:column;border:1px solid #e6e6e6;border-radius:8px;padding:10px;color:#222;text-decoration:none;background:#fff}',
     '.sc37-card:hover{border-color:#2a9d4a}',
+    '.sc37-buy{margin-top:8px;border:0;border-radius:6px;background:#2a9d4a;color:#fff;font-weight:600;font-size:14px;padding:8px 6px;cursor:pointer}',
+    '.sc37-buy:hover{background:#1f7a39}.sc37-buy[disabled]{opacity:.7;cursor:default}',
     '.sc37-card img{width:100%;aspect-ratio:1/1;object-fit:contain;margin-bottom:8px}',
     // немає фото / не відкрилось — сіра заглушка того ж розміру, щоб картки не «стрибали»
     '.sc37-noimg{display:block;width:100%;aspect-ratio:1/1;margin-bottom:8px;border-radius:6px;background:#f4f5f4 url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23c8ccc8%27 d=%27M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5z%27/%3E%3C/svg%3E") center/32% no-repeat}',
@@ -5332,13 +5350,27 @@ scModule(37, function () {
       }
       var box = document.createElement('div');
       box.className = 'sc37-res';
-      var onlyStock = false, sort = 'rel', shown = 0, list = r.items, PAGE = 24;
+      // 11.11.2026: сортування (&s=) і «лише в наявності» (&st=1) — у посиланні, кількість показаних і місце на
+      // сторінці — в history.state: «Назад» з товару повертає до того самого списку на тому самому місці
+      var onlyStock = sp.get('st') === '1', sort = /^(asc|desc)$/.test(sp.get('s') || '') ? sp.get('s') : 'rel', shown = 0, list = r.items, PAGE = 24;
+      var hs0 = (function () { try { return history.state && typeof history.state === 'object' ? history.state : {}; } catch (x) { return {}; } })();
+      var restoreN = +hs0.sc37n || 0, restoreY = +hs0.sc37y || 0;
+      function saveState(withScroll) {
+        try {
+          var st = {}, hs = history.state;
+          if (hs && typeof hs === 'object') for (var k in hs) st[k] = hs[k];
+          st.sc37n = shown;
+          st.sc37y = withScroll ? window.pageYOffset : 0;
+          history.replaceState(st, '', resultsUrl(q, selCat, selBrand, aParam()) + (sort !== 'rel' ? '&s=' + sort : '') + (onlyStock ? '&st=1' : ''));
+        } catch (x) {}
+      }
       [].forEach.call(document.querySelectorAll('.catalog__top-col--right'), function (el) { el.style.visibility = 'hidden'; });   // сортування Хорошопу не діє на наш список
       function cards(from, to, arr) {
         return arr.slice(from, to).map(function (it, i) {
           return '<a class="sc37-card" href="' + esc(it.u) + '" data-i="' + (from + i) + '">' + (it.i ? '<img src="' + esc(it.i) + '" alt="' + esc(it.n) + '" loading="lazy">' : '<span class="sc37-noimg"></span>') +
             (it.b ? '<span class="sc37-b">' + esc(it.b) + '</span>' : '') + '<span class="sc37-t">' + esc(it.n) + '</span>' +
-            '<span class="sc37-pr">' + price(it.p) + '</span><span class="sc37-st' + (it.s ? '' : ' is-out') + '">' + (it.s ? 'В наявності' : 'Немає в наявності') + '</span></a>';
+            '<span class="sc37-pr">' + price(it.p) + '</span><span class="sc37-st' + (it.s ? '' : ' is-out') + '">' + (it.s ? 'В наявності' : 'Немає в наявності') + '</span>' +
+            (it.s ? '<button type="button" class="sc37-buy" data-u="' + esc(it.u) + '">Купити</button>' : '') + '</a>';
         }).join('');
       }
       // фільтр з посилання (категорія / бренд з підказок), якого серед знайденого немає, — ігноруємо
@@ -5399,7 +5431,8 @@ scModule(37, function () {
         var arr = list.filter(function (it) { return pass(it); });
         if (sort === 'asc') arr.sort(function (a, b) { return a.p - b.p; });
         else if (sort === 'desc') arr.sort(function (a, b) { return b.p - a.p; });
-        shown = Math.min(PAGE, arr.length);
+        shown = Math.min(Math.max(PAGE, restoreN), arr.length);
+        restoreN = 0;
         var fx = fixedText(q, r);
         box.innerHTML = (fx ? '<p class="sc37-note">Показано результати для «<b>' + esc(fx) + '</b>»</p>' : '') +
           (r.qnote ? '<p class="sc37-note">Лише ті, що підходять: <b>' + esc(r.qnote) + '</b> (за характеристиками виробника)</p>' : '') +
@@ -5415,6 +5448,7 @@ scModule(37, function () {
         if (e.target.type === 'checkbox') onlyStock = e.target.checked;
         else if (e.target.tagName === 'SELECT') sort = e.target.value;
         draw();
+        saveState();
       }));
       box.addEventListener('click', scSafe(37, function (e) {
         var chip = e.target.closest('button.sc37-chip');
@@ -5428,10 +5462,9 @@ scModule(37, function () {
             if (p[0] === 'f') { if (selF[p[1]]) delete selF[p[1]]; else selF[p[1]] = 1; }
             else if (selA[p[0]] === p[1]) delete selA[p[0]]; else selA[p[0]] = p[1];
           }
-          // фільтр — у посиланні: «Назад» з товару повертає до того ж списку
-          try { history.replaceState(history.state, '', resultsUrl(q, selCat, selBrand, aParam())); } catch (x) {}
           try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_search_facet', { search_term: q.slice(0, 100), facet: facetName, place: 'page' }); } catch (x) {}
           draw();
+          saveState();                                              // фільтр — у посиланні: «Назад» з товару повертає до того ж списку
           return;
         }
         if (e.target.classList.contains('sc37-more')) {
@@ -5439,14 +5472,34 @@ scModule(37, function () {
           grid.insertAdjacentHTML('beforeend', cards(shown, shown + PAGE, arr));
           shown = Math.min(shown + PAGE, arr.length);
           if (shown >= arr.length) e.target.remove();
+          saveState();
+          return;
+        }
+        // «Купити» просто зі списку (11.11.2026): штатний кошик Хорошопу, id товару — зі сторінки товару (блок 39);
+        // не вийшло — відкриваємо картку товару
+        var buy = e.target.closest('.sc37-buy');
+        if (buy) {
+          e.preventDefault(); e.stopPropagation();
+          if (buy.disabled) return;
+          var bu = buy.getAttribute('data-u');
+          buy.disabled = true; buy.textContent = 'Додаємо…';
+          (window.scProductId ? window.scProductId(bu) : Promise.reject(new Error('no api'))).then(function (id) {
+            if (!id || typeof window.AjaxCart === 'undefined') throw new Error('no id');
+            window.AjaxCart.getInstance().appendProduct({ type: 'product', id: +id }, undefined, true);
+            buy.textContent = 'У кошику ✓';
+            try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_search_buy', { search_term: q.slice(0, 100), item_url: bu }); } catch (x) {}
+            setTimeout(function () { buy.disabled = false; buy.textContent = 'Купити'; }, 2500);
+          })['catch'](function () { saveState(true); location.href = bu; });
           return;
         }
         var a = e.target.closest('a[data-i]');
+        if (a) saveState(true);
         if (a) try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_search_click', { search_term: q.slice(0, 100), position: +a.getAttribute('data-i') + 1, place: 'page' }); } catch (x) {}
       }));
       draw();
       anchor.parentElement.insertBefore(box, anchor);
       hideEls.forEach(function (el) { el.style.display = 'none'; });
+      if (restoreY) setTimeout(function () { window.scrollTo(0, restoreY); }, 0);
     }));
   }
 });
@@ -5648,6 +5701,7 @@ scModule(39, function () {
       })();
     }).then(function (id) { if (id) ids[url] = id; return id; });
   }
+  window.scProductId = productId;   // для «Купити» на сторінці результатів пошуку (блок 37)
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function price(p) { return String(p).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' грн'; }
