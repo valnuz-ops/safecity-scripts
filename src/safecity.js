@@ -5131,7 +5131,8 @@ scModule(37, function () {
    * постачальника перебудовуються не одразу. Тому показані в результатах товари перевіряємо по самій сторінці
    * товару (scProduct: читає лише початок сторінки до мітки наявності, не більше 2 одночасно, кеш 1 год)
    * і, якщо наявність або ціна інші, одразу перемальовуємо список.
-   * Перевіряються лише показані товари (у підказках — до 8, на сторінці — видимі), кожен раз за відкриття сторінки;
+   * Перевіряються лише показані товари (у підказках — перші 4, на сторінці — картки, що з'явились на екрані),
+   * кожен раз за відкриття сторінки;
    * свіжа відповідь (з ціною) зберігається в sc37-live і використовується далі без запитів. */
   var verified = {}, VERIFY_FRESH = 15 * 60e3;
   function verifyLive(items, onChange) {
@@ -5298,9 +5299,10 @@ scModule(37, function () {
     if (q !== lastQ) { lastQ = q; clearTimeout(render.t); render.t = setTimeout(function () { ga(q, r, 'dropdown'); }, 1500); }
     // наявність і ціну показаних — перевіряємо по сторінці товару, коли покупець перестав друкувати
     clearTimeout(render.v);
-    if (top.some(function (it) { return !verified[it.u]; })) render.v = setTimeout(scSafe(37, function () {
+    var top4 = top.slice(0, 4);                                  // лише перші 4 — їх бачать найчастіше, менше запитів
+    if (top4.some(function (it) { return !verified[it.u]; })) render.v = setTimeout(scSafe(37, function () {
       if (input.value.trim() !== q || dd.style.display === 'none') return;
-      verifyLive(top, function () {
+      verifyLive(top4, function () {
         if (ddInput === input && dd.style.display !== 'none' && input.value.trim() === q) render(input, q);
       });
     }), 350);
@@ -5561,10 +5563,30 @@ scModule(37, function () {
           '<div class="sc37-grid">' + cards(0, shown, arr) + '</div>' + (arr.length > shown ? '<button type="button" class="sc37-more">Показати ще</button>' : '');
         box.querySelector('select').value = sort;
         box._arr = arr;
-        verifyLive(arr.slice(0, shown), redraw);
+        watchCards();
       }
       // наявність / ціна з сторінки товару інші, ніж в індексі — той самий список, та сама кількість
-      function redraw() { if (!box.isConnected) return; restoreN = shown; draw(); }
+      // (кілька відповідей поспіль — одна перемальовка)
+      var redrawT = 0;
+      function redraw() { clearTimeout(redrawT); redrawT = setTimeout(scSafe(37, function () { if (!box.isConnected) return; restoreN = shown; draw(); }), 200); }
+      // перевіряємо картку, лише коли вона з'являється на екрані (а не всі показані одразу)
+      var cardIO = null;
+      function watchCards() {
+        if (!('IntersectionObserver' in window)) { verifyLive((box._arr || []).slice(0, 12), redraw); return; }
+        if (cardIO) cardIO.disconnect();
+        cardIO = new IntersectionObserver(function (es) {
+          es.forEach(function (e) {
+            if (!e.isIntersecting) return;
+            cardIO.unobserve(e.target);
+            var it = (box._arr || [])[+e.target.getAttribute('data-i')];
+            if (it) verifyLive([it], redraw);
+          });
+        }, { rootMargin: '150px 0px' });
+        [].forEach.call(box.querySelectorAll('.sc37-card[data-i]'), function (c) {
+          var it = (box._arr || [])[+c.getAttribute('data-i')];
+          if (it && !verified[it.u]) cardIO.observe(c);
+        });
+      }
       box.addEventListener('change', scSafe(37, function (e) {
         if (e.target.type === 'checkbox') onlyStock = e.target.checked;
         else if (e.target.tagName === 'SELECT') sort = e.target.value;
@@ -5594,7 +5616,7 @@ scModule(37, function () {
           shown = Math.min(shown + PAGE, arr.length);
           if (shown >= arr.length) e.target.remove();
           saveState();
-          verifyLive(arr.slice(0, shown), redraw);
+          watchCards();
           return;
         }
         // «Купити» просто зі списку (11.11.2026): штатний кошик Хорошопу, id товару — зі сторінки товару (блок 39);
@@ -5621,6 +5643,7 @@ scModule(37, function () {
       draw();
       anchor.parentElement.insertBefore(box, anchor);
       hideEls.forEach(function (el) { el.style.display = 'none'; });
+      watchCards();                                             // картки вже на сторінці — спостерігаємо за ними тут
       if (restoreY) setTimeout(function () { window.scrollTo(0, restoreY); }, 0);
     }));
   }
