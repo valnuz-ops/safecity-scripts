@@ -4456,8 +4456,8 @@ scModule(36, function () {
  *       GA4: sc_search_zero / sc_search_partial / sc_search_fixed / sc_search_voice — для тижневого звіту.
  *     • «від N» за характеристиками (поле q індексу), доводчики за вагою дверей (поле r);
  *       наявність «наживо» з карток каталогу й товару (localStorage sc37-live, 12 год) — фід оновлюється раз на добу.
- *     • 12.11.2026: показані «немає в наявності» перевіряються по сторінці товару (scProduct) і перемальовуються,
- *       якщо товар є, — раніше після оновлення з фіду постачальника товар ставав «в наявності» лише після відкриття картки.
+ *     • 12.11.2026: показані товари перевіряються по сторінці товару (scProduct) — наявність і ціна; якщо інші,
+ *       список перемальовується (раніше після оновлення з фіду постачальника в пошуку були стара ціна / «немає»).
  * ===================================================================== */
 var SC_SEARCH_ON = true;    // true — для всіх відвідувачів
 var SC_SEARCH_INDEX = 'https://valnuz-ops.github.io/safecity-scripts/search/index.json';
@@ -5106,7 +5106,9 @@ scModule(37, function () {
     var pa = document.querySelector('.product-header__availability, .product__availability, [class*="product"][class*="availability"]');
     if (pa && !pa.closest('.catalogCard, .catalog-card')) {
       var cs = stockText(pa.textContent), cu = pathOf((document.querySelector('link[rel=canonical]') || {}).href || location.href);
-      if (cs != null && cu) { live[cu] = [cs, now]; n++; }
+      var pm = document.querySelector('[itemprop="offers"] [itemprop="price"], .product-card__price [itemprop="price"]');
+      var cp = pm ? Math.round(parseFloat(String(pm.getAttribute('content') || '').replace(',', '.'))) || 0 : 0;
+      if (cs != null && cu) { live[cu] = cp ? [cs, now, cp] : [cs, now]; n++; }
     }
     if (n) { liveSave(); if (IDX) applyLive(IDX); }
     return n;
@@ -5115,34 +5117,40 @@ scModule(37, function () {
   function applyLive(idx) {
     if (!idx) return;
     liveLoad();
-    Object.keys(live).forEach(function (u) { var d = idx.byUrl && idx.byUrl[u]; if (d) d.s = live[u][0]; });
+    Object.keys(live).forEach(function (u) {
+      var d = idx.byUrl && idx.byUrl[u];
+      if (!d) return;
+      d.s = live[u][0];
+      if (live[u][2]) d.p = live[u][2];                       // ціна з сайту (12.11.2026) — індекс з фіду раз на добу
+    });
   }
   scReady(scSafe(37, function () { harvestLive(); setTimeout(scSafe(37, harvestLive), 2500); }));
 
-  /* ---------- перевірка «немає в наявності» по сторінці товару (12.11.2026) ----------
-   * Фіди Хорошопу (звідки stock.json) після оновлення наявності з фіду постачальника перебудовуються не одразу,
-   * а «наживо» товар ставав доступним лише після відкриття його картки. Тепер товари, показані в результатах
-   * як «немає в наявності», перевіряємо по самій сторінці товару (scProduct: читає лише початок сторінки до
-   * мітки наявності, не більше 2 одночасно, кеш 1 год) і, якщо товар є, одразу перемальовуємо список.
+  /* ---------- перевірка наявності й ціни по сторінці товару (12.11.2026) ----------
+   * Індекс (ціни) збирається з фіду раз на ніч, а фіди Хорошопу (звідки stock.json) після оновлення з фіду
+   * постачальника перебудовуються не одразу. Тому показані в результатах товари перевіряємо по самій сторінці
+   * товару (scProduct: читає лише початок сторінки до мітки наявності, не більше 2 одночасно, кеш 1 год)
+   * і, якщо наявність або ціна інші, одразу перемальовуємо список.
    * Перевіряються лише показані товари (у підказках — до 8, на сторінці — видимі), кожен раз за відкриття сторінки;
-   * свіжа відповідь потрапляє в sc37-live і далі. */
+   * свіжа відповідь (з ціною) зберігається в sc37-live і використовується далі без запитів. */
   var verified = {}, VERIFY_FRESH = 15 * 60e3;
-  function verifyOut(items, onChange) {
+  function verifyLive(items, onChange) {
     if (typeof scProduct !== 'function' || typeof scInStock !== 'function') return;
     liveLoad();
     var now = Date.now(), t = 0;
     items.forEach(function (it) {
-      if (!it || it.s || !it.u || verified[it.u]) return;
+      if (!it || !it.u || verified[it.u]) return;
       var lv = live[it.u];
-      if (lv && lv[0] === 0 && now - lv[1] < VERIFY_FRESH) return;   // «немає» щойно бачили на самому сайті
+      if (lv && lv[2] && now - lv[1] < VERIFY_FRESH) return;     // щойно бачили на самому сайті — вже підставлено
       verified[it.u] = 1;
       scProduct(it.u).then(scSafe(37, function (p) {
         if (!p || !p.avail) return;
-        var s = scInStock(p.avail) ? 1 : 0;
-        live[it.u] = [s, Date.now()];
+        var s = scInStock(p.avail) ? 1 : 0, pr = +String(p.price || '').replace(/\D/g, '') || 0;
+        live[it.u] = pr ? [s, Date.now(), pr] : [s, Date.now()];
         liveSave();
-        if (s !== it.s) {
+        if (s !== it.s || (pr && pr !== it.p)) {
           it.s = s;
+          if (pr) it.p = pr;
           clearTimeout(t);
           t = setTimeout(scSafe(37, onChange), 150);                // кілька відповідей поспіль — одна перемальовка
         }
@@ -5288,11 +5296,11 @@ scModule(37, function () {
     active = -1;
     place(input);
     if (q !== lastQ) { lastQ = q; clearTimeout(render.t); render.t = setTimeout(function () { ga(q, r, 'dropdown'); }, 1500); }
-    // «немає в наявності» серед показаних — перевіряємо по сторінці товару, коли покупець перестав друкувати
+    // наявність і ціну показаних — перевіряємо по сторінці товару, коли покупець перестав друкувати
     clearTimeout(render.v);
-    if (top.some(function (it) { return !it.s; })) render.v = setTimeout(scSafe(37, function () {
+    if (top.some(function (it) { return !verified[it.u]; })) render.v = setTimeout(scSafe(37, function () {
       if (input.value.trim() !== q || dd.style.display === 'none') return;
-      verifyOut(top, function () {
+      verifyLive(top, function () {
         if (ddInput === input && dd.style.display !== 'none' && input.value.trim() === q) render(input, q);
       });
     }), 350);
@@ -5553,9 +5561,9 @@ scModule(37, function () {
           '<div class="sc37-grid">' + cards(0, shown, arr) + '</div>' + (arr.length > shown ? '<button type="button" class="sc37-more">Показати ще</button>' : '');
         box.querySelector('select').value = sort;
         box._arr = arr;
-        verifyOut(arr.slice(0, shown), redraw);
+        verifyLive(arr.slice(0, shown), redraw);
       }
-      // товар з «немає» виявився в наявності (перевірка по сторінці товару) — той самий список, та сама кількість
+      // наявність / ціна з сторінки товару інші, ніж в індексі — той самий список, та сама кількість
       function redraw() { if (!box.isConnected) return; restoreN = shown; draw(); }
       box.addEventListener('change', scSafe(37, function (e) {
         if (e.target.type === 'checkbox') onlyStock = e.target.checked;
@@ -5586,7 +5594,7 @@ scModule(37, function () {
           shown = Math.min(shown + PAGE, arr.length);
           if (shown >= arr.length) e.target.remove();
           saveState();
-          verifyOut(arr.slice(0, shown), redraw);
+          verifyLive(arr.slice(0, shown), redraw);
           return;
         }
         // «Купити» просто зі списку (11.11.2026): штатний кошик Хорошопу, id товару — зі сторінки товару (блок 39);
