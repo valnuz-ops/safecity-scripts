@@ -5475,13 +5475,26 @@ scModule(37, function () {
       var onlyStock = sp.get('st') === '1', sort = /^(asc|desc)$/.test(sp.get('s') || '') ? sp.get('s') : 'rel', shown = 0, list = r.items, PAGE = 24;
       var hs0 = (function () { try { return history.state && typeof history.state === 'object' ? history.state : {}; } catch (x) { return {}; } })();
       var restoreN = +hs0.sc37n || 0, restoreY = +hs0.sc37y || 0;
+      function sameUrl(u) {
+        try {
+          var a = new URL(u, location.href), b = new URL(location.href);
+          if (a.pathname.replace(/\/$/, '') !== b.pathname.replace(/\/$/, '')) return false;
+          var norm = function (sp) { var e = []; sp.forEach(function (v, k) { e.push(k + '=' + v); }); return e.sort().join('&'); };
+          return norm(a.searchParams) === norm(b.searchParams);
+        } catch (x) { return false; }
+      }
       function saveState(withScroll) {
         try {
           var st = {}, hs = history.state;
           if (hs && typeof hs === 'object') for (var k in hs) st[k] = hs[k];
           st.sc37n = shown;
           st.sc37y = withScroll ? window.pageYOffset : 0;
-          history.replaceState(st, '', resultsUrl(q, selCat, selBrand, aParam()) + (sort !== 'rel' ? '&s=' + sort : '') + (onlyStock ? '&st=1' : ''));
+          // 12.11.2026: якщо параметри ті самі (клік по картці, «Показати ще»), посилання не міняємо —
+          // інакше GA4 (enhanced measurement, зміни історії) рахує зайвий page_view + view_search_results
+          // з порожнім search_term (було сотні на день). Порівнюємо розкодовані параметри: '+' і '%20' — одне й те саме.
+          var url = resultsUrl(q, selCat, selBrand, aParam()) + (sort !== 'rel' ? '&s=' + sort : '') + (onlyStock ? '&st=1' : '');
+          if (sameUrl(url)) history.replaceState(st, '');
+          else history.replaceState(st, '', url);
         } catch (x) {}
       }
       [].forEach.call(document.querySelectorAll('.catalog__top-col--right'), function (el) { el.style.visibility = 'hidden'; });   // сортування Хорошопу не діє на наш список
