@@ -1567,8 +1567,13 @@ scModule(7, function () {
       chip(cr, 'Усі камери ' + camBrand[2] + ' →', url(CFG.cams, { brand: camBrand[1], presence: 1, tipPristrou: [CFG.ipCam, CFG.ptz] }));
     }
 
-    // 2. Живлення камер
-    if (isIP && !isAjax) {
+    // 2. Жорсткий диск (купується окремо)
+    var hdds = num(scGet(f, /^кількість жорстких дисків$/));
+    var hr = row('Жорсткий диск', 'Диск купується окремо' + (hdds > 1 ? ': ' + hdds + ' відсіки' : '') + ' — без нього реєстратор не записує');
+    chip(hr, 'Жорсткі диски →', '/katalog/search/?q=' + encodeURIComponent('жорсткий диск'));
+
+    // 3. Живлення камер (камери Ajax теж живляться по PoE)
+    if (isIP) {
       var pr;
       if (poe) {
         var ports = poePorts || ipCh;
@@ -1580,7 +1585,7 @@ scModule(7, function () {
       chip(pr, 'PoE-комутатори →', url(CFG.switches, { poe: 1, presence: 1 }));
     }
 
-    // 3. Кабель
+    // 4. Кабель
     var kr = row('Кабель і роз’єми');
     chip(kr, 'Вита пара →', url(CFG.utp, { presence: 1 }));
     chip(kr, 'Роз’єми та патч-корди →', url(CFG.connectors, { presence: 1 }));
@@ -2908,6 +2913,7 @@ scModule(19, function () {
     vc:    { url: '/systema-nakopychennia-enerhii-all-in-one-venus-c-marstek/', note: 'Venus C · 2,56 кВт·год, 2,5 кВт' },
     vmini: { url: '/systema-nakopychennia-enerhii-all-in-one-venus-e-mini-marstek/', note: 'Venus E Mini · 2 кВт·год, 1,5 кВт' },
     va:    { url: '/systema-rezervnoho-zhyvlennia-invertor-ta-batareia-vse-v-odnomu-marstek-venus-a-potuzhnist/', note: 'Venus A · 2,12 кВт·год, свій сонячний вхід' },
+    aBat:  { url: '/dodatkova-batareia-marstek-mst-e2-0st-do-systemy-nakopychennia-enerhii-marstek-venus-a-2-1/', note: 'Батарея Venus A · 2,12 кВт·год, до 5 шт.' },
     dInv:  { url: '/invertor-marstek-mst-hi-2200-do-systemy-nakopychennia-enerhii-marstek-venus-d-2-2-kvt-ip65/', note: 'Інверторний модуль Venus D · 2,2 кВт, 4 MPPT' },
     dBat:  { url: '/dodatkova-batareia-marstek-mst-e2-5st-d-do-systemy-nakopychennia-enerhii-marstek-venus-d-2/', note: 'Батарея Venus D · 2,56 кВт·год, до 6 шт.' },
     dKit:  { url: '/systema-nakopychennia-enerhii-invertor-ta-batareia-marstek-venus-d-potuzhnist-2-2-kvt-ener/', note: 'Комплект Venus D · інвертор + батарея 2,56 кВт·год' },
@@ -3035,6 +3041,11 @@ scModule(19, function () {
         text: 'У комплекті одна батарея. Ємність нарощують батареями Marstek MST-E2.5ST-D — до 6 шт. у системі (15,36 кВт·год); лічильник CT002 — для режиму власного споживання:',
         list: [MS.dBat, MS.ct]
       };
+      if (/MST-E2\.0ST/i.test(t)) return {
+        title: '⚡ Система для цієї батареї',
+        text: 'Батарея сумісна лише з системою Marstek Venus A (базовий блок з інвертором і першою батареєю 2,12 кВт·год). До однієї системи — до 5 додаткових батарей, разом до 12,72 кВт·год:',
+        list: [MS.va, MS.ct]
+      };
       if (/DB63S/i.test(t)) return {
         title: '🔋 Сумісні системи Marstek',
         text: 'Смартбокс DB63S працює із системами Marstek Venus E 3.0 і Venus C (за даними постачальника):',
@@ -3062,8 +3073,8 @@ scModule(19, function () {
       };
       if (/Venus A\b/i.test(t)) return {
         title: '🧩 Підберіть до Venus A',
-        text: 'Розумний лічильник Marstek для режиму власного споживання:',
-        list: [MS.ct]
+        text: 'Ємність нарощують батареями Marstek MST-E2.0ST — до 5 шт. (до 12,72 кВт·год у системі); лічильник CT002 — для режиму власного споживання:',
+        list: [MS.aBat, MS.ct]
       };
       return null;
     },
@@ -5806,6 +5817,12 @@ scModule(39, function () {
         var ah = (n.match(/під АКБ\s*(\d+(?:\.\d+)?)Ah/i) || [])[1];
         return ah ? [R('акумулятор 12v ' + ah + 'ah', 1, /\b24V\b/i.test(n) ? 'Для ДБЖ 24 В потрібні 2 такі акумулятори 12 В' : 'Акумулятор потрібної ємності — купується окремо')] : [];
       }
+      case 'Системи накопичення енергії':
+        // Marstek: батареї розширення — лише своєї серії (як у блоці 19)
+        if (/MST-E2\.0ST/i.test(n)) return [!has(cart, /venus a\b(?!.*mst)/i) && { u: '/systema-rezervnoho-zhyvlennia-invertor-ta-batareia-vse-v-odnomu-marstek-venus-a-potuzhnist/', n: 1, note: 'Базовий блок Venus A — якщо його ще немає' }];
+        if (/Venus A\b/i.test(n)) return [{ u: '/dodatkova-batareia-marstek-mst-e2-0st-do-systemy-nakopychennia-enerhii-marstek-venus-a-2-1/', n: 1, note: 'Батарея розширення Venus A (до 5 шт.)' }, { u: '/rozumnyi-lichilnyk-ct002-marstek/', n: 1, note: 'Лічильник для режиму власного споживання' }];
+        if (/Venus D\b|MST-HI-2200/i.test(n) && !/MST-E2\.5ST-D/i.test(n)) return [{ u: '/dodatkova-batareia-marstek-mst-e2-5st-d-do-systemy-nakopychennia-enerhii-marstek-venus-d-2/', n: 1, note: 'Батарея розширення Venus D (до 6 шт.)' }];
+        return [];
       case 'Маршрутизатори':
         return /маршрутизатор|роутер/i.test(n) && !/4g|lte/i.test(n) ? [upsR('Інтернет працює без світла', (+it.p || 0) < 3000)] : [];
       case 'Точки доступу':
