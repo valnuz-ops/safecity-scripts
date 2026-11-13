@@ -6067,8 +6067,10 @@ scModule(40, function () {
   var LS = 'sc40', SS = 'sc40-shown', GAP = 3600e3, EXIT_AFTER = 20e3, t0 = Date.now();
 
   function ga(ev, p) { try { if (typeof window.gtag === 'function') window.gtag('event', ev, p); } catch (x) {} }
-  function get(st, k) { try { return st.getItem(k); } catch (e) { return null; } }
-  function set(st, k, v) { try { st.setItem(k, v); } catch (e) {} }
+  // st — назва сховища ('localStorage' / 'sessionStorage'): саме звернення window.localStorage кидає SecurityError,
+  // коли браузер блокує сховище (iOS-вебвʼю, заборонені cookie, приватний режим), тому — лише всередині try
+  function get(st, k) { try { return window[st].getItem(k); } catch (e) { return null; } }
+  function set(st, k, v) { try { window[st].setItem(k, v); } catch (e) {} }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   // стан кошика з шапки й прихованого вікна кошика Хорошопу
@@ -6108,8 +6110,8 @@ scModule(40, function () {
 
   function show(why) {
     var c = cart();
-    if (!c || document.getElementById('sc40') || cartOpen() || get(sessionStorage, SS)) return;
-    set(sessionStorage, SS, why);
+    if (!c || document.getElementById('sc40') || cartOpen() || get('sessionStorage', SS)) return;
+    set('sessionStorage', SS, why);
     scStyle('sc40-css', CSS);
     var box = document.createElement('div');
     box.id = 'sc40';
@@ -6145,10 +6147,10 @@ scModule(40, function () {
   }
 
   function start() {
-    if (/checkout.*complete|complete.*order/i.test(location.pathname)) { set(localStorage, LS, ''); return; }
-    var prev = parseInt(get(localStorage, LS), 10) || 0;
+    if (/checkout.*complete|complete.*order/i.test(location.pathname)) { set('localStorage', LS, ''); return; }
+    var prev = parseInt(get('localStorage', LS), 10) || 0;
     var c = cart();
-    set(localStorage, LS, c ? String(Date.now()) : '');            // останній перегляд із товарами в кошику
+    set('localStorage', LS, c ? String(Date.now()) : '');            // останній перегляд із товарами в кошику
     if (c && prev && Date.now() - prev >= GAP) setTimeout(scSafe(40, function () { show('return'); }), 2500);
 
     // ПК: курсор вийшов за верх вікна
@@ -6160,7 +6162,7 @@ scModule(40, function () {
     }
     // кошик змінився на цій сторінці — оновлюємо мітку часу
     document.addEventListener('click', function () {
-      setTimeout(function () { if (cart()) set(localStorage, LS, String(Date.now())); }, 2500);
+      setTimeout(function () { if (cart()) set('localStorage', LS, String(Date.now())); }, 2500);
     }, true);
   }
   scIdle(scSafe(40, start));
