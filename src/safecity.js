@@ -3646,6 +3646,30 @@ scModule(28, function () {
     P + '.catalog-card__title{font-size:13px!important;line-height:1.25!important;text-align:center!important;margin-top:8px!important;-webkit-line-clamp:3!important}');
 });
 
+// ===== 41. Відео в описі товару (13.11.2026): тема обмежує лише <img>, тож <video> з опису постачальника
+// виходило 1920 px і вилазило за колонку. Обмежуємо ширину; ролики без звуку грають по колу, коли видимі
+// (як у постачальника), і зупиняються поза екраном — щоб не вантажити сторінку. =====
+scModule(41, function () {
+  'use strict';
+  scStyle('sc-descvideo-style',
+    '.text video{display:block!important;max-width:100%!important;width:100%!important;height:auto!important;margin:10px 0!important;background:#000;border-radius:6px}');
+  var vids = [].slice.call(document.querySelectorAll('.text video'));
+  if (!vids.length) return;
+  vids.forEach(function (v) {
+    v.muted = true; v.loop = true; v.playsInline = true;
+    v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+  });
+  if (!('IntersectionObserver' in window)) return;
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      var v = e.target;
+      if (e.isIntersecting) { if (v.preload !== 'auto') v.preload = 'auto'; var p = v.play(); if (p && p.catch) p.catch(function () {}); }
+      else if (!v.paused) v.pause();
+    });
+  }, { threshold: 0.35 });
+  vids.forEach(function (v) { io.observe(v); });
+});
+
 /* =====================================================================
  * 33. Оформлення замовлення — візуальні правки (03.11.2026)
  *     • «Відділення» не вибране заздалегідь: замість №1 — «Оберіть відділення», без вибору
