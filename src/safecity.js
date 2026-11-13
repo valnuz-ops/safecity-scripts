@@ -39,10 +39,22 @@ function scErr(n, e) {
  * 5 звітів за перегляд сторінки. Боти не надсилають. Власні помилки сторожа глушаться тут же —
  * scErr звідси не викликається, тож рекурсії немає. */
 var scHealthSent = {}, scHealthCount = 0;
+/* Мережеві збої fetch (Safari: «Load failed», Chrome: «Failed to fetch», Firefox: «NetworkError…»)
+ * під час переходу на іншу сторінку, згортання вкладки чи без інтернету — це не помилка коду: не звітуємо. */
+var scLeaving = false;
+window.addEventListener('pagehide', function () { scLeaving = true; });
+window.addEventListener('beforeunload', function () { scLeaving = true; });
+window.addEventListener('pageshow', function () { scLeaving = false; });
+function scNetErr(e) {
+  return !!e && e.name === 'TypeError' &&
+    /load failed|failed to fetch|networkerror|network connection was lost|cancelled|скасовано|отменено/i.test(e.message || '');
+}
+function scNetIdle() { return scLeaving || document.visibilityState === 'hidden' || navigator.onLine === false; }
 function scHealth(kind, e) {
   try {
     var url = window.SC_HEALTH_URL_TEST || SC_HEALTH_URL;    // SC_HEALTH_URL_TEST — лише для test/health.html
     if (!url || scHealthCount >= 5) return;
+    if (scNetErr(e) && scNetIdle()) return;                  // обірваний запит при переході / без мережі
     var ua = navigator.userAgent || '';
     if (/bot|crawl|spider|lighthouse|headless/i.test(ua)) return;
 
@@ -5021,7 +5033,20 @@ scModule(37, function () {
     // наявність (stock.json, щогодини з фідів) — паралельно з індексом; не вдалося — лишається нічна з індексу
     var stockP = fetch(SC_SEARCH_STOCK + '?h=' + Math.floor(Date.now() / 6e5), { cache: 'no-cache' })
       .then(function (r) { return r.ok ? r.json() : null; })['catch'](function () { return null; });
-    loading = fetch(SC_SEARCH_INDEX).then(function (r) { if (!r.ok) throw new Error('index ' + r.status); return r.json(); })
+    // індекс 2,7 МБ: на телефоні завантаження часто обривається (слабка мережа, перехід зі сторінки) —
+    // мережевий збій повторюємо ще 2 рази (через 2 і 5 с), поки сторінка відкрита; звітуємо лише якщо не вдалося всі 3 рази
+    function getIndex(attempt) {
+      return fetch(SC_SEARCH_INDEX).then(function (r) { if (!r.ok) throw new Error('index ' + r.status); return r.json(); })['catch'](function (e) {
+        if (!scNetErr(e) || attempt >= 3) {
+          if (scNetErr(e)) e = new TypeError(e.message + ' (index.json, ' + attempt + ' спроби)');
+          throw e;
+        }
+        return new Promise(function (ok, fail) {
+          setTimeout(function () { scNetIdle() ? fail(e) : getIndex(attempt + 1).then(ok, fail); }, attempt === 1 ? 2000 : 5000);
+        });
+      });
+    }
+    loading = getIndex(1)
       .then(scSafe(37, function (data) {
         buildIndex(data, scSafe(37, function (idx) {
           stockP.then(scSafe(37, function (st) {
