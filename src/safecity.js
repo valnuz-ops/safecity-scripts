@@ -6193,6 +6193,192 @@ scModule(40, function () {
 });
 
 /* =====================================================================
+ * 42. Товар не в наявності → «Схожі в наявності» (14.11.2026, як модуль SmartAlt для OpenCart)
+ *     Під кнопкою «Повідомити, коли з'явиться» (блок 16) — до 4 товарів тієї ж категорії, що є в наявності:
+ *     спершу схожі за назвою (тип, серія, характеристики в назві), того ж бренду і з близькою ціною
+ *     (0,5–2× ціни; якщо таких мало — 0,33–3×). Дані — індекс пошуку (блок 37, той самий файл, що й для
+ *     пошуку й «До цього знадобиться», тож зайвого завантаження немає), наявність і ціна кожного показаного
+ *     товару перевіряються по його сторінці (scProduct, кеш 1 год).
+ *     Посилання «Усі … в наявності» — остання категорія з хлібних крихт + filter/presence=1/.
+ *     GA4: sc_alt_view (shown — скільки показали), sc_alt_click (pos, item_url).
+ *     ВІДКАТ: SC_ALT_ON = false (або ?sc_alt=0 у адресі — лише в цьому браузері; ?sc_alt=1 — повернути).
+ * ===================================================================== */
+var SC_ALT_ON = true;
+
+scModule(42, function () {
+  'use strict';
+  var flag = location.search.match(/[?&]sc_alt=([01])/);
+  try { if (flag) localStorage.setItem('sc_alt', flag[1]); } catch (e) {}
+  var local = (function () { try { return localStorage.getItem('sc_alt'); } catch (e) { return null; } })();
+  if (!(local === '1' || (SC_ALT_ON && local !== '0'))) return;
+
+  var SHOW = 4, CHECK = 8;
+
+  scStyle('sc42-css', [
+    '#sc-alt{margin:14px 0 0;padding:12px 14px;border:1px solid #e3e6ea;border-radius:10px;background:#fafbfc;font-size:14px;line-height:1.35}',
+    '#sc-alt .sc42__h{font-weight:700;font-size:15px;margin:0 0 2px}',
+    '#sc-alt .sc42__t{font-size:12.5px;color:#5f6b78;margin:0 0 10px}',
+    '#sc-alt .sc42__list{display:flex;flex-direction:column;gap:6px}',
+    '#sc-alt a.sc42__c{display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid #e6e6e6;border-radius:8px;background:#fff;color:#1a1a1a;text-decoration:none;transition:border-color .15s}',
+    '#sc-alt a.sc42__c:hover{border-color:#2b7de9}',
+    '#sc-alt .sc42__c img{flex:0 0 48px;width:48px;height:48px;object-fit:contain}',
+    '#sc-alt .sc42__n{flex:1;min-width:0;font-size:13px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}',
+    '#sc-alt .sc42__p{flex:0 0 auto;text-align:right;font-weight:700;font-size:14px;white-space:nowrap}',
+    '#sc-alt .sc42__s{display:block;font-size:11.5px;font-weight:400;color:#17b260}',
+    '#sc-alt a.sc42__all{display:inline-block;margin-top:10px;font-size:13px;color:#2b7de9;text-decoration:none}',
+    '#sc-alt a.sc42__all:hover{text-decoration:underline}'
+  ].join('\n'));
+
+  function ga(ev, p) { try { if (typeof window.gtag === 'function') window.gtag('event', ev, p); } catch (x) {} }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function fmt(p) { return String(Math.round(p)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' грн'; }
+  function path() { return location.pathname.replace(/^\/(ru|en)\//, '/'); }
+  function toks(it) {
+    var s = {};
+    String(it.wn || it.n || '').toLowerCase().split(/[\s,()/«»"]+/).forEach(function (t) {
+      if (t.length >= 2 && !/^(для|з|із|та|і|на|під|в|у|до|від)$/.test(t)) s[t] = 1;
+    });
+    return s;
+  }
+  function firstWord(it) { return (String(it.wn || it.n || '').toLowerCase().match(/[a-zа-яіїєґ'’-]{3,}/) || [''])[0]; }
+
+  // кандидати з індексу: та сама категорія, в наявності, з ціною — за схожістю
+  function pick(all, cur) {
+    var ct = toks(cur), cn = Object.keys(ct).length || 1, fw = firstWord(cur), p0 = +cur.p || 0;
+    var pool = all.filter(function (x) { return x.s && x.u !== cur.u && x.k === cur.k && +x.p > 0; });
+    function within(lo, hi) { return pool.filter(function (x) { return !p0 || (x.p >= p0 * lo && x.p <= p0 * hi); }); }
+    var list = within(0.5, 2);
+    if (list.length < SHOW) list = within(0.33, 3);
+    if (list.length < SHOW) list = pool;
+    return list.map(function (x) {
+      var xt = toks(x), common = 0;
+      for (var t in xt) if (ct[t]) common++;
+      var sc = 3 * common / cn;
+      if (cur.b && x.b === cur.b) sc += 1;
+      if (fw && firstWord(x) === fw) sc += 1;
+      if (p0) sc -= 1.5 * Math.abs(Math.log(x.p / p0));
+      return { it: x, sc: sc };
+    }).sort(function (a, b) { return b.sc - a.sc; }).slice(0, CHECK).map(function (r) { return r.it; });
+  }
+
+  // остання справжня категорія з хлібних крихт (не сторінка фільтра) → «усі в наявності»
+  function catLink() {
+    var links = document.querySelectorAll('.breadcrumbs a, [itemtype*="BreadcrumbList"] a'), best = null;
+    [].forEach.call(links, function (a) {
+      var h = (a.getAttribute('href') || '').replace(/^https?:\/\/[^/]+/, '');
+      if (h && h !== '/' && !/\/filter\//.test(h) && !/^\/(ru|en)\/?$/.test(h)) best = { url: h.replace(/\/?$/, '/'), name: a.textContent.trim() };
+    });
+    return best;
+  }
+
+  function render(cur, items) {
+    if (document.getElementById('sc-alt') || !items.length) return;
+    var anchor = scAnchor();
+    if (!anchor) return;
+    var after = document.getElementById('sc-stock') || anchor;
+    var box = document.createElement('div');
+    box.id = 'sc-alt';
+    var cat = catLink();
+    box.innerHTML = '<div class="sc42__h">Схожі товари в наявності</div>' +
+      '<div class="sc42__t">Цього товару зараз немає — ці можна замовити вже сьогодні</div>' +
+      '<div class="sc42__list">' + items.map(function (x, i) {
+        return '<a class="sc42__c" data-pos="' + (i + 1) + '" href="' + esc(SC_LANG + x.u) + '">' +
+          (x.i ? '<img loading="lazy" alt="" src="' + esc(x.i) + '">' : '') +
+          '<span class="sc42__n">' + esc(x.n) + '</span>' +
+          '<span class="sc42__p">' + fmt(x.p) + '<span class="sc42__s">в наявності</span></span></a>';
+      }).join('') + '</div>' +
+      (cat ? '<a class="sc42__all" href="' + esc(cat.url + 'filter/presence=1/') + '">Усі «' + esc(cat.name) + '» в наявності →</a>' : '');
+    after.parentNode.insertBefore(box, after.nextSibling);
+    box.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a.sc42__c');
+      if (a) ga('sc_alt_click', { pos: +a.getAttribute('data-pos'), item_url: a.getAttribute('href') });
+    });
+    ga('sc_alt_view', { shown: items.length, non_interaction: true });
+  }
+
+  function start() {
+    var av = document.querySelector('[itemprop="availability"]');
+    var href = av ? av.getAttribute('href') || av.getAttribute('content') || '' : '';
+    if (!/OutOfStock|SoldOut|Discontinued/i.test(href)) return;     // лише «Немає в наявності»
+    if (!scAnchor() || document.getElementById('sc-alt')) return;
+    var api = window.scSearchApi;
+    if (!api || !api.load) return;                                     // старі браузери — без пошуку й без цього блоку
+    api.load(scSafe(42, function (idx) {
+      var cur = idx.byUrl[path()];
+      if (!cur || !cur.k) return;
+      var cands = pick(idx.docs.map(function (d) { return d.it; }), cur);
+      if (!cands.length) return;
+      // перевіряємо по сторінках товарів (наявність і ціна «наживо»), показуємо перші SHOW підтверджених
+      Promise.all(cands.map(function (x) {
+        return scProduct(SC_LANG + x.u).then(function (p) {
+          if (!p || !scInStock(p.avail)) return null;
+          var pr = +String(p.price || '').replace(/\D/g, '');
+          return { u: x.u, n: x.n, i: x.i, p: pr || x.p };
+        });
+      })).then(scSafe(42, function (res) {
+        render(cur, res.filter(Boolean).slice(0, SHOW));
+      }));
+    }));
+  }
+  scIdle(scSafe(42, start));
+});
+
+
+/* =====================================================================
+ * 43. Каталог → «відправимо сьогодні / завтра» під «В наявності» на картках товарів (14.11.2026,
+ *     як модуль Automatic Stickers для OpenCart). Значок «Доставимо безкоштовно» вже ставить сам Хорошоп,
+ *     а «Закінчується» зробити нема з чого: фід TRINITI віддає кількість лише 0 або 10.
+ *     Текст — за тим самим розкладом відправки, що й плашка на картці товару (блок 1, scShipText):
+ *     робочий день до 15:00 (Київ) — «сьогодні», інакше «завтра»; вихідні (пт 15:00 – нд 12:00) — нічого.
+ *     Лише картки в наявності; оновлюється щохвилини (після 15:00 «сьогодні» → «завтра») і після
+ *     перемальовки каталогу фільтрами.
+ *     ВІДКАТ: SC_SHIPTAG_ON = false (або ?sc_shiptag=0 у адресі — лише в цьому браузері).
+ * ===================================================================== */
+var SC_SHIPTAG_ON = true;
+
+scModule(43, function () {
+  'use strict';
+  var flag = location.search.match(/[?&]sc_shiptag=([01])/);
+  try { if (flag) localStorage.setItem('sc_shiptag', flag[1]); } catch (e) {}
+  var local = (function () { try { return localStorage.getItem('sc_shiptag'); } catch (e) { return null; } })();
+  if (!(local === '1' || (SC_SHIPTAG_ON && local !== '0'))) return;
+  if (typeof window.scShipText !== 'function') return;
+
+  scStyle('sc43-css', '.sc43{display:block;margin-top:2px;font-size:12px;line-height:1.3;color:#2f8566;font-weight:400}');
+
+  function label() {
+    var m = (window.scShipText() || {}).main || '';
+    return /^Відправимо сьогодні/.test(m) ? '🚚 Відправимо сьогодні' : /^Відправимо завтра/.test(m) ? '🚚 Відправимо завтра' : '';
+  }
+  function apply() {
+    var text = label();
+    [].forEach.call(document.querySelectorAll('.j-catalog-card .catalogCard-availability'), function (av) {
+      var tag = av.querySelector('.sc43');
+      var own = (av.firstChild && av.firstChild.nodeType === 3 ? av.firstChild.nodeValue : av.textContent).trim();
+      var ok = text && scInStock(own);
+      if (!ok) { if (tag) tag.remove(); return; }
+      if (!tag) { tag = document.createElement('span'); tag.className = 'sc43'; av.appendChild(tag); }
+      if (tag.textContent !== text) tag.textContent = text;
+    });
+  }
+  function start() {
+    if (!document.querySelector('.j-catalog-card')) return;
+    apply();
+    var t = 0;
+    new MutationObserver(function (list) {
+      for (var i = 0; i < list.length; i++) {
+        var n = list[i].target;
+        if (n.nodeType === 1 && !(n.classList && (n.classList.contains('sc43') || n.classList.contains('catalogCard-availability')))) {
+          clearTimeout(t); t = setTimeout(scSafe(43, apply), 300); return;
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+    setInterval(scSafe(43, apply), 6e4);
+  }
+  scReady(scSafe(43, start));
+});
+
+/* =====================================================================
  * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
  *     Хорошоп змінив шаблон — блоки мовчки перестають з'являтися. Раз за перегляд, через ~5 с після
  *     завантаження (сторінка дорисована), перевіряємо те, без чого блоки не працюють, і надсилаємо звіт
