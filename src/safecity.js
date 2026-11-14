@@ -6256,6 +6256,98 @@ scModule(42, function () {
   }
   function firstWord(it) { return (String(it.wn || it.n || '').toLowerCase().match(/[a-zа-яіїєґ'’-]{3,}/) || [''])[0]; }
 
+  /* ---------- сумісність (14.11.2026, після перегляду підбору на всіх ~2 600 картках без наявності) ----------
+   * Схожий за назвою товар ще не означає, що він підходить замість. Відсікаємо:
+   * • інший тип пристрою — перше слово «Типу пристрою» постачальника (поле wx індексу): MHD/HDTVI-камера ≠ IP,
+   *   PTZ ≠ звичайна, відеодзвінок ≠ відеодомофон, кнопка вимикача ≠ тривожна кнопка, ковпачок ≠ патч-корд;
+   * • гірші характеристики: менше каналів / портів / Мп / А·год / mAh / Вт / Вт·год / ВА / ГБ / U / абонентів /
+   *   ваги дверей / діагоналі екрана (NVR 16 кан. → 8 кан., 8 Мп → 5 Мп, 20000 mAh → 10000);
+   * • інша напруга (клас 12 / 24 / 48 В: 12 ≈ 12,8, 48 ≈ 51,2); для запобіжників, автоматів, конекторів —
+   *   номінал не нижчий; БЖ / ДБЖ / зарядні — струм не менший; свинцево-кислотна ≠ LiFePO4;
+   * • вулична ↔ внутрішня, бездротове ↔ дротове, Outdoor ↔ Indoor; EM-Marine ≠ Mifare; NC ≠ NO;
+   *   автоматичні вимикачі — та сама кількість полюсів і струм.
+   * Перевірити з консолі: SC_ALT_PICK('/url-tovaru/') → назви підібраних. */
+  var GE = ['канал', 'порт', 'ah', 'mah', 'w', 'wh', 'va', 'gb', 'u', 'mp', 'ab', 'kg'];
+  var TECH = { ip: 1, hdtvi: 1, hdcvi: 1, ahd: 1, mhd: 1 };
+  var NOTW = '(?![a-zа-яіїєґ0-9])';
+  function qv(x, k) {
+    var m = (' ' + (x.q || '') + ' ').match(new RegExp(' ' + k + ':([\\d.]+) '));
+    return m ? parseFloat(m[1]) : 0;
+  }
+  function spec(x) {
+    if (x._sp) return x._sp;
+    var s = {};
+    String(x.wn || '').split(' ').forEach(function (t) {
+      var m = t.match(/^(\d+(?:\.\d+)?)(mp|канал|порт|v|ah|mah|w|kw|wh|kwh|va|kva|tb|gb|u)$/);
+      if (!m) return;
+      var v = parseFloat(m[1]), u = m[2];
+      if (u === 'kw' || u === 'kwh' || u === 'kva' || u === 'tb') { v *= 1000; u = u === 'kw' ? 'w' : u === 'kwh' ? 'wh' : u === 'kva' ? 'va' : 'gb'; }
+      if (!(u in s)) s[u] = v;
+    });
+    [['ch', 'канал'], ['pw', 'w'], ['ab', 'ab'], ['kg', 'kg']].forEach(function (p) {
+      var v = qv(x, p[0]);
+      if (v && !(p[1] in s)) s[p[1]] = v;
+    });
+    var inch = String(x.n || '').match(/(\d+(?:\.\d+)?)\s?(?:"|”|″|'')/);
+    if (inch) s.inch = parseFloat(inch[1]);
+    return (x._sp = s);
+  }
+  function vclass(v) {
+    var c = [[12, 11, 13.5], [24, 23, 27], [36, 35, 39], [48, 47, 53]];
+    for (var i = 0; i < c.length; i++) if (v >= c[i][1] && v <= c[i][2]) return c[i][0];
+    return v;
+  }
+  function chem(x) {
+    var w = (x.wn || '') + ' ' + (x.wx || '');
+    if (/lifepo4|літій/.test(w)) return 'li';
+    if (/(^|[^a-z])(agm|gel)([^a-z]|$)|свинцев/.test(w)) return 'pb';
+    return '';
+  }
+  function amps(x) { var m = (' ' + (x.wn || '') + ' ').match(/ (\d+(?:\.\d+)?)a /); return m ? parseFloat(m[1]) : 0; }
+  function type(x) {
+    var w = String(x.wx || '').split(' ');
+    if (!w[0]) return '';
+    return TECH[w[0]] && w[1] && w[1].indexOf('відеокамера') !== -1 ? w[0] + '-' + w[1] : w[0];
+  }
+  function card(x) { var n = String(x.n || '').toLowerCase(); return (/em-?marine|(^|[^a-z])em([^a-z]|$)/.test(n) ? 'em' : '') + (/mifare/.test(n) ? 'mf' : ''); }
+  function ncno(x) { var m = String(x.n || '').toLowerCase().match(/(^|[^a-z])(nc|no)([^a-z]|$)/); return m ? m[2] : ''; }
+  function inout(x) { var n = String(x.n || '').toLowerCase(); return (/outdoor/.test(n) ? 'out' : '') + (/indoor/.test(n) ? 'in' : ''); }
+  function poles(x) { var m = String(x.n || '').toLowerCase().match(/(\d)\s?-?\s?(?:p(?![a-z])|полюс)/); return m ? m[1] : ''; }
+  function brAmps(x) { var m = String(x.n || '').toLowerCase().match(new RegExp('(\\d+)\\s?(?:а|a)' + NOTW)); return m ? m[1] : ''; }
+  function has(x, w) { return (' ' + (x.wx || '') + ' ').indexOf(' ' + w + ' ') !== -1; }
+  var RATING_CAT = /запобіжн|вимикач|сонячн|обмежувач|реле|перемикач/i, AMPS_CAT = /блок.*живлен|дбж|зарядн/i;
+  var CARD_NAME = /ключ|брелок|карт|зчитув|клавіат|браслет/i;
+  function fits(cur, x) {
+    var a = spec(cur), b = spec(x), i, k;
+    for (i = 0; i < GE.length; i++) { k = GE[i]; if (k in a && k in b && b[k] < a[k] * 0.95) return false; }
+    if ('inch' in a && 'inch' in b && b.inch < a.inch * 0.95) return false;
+    if ('v' in a && 'v' in b) {
+      if (RATING_CAT.test(cur.k)) { if (b.v < a.v) return false; }
+      else if (vclass(a.v) !== vclass(b.v)) return false;
+    }
+    if (AMPS_CAT.test(cur.k)) { var a0 = amps(cur), a1 = amps(x); if (a0 && a1 && a1 < a0 * 0.95) return false; }
+    var c0 = chem(cur), c1 = chem(x);
+    if (c0 && c1 && c0 !== c1) return false;
+    var pairs = [['бездротове', 'дротове'], ['вуличне', 'внутрішнє']];
+    for (i = 0; i < pairs.length; i++) {
+      var p = pairs[i][0], q = pairs[i][1];
+      if ((has(cur, p) && !has(cur, q) && has(x, q) && !has(x, p)) || (has(cur, q) && !has(cur, p) && has(x, p) && !has(x, q))) return false;
+    }
+    var t0 = type(cur), t1 = type(x);
+    if (t0 && t1 && t0 !== t1) return false;
+    var k0 = card(cur), k1 = card(x);
+    if (k0 && k1 && k0 !== k1 && k1.indexOf(k0) === -1) return false;
+    if (k0 && !k1 && CARD_NAME.test(cur.n)) return false;
+    var n0 = ncno(cur), n1 = ncno(x);
+    if (n0 && n1 && n0 !== n1) return false;
+    var o0 = inout(cur), o1 = inout(x);
+    if (o0 && o1 && o0 !== o1) return false;
+    if (/вимикач/i.test(cur.k) && (poles(cur) !== poles(x) || brAmps(cur) !== brAmps(x))) return false;
+    return true;
+  }
+  // товари-аксесуари в інших категоріях (кронштейн для замка, ковпачок для патч-корду…) — без підбору
+  var SKIP_NAME = /^(кронштейн|козирок|коробка|ковпачок|заглушка|кріплення|рамка)/i;
+
   // кандидати з індексу: та сама категорія, в наявності, з ціною — за схожістю
   function pick(all, cur) {
     var ct = toks(cur), cn = Object.keys(ct).length || 1, fw = firstWord(cur), p0 = +cur.p || 0, br = String(cur.b || '').toLowerCase();
@@ -6269,7 +6361,8 @@ scModule(42, function () {
       for (var t in xt) if (ct[t] && t !== br) n++;
       if (n < 2) return false;
       if (l0 && !(len(x) >= l0)) return false;
-      return !x0 || sect(x) === x0;
+      if (x0 && sect(x) !== x0) return false;
+      return fits(cur, x);
     }
     var pool = all.filter(function (x) { return x.s && x.u !== cur.u && x.k === cur.k && +x.p > 0 && alike(x); });
     function within(lo, hi) { return pool.filter(function (x) { return !p0 || (x.p >= p0 * lo && x.p <= p0 * hi); }); }
@@ -6323,6 +6416,15 @@ scModule(42, function () {
     ga('sc_alt_view', { shown: items.length, non_interaction: true });
   }
 
+  window.SC_ALT_PICK = function (u) {
+    var api = window.scSearchApi, out = 'індекс ще вантажиться';
+    if (api) api.load(function (idx) {
+      var cur = idx.byUrl[u];
+      out = cur ? pick(idx.docs.map(function (d) { return d.it; }), cur).map(function (x) { return x.n + ' — ' + x.p; }) : 'немає в індексі';
+    });
+    return out;
+  };
+
   function start() {
     var av = document.querySelector('[itemprop="availability"]');
     var href = av ? av.getAttribute('href') || av.getAttribute('content') || '' : '';
@@ -6332,7 +6434,7 @@ scModule(42, function () {
     if (!api || !api.load) return;                                     // старі браузери — без пошуку й без цього блоку
     api.load(scSafe(42, function (idx) {
       var cur = idx.byUrl[path()];
-      if (!cur || !cur.k || SKIP_CAT.test(cur.k)) return;
+      if (!cur || !cur.k || SKIP_CAT.test(cur.k) || SKIP_NAME.test(String(cur.n).trim())) return;
       var cands = pick(idx.docs.map(function (d) { return d.it; }), cur);
       if (!cands.length) return;
       // перевіряємо по сторінках товарів (наявність і ціна «наживо»), показуємо перші SHOW підтверджених
