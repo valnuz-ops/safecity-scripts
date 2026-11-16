@@ -3,8 +3,9 @@
 
 Джерела:
   1. Facebook-фід Хорошопа (усі товари з прапорцем «Facebook Feed»): назва, посилання, ціна, наявність, фото, бренд, розділ.
-  2. Google-фід Хорошопа: id = артикул на сайті (для нових товарів, яких немає в search/codes.json).
-  3. search/codes.json — внутрішній артикул Хорошопа → артикул на сайті (з експорту каталогу).
+  2. Google-фід Хорошопа: свіжіша наявність і товари, яких ще немає у Facebook-фіді (id там — внутрішній артикул).
+  3. search/codes.json — внутрішній артикул Хорошопа → артикул на сайті (з експорту каталогу 10.11.2026);
+     нові товари доповнюються зі сторінки товару (itemprop="sku") і зберігаються туди ж.
   4. Повний фід постачальника: ключові характеристики (вулична/купольна, PoE, Wi-Fi, мікрофон…) — лише для пошуку.
 
 Запуск: FB_FEED_URL=... GOOGLE_FEED_URL=... python3 tools/build_search_index.py
@@ -122,6 +123,25 @@ def text(el, tag):
     return (x.text or '').strip() if x is not None and x.text else ''
 
 
+def site_sku(url):
+    """Артикул на сайті зі сторінки товару (itemprop="sku"), читаємо лише початок сторінки."""
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (compatible; SafeCitySearchIndex/1.0)'})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            html = b''
+            while len(html) < 600000:
+                chunk = r.read(65536)
+                if not chunk:
+                    break
+                html += chunk
+                m = re.search(rb'itemprop="sku"\s+content="([^"]+)"', html)
+                if m:
+                    return m.group(1).decode('utf-8').strip()
+    except Exception as e:
+        print('sku fetch failed:', url, e)
+    return ''
+
+
 def thumb(url):
     # /content/images/13/21860255606531_+b891c032b4.jpg -> /content/images/13/160x160l80nn0/21860255606531.webp
     # SEO-назви (10.11.2026): /content/images/42/akumuljator-…-85129030621278.jpg -> …/160x160l80nn0/akumuljator-…-85129030621278.webp
@@ -189,11 +209,26 @@ def main():
     # і пошук їх не знаходив. Тепер беремо всі товари Facebook-фіду + ті з Google-фіду, яких у ньому немає.
     fb_links = set(text(it, 'link') for it in fb_items)
     g_only = [it for it in g_items if text(it, 'link') and text(it, 'link') not in fb_links]
+    # 16.11.2026: id у Google-фіді — внутрішній артикул, а не артикул на сайті. Товарів, доданих після експорту
+    # в codes.json, не було знайти за артикулом (26-00723 — Ajax NVR H2DAC). Беремо артикул зі сторінки товару
+    # (до 400 за запуск) і дописуємо в codes.json, щоб наступного разу не завантажувати знову.
+    fetched = 0
+    for it in fb_items + g_only:
+        sku, link = text(it, 'id'), text(it, 'link')
+        if sku and sku not in codes and link and fetched < 400:
+            fetched += 1
+            c = site_sku(link)
+            if c:
+                codes[sku] = c
+    if fetched:
+        with open(CODES, 'w', encoding='utf-8') as f:
+            json.dump(codes, f, ensure_ascii=False, separators=(',', ':'))
+        print('site sku fetched:', fetched)
     items, nocode = [], 0
     for it in fb_items + g_only:
         sku, link = text(it, 'id'), text(it, 'link')
         code = codes.get(sku) or link2code.get(link, '')
-        if not code:
+        if not code or code == sku:
             nocode += 1
         price = re.sub(r'[^\d.]', '', text(it, 'price').split(' ')[0]) or '0'
         cat = text(it, 'product_type').split('>')[-1].strip()

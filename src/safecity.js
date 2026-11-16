@@ -4563,7 +4563,9 @@ scModule(37, function () {
     'наружная': ['вуличне', 'вулична'], 'уличная': ['вуличне', 'вулична'], 'вулична': ['вуличне', 'вулична'], 'внутренняя': ['внутрішнє', 'внутрішня'], 'внутрішня': ['внутрішнє', 'внутрішня'], 'купольная': ['купольна'], 'цилиндрическая': ['циліндрична'], 'поворотная': ['поворотна', 'ptz'],
     'солнечная': ['сонячна'], 'старлинк': ['starlink'], 'старлінк': ['starlink'],
     'хиквижн': ['hikvision'], 'хіквіжн': ['hikvision'], 'хиквижен': ['hikvision'], 'дахуа': ['dahua'], 'твт': ['tvt'], 'имоу': ['imou'], 'імоу': ['imou'], 'эзвиз': ['ezviz'], 'езвіз': ['ezviz'], 'аякс': ['ajax'],
-    'экофлоу': ['ecoflow'], 'екофлоу': ['ecoflow'], 'джекери': ['jackery'], 'джекері': ['jackery'], 'деє': ['deye'], 'дее': ['deye'], 'крафт': ['kraft'], 'тринікс': ['trinix'], 'триникс': ['trinix'], 'слинекс': ['slinex'], 'слінекс': ['slinex'], 'укітел': ['oukitel'], 'оукитель': ['oukitel'], 'оупес': ['oupes'], 'чоетек': ['choetech'], 'хуавей': ['huawei'], 'тплинк': ['tp-link'], 'кади': ['cudy'], 'кюді': ['cudy'], 'мікротік': ['mikrotik'], 'микротик': ['mikrotik']
+    'экофлоу': ['ecoflow'], 'екофлоу': ['ecoflow'], 'джекери': ['jackery'], 'джекері': ['jackery'], 'деє': ['deye'], 'дее': ['deye'], 'крафт': ['kraft'], 'тринікс': ['trinix'], 'триникс': ['trinix'], 'слинекс': ['slinex'], 'слінекс': ['slinex'], 'укітел': ['oukitel'], 'оукитель': ['oukitel'], 'оупес': ['oupes'], 'чоетек': ['choetech'], 'хуавей': ['huawei'], 'тплинк': ['tp-link'], 'кади': ['cudy'], 'кюді': ['cudy'], 'мікротік': ['mikrotik'], 'микротик': ['mikrotik'],
+    // 16.11.2026, з пошуку на сайті
+    'волтсмайл': ['voltsmile'], 'вольтсмайл': ['voltsmile'], 'литайм': ['litime'], 'літайм': ['litime'], 'марстек': ['marstek'], 'батлінк': ['battlink'], 'батлинк': ['battlink']
   };
   // розмовні назви, русизми, транслітерація (10.11.2026, після «свіч» від власника)
   var SYN2 = {
@@ -4856,6 +4858,8 @@ scModule(37, function () {
 
   // запити з реального пошуку, які означають інший товар: «акб для роутера» — це ДБЖ для роутера
   var QUERY_FIX = [
+    // 16.11.2026: «gen 3», «ген 3» — у назвах Starlink «Gen3» разом
+    [/(^|\s)(?:gen|ген)\s+([1-3])(?=\s|$)/gi, '$1gen$2'],
     [/(?:^|\s)(?:акб|акум\S*|аккум\S*|батаре\S*|живлення|питание)\s+(?:для|на)\s+(роутер\S*|маршрутизатор\S*|модем\S*|onu|ону|термінал\S*)/i, ' дбж для $1'],
     // «2в1», «3 in 1» — як у назвах: «2 в 1»
     [/(^|[^0-9])([2-9])\s*(?:в|in|v)\s*1(?![0-9])/gi, '$1$2 в 1'],
@@ -5000,6 +5004,9 @@ scModule(37, function () {
       return /^\d{2,4}$/.test(q) && qt.length > 1 && idx.docs.some(function (d) { return numHit(d, q); });
     });
     var wantAcc = alts.some(function (al) { return al.some(function (a) { return ACC_RE.test(a.t); }); });
+    // 16.11.2026: точна модель із запиту («dt-sl3003», «mst-hi-2200») — першою. Раніше «dt-sl3003» ділилось
+    // на «sl» + «3003», і вище стояв металодетектор TRX-3003B1, бо він у наявності
+    var models = String(query).split(/\s+/).map(compact).filter(function (c) { return c.length >= 5 && /[a-z]/.test(c) && /\d/.test(c); });
     var res = [];
     idx.docs.forEach(function (doc) {
       var sum = 0, hit = 0;
@@ -5014,6 +5021,7 @@ scModule(37, function () {
       if (alts.some(function (al) { return al.some(function (a) { return a.t.length >= 3 && doc.first.some(function (f) { return f === a.t || f.indexOf(stem(a.t)) === 0; }); }); })) score += 0.35;
       if (alts.some(function (al) { return al.some(function (a) { return a.t.length > 3 && doc.cat.indexOf(a.t) >= 0; }); })) score += 0.3;
       if (doc.it.s) score += 0.4;   // у наявності — вище за «тип у назві» (0.35)
+      if (models.length && models.some(function (m) { return doc.codes.some(function (c) { return c === m || (c.indexOf(m) === 0 && /^[a-z]/.test(c.charAt(m.length) || 'a')); }); })) score += 2;
       if (qt.length > 1 && inName === qt.length) score += 0.3;   // усі слова в назві — вище, ніж збіг лише за характеристиками
       // аксесуари (кронштейни, коробки, корпуси, кріплення) — нижче, якщо їх не шукали: «дахуа», «ajax» → спершу самі пристрої
       if (!wantAcc && ACC_RE.test(doc.cat + ' ' + doc.first.join(' '))) score -= 0.45;
