@@ -123,6 +123,9 @@ def text(el, tag):
     return (x.text or '').strip() if x is not None and x.text else ''
 
 
+SKU_DEBUG = 0
+
+
 def site_sku(url):
     """Артикул на сайті зі сторінки товару (itemprop="sku"), читаємо лише початок сторінки."""
     try:
@@ -134,9 +137,15 @@ def site_sku(url):
                 if not chunk:
                     break
                 html += chunk
-                m = re.search(rb'itemprop="sku"\s+content="([^"]+)"', html)
+                m = (re.search(rb'itemprop="sku"[^>]*?content="([^"]+)"', html) or
+                     re.search(rb'\(\xd0\xb0\xd1\x80\xd1\x82\xd0\xb8\xd0\xba\xd1\x83\xd0\xbb: ([0-9A-Za-z-]+)\)', html))   # «(артикул: 26-00723)» у dataLayer
                 if m:
                     return m.group(1).decode('utf-8').strip()
+            global SKU_DEBUG
+            if SKU_DEBUG < 2:
+                SKU_DEBUG += 1
+                i = html.find(b'sku')
+                print('sku not found:', url, len(html), html[max(0, i - 80):i + 80] if i >= 0 else html[:200])
     except Exception as e:
         print('sku fetch failed:', url, e)
     return ''
