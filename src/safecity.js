@@ -5021,7 +5021,7 @@ scModule(37, function () {
       if (alts.some(function (al) { return al.some(function (a) { return a.t.length >= 3 && doc.first.some(function (f) { return f === a.t || f.indexOf(stem(a.t)) === 0; }); }); })) score += 0.35;
       if (alts.some(function (al) { return al.some(function (a) { return a.t.length > 3 && doc.cat.indexOf(a.t) >= 0; }); })) score += 0.3;
       if (doc.it.s) score += 0.4;   // у наявності — вище за «тип у назві» (0.35)
-      if (models.length && models.some(function (m) { return doc.codes.some(function (c) { return c === m || (c.indexOf(m) === 0 && /^[a-z]/.test(c.charAt(m.length) || 'a')); }); })) score += 2;
+      if (models.length && models.some(function (m) { return doc.codes.some(function (c) { return c === m || (c.indexOf(m) === 0 && /^[a-zа-яіїєґ]/.test(c.charAt(m.length))); }); })) score += 2;
       if (qt.length > 1 && inName === qt.length) score += 0.3;   // усі слова в назві — вище, ніж збіг лише за характеристиками
       // аксесуари (кронштейни, коробки, корпуси, кріплення) — нижче, якщо їх не шукали: «дахуа», «ajax» → спершу самі пристрої
       if (!wantAcc && ACC_RE.test(doc.cat + ' ' + doc.first.join(' '))) score -= 0.45;
