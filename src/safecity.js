@@ -154,10 +154,10 @@ function scNear(el, fn, margin) {
 // після «Купити» / відкриття кошика черга чекає 4 с, щоб кошик Хорошопа вантажився першим.
 var scProduct = (function () {
   var TTL = 3600 * 1000, mem = {}, MAXC = 2, active = 0, queue = [], holdUntil = 0, held = 0;
-  function read(k) {
+  function read(k, ttl) {
     try {
       var v = JSON.parse(localStorage.getItem('scp2:' + k));
-      if (v && Date.now() - v.t < TTL) return v.d;
+      if (v && v.d && Date.now() - v.t < ttl) return v;
     } catch (e) {}
     return null;
   }
@@ -213,11 +213,15 @@ var scProduct = (function () {
     var img = (html.match(/property="og:image"\s+content="([^"]*)"/i) || [])[1] || '';
     return { name: name, avail: avail, price: pn ? Math.round(pn).toLocaleString('uk-UA') + ' грн' : '', img: img };
   }
-  return function (url) {
-    if (mem[url]) return mem[url];
-    var cached = read(url);
-    if (cached) return (mem[url] = Promise.resolve(cached));
-    return (mem[url] = new Promise(function (resolve) {
+  // maxAge (мс, необов'язково) — найстаріші дані, які підходять. Без нього — кеш 1 год.
+  // Перевірка наявності в пошуку (модуль 37) передає 15 хв: інакше годинний кеш з часу, коли товару не було,
+  // перебивав свіжу наявність з сайту (16.11.2026 — товар щойно з'явився, а пошук показував «Немає»).
+  return function (url, maxAge) {
+    var ttl = maxAge || TTL, m = mem[url];
+    if (m && Date.now() - m.t < ttl) return m.p;
+    var cached = read(url, ttl);
+    if (cached) return (mem[url] = { t: cached.t, p: Promise.resolve(cached.d) }).p;   // t — коли дані взяли з сайту
+    return (mem[url] = { t: Date.now(), p: new Promise(function (resolve) {
       queue.push(function () {
         // через then: синхронна помилка fetch теж потрапить у catch, і черга не «зависне» з active++
         Promise.resolve(url).then(readHead).then(function (html) {
@@ -227,7 +231,7 @@ var scProduct = (function () {
         }).catch(function () { resolve(null); }).then(function () { active--; pump(); });
       });
       pump();
-    }));
+    }) }).p;
   };
 })();
 
@@ -5204,7 +5208,7 @@ scModule(37, function () {
       var lv = live[it.u];
       if (lv && lv[2] && now - lv[1] < VERIFY_FRESH) return;     // щойно бачили на самому сайті — вже підставлено
       verified[it.u] = 1;
-      scProduct(it.u).then(scSafe(37, function (p) {
+      scProduct(it.u, VERIFY_FRESH).then(scSafe(37, function (p) {
         if (!p || !p.avail) return;
         var s = scInStock(p.avail) ? 1 : 0, pr = +String(p.price || '').replace(/\D/g, '') || 0;
         live[it.u] = pr ? [s, Date.now(), pr] : [s, Date.now()];
