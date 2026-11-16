@@ -48,6 +48,12 @@ def main():
             s = g[link][1]
         if s:
             ins.append(re.sub(r'^https?://[^/]+', '', link))
+        g.pop(link, None)
+    # товари лише з Google-фіду (нові, ще не потрапили у Facebook-фід) — 16.11.2026
+    for link, (_, s) in g.items():
+        total += 1
+        if s:
+            ins.append(re.sub(r'^https?://[^/]+', '', link))
     if total < 1000:
         sys.exit('too few items (%d) — keeping old stock' % total)
     ins.sort()

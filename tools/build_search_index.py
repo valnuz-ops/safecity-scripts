@@ -117,6 +117,8 @@ def get(url, timeout=180):
 
 def text(el, tag):
     x = el.find(G + tag)
+    if x is None:
+        x = el.find(tag)                                  # Google-фід: <title>, <link> без g:
     return (x.text or '').strip() if x is not None and x.text else ''
 
 
@@ -135,12 +137,14 @@ def main():
     codes = json.load(open(CODES, encoding='utf-8')) if os.path.exists(CODES) else {}
 
     link2code, g_stock = {}, {}   # g_stock: наявність із Google-фіду — він свіжіший за Facebook-фід (10.11: 73-01018)
+    g_items = []                  # товари Google-фіду — нові з'являються в ньому раніше, ніж у Facebook-фіді
     if g_url:
         try:
             groot = ET.fromstring(get(g_url))
             for it in groot.iter('item'):
                 link2code[text(it, 'link')] = text(it, 'id')
                 g_stock[text(it, 'link')] = text(it, 'availability') == 'in stock'
+                g_items.append(it)
         except Exception as e:
             print('google feed failed:', e)
 
@@ -180,8 +184,13 @@ def main():
         print('supplier feed failed:', e)
 
     root = ET.fromstring(get(fb_url))
+    fb_items = list(root.iter('item'))
+    # 16.11.2026: нових товарів (кабелі Starlink Gen3 30 м) ще не було у Facebook-фіді, лише в Google-фіді —
+    # і пошук їх не знаходив. Тепер беремо всі товари Facebook-фіду + ті з Google-фіду, яких у ньому немає.
+    fb_links = set(text(it, 'link') for it in fb_items)
+    g_only = [it for it in g_items if text(it, 'link') and text(it, 'link') not in fb_links]
     items, nocode = [], 0
-    for it in root.iter('item'):
+    for it in fb_items + g_only:
         sku, link = text(it, 'id'), text(it, 'link')
         code = codes.get(sku) or link2code.get(link, '')
         if not code:
@@ -211,7 +220,7 @@ def main():
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
-    print('items', len(items), 'without code', nocode, 'with ranges', sum(1 for i in items if i[12]), 'with qty', sum(1 for i in items if i[13]), 'with specs', sum(1 for i in items if i[8]), 'bytes', os.path.getsize(OUT))
+    print('items', len(items), '(google only %d)' % len(g_only), 'without code', nocode, 'with ranges', sum(1 for i in items if i[12]), 'with qty', sum(1 for i in items if i[13]), 'with specs', sum(1 for i in items if i[8]), 'bytes', os.path.getsize(OUT))
 
 
 if __name__ == '__main__':
