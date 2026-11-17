@@ -5811,6 +5811,8 @@ scModule(39, function () {
     var noSwitch = !has(cart, /комутатор/i), noLock = !has(cart, /замок|защіпка/i), noPsu = !has(cart, /блок живлення/i);
     switch (k) {
       case 'Відеокамери':
+        // 17.11.2026: Ajax IndoorCam — слоту microSD немає, запис лише в Ajax NVR або хмару
+        if (b === 'Ajax' && /indoorcam/i.test(n)) return [!has(cart, /nvr|реєстратор/i) && R('відеореєстратор ajax nvr', 1, 'Запис камери Ajax (microSD у камері немає)')];
         if (/wi-?fi|imou|ezviz/i.test(n)) return [R("карта пам'яті microsd", 2, NOTE.sd),
           !has(cart, /дбж для роутер/i) && upsR('Камера працює, поки працює роутер, — ДБЖ тримає Wi-Fi без світла', true)];
         if (ip) return [b === 'Ajax' && !has(cart, /nvr|реєстратор/i) && R('відеореєстратор ajax nvr', 1, 'Запис камер Ajax'), noSwitch && poeR(cart), R('кабель вита пара utp cat5e', 1, NOTE.utp), R('патч-корд мережевий utp', 1, NOTE.patch)];
@@ -5819,7 +5821,8 @@ scModule(39, function () {
         if (/^Нагрудний/.test(n)) return [];
         return [R('жорсткий диск purple', 2, NOTE.hdd), ip && !/poe/i.test(n) && noSwitch && R('poe-комутатор некерований', 1, NOTE.poe), R('кабель hdmi 2.0', 1, NOTE.hdmi)];
       case 'Відеодомофони':
-        if (/^відеодзвінок|дзвінок/i.test(n)) return [];   // відеодзвінок сам по собі, замок і панель йому не потрібні
+        // відеодзвінок сам по собі, замок і панель йому не потрібні; Ajax DoorBell пише лише в Ajax NVR або хмару (17.11.2026)
+        if (/^відеодзвінок|дзвінок/i.test(n)) return b === 'Ajax' && !has(cart, /nvr|реєстратор/i) ? [R('відеореєстратор ajax nvr', 1, 'Запис з дзвінка (або хмара Ajax)')] : [];
         return [R('відеопанель ' + b, 2, 'Панель того ж бренду', function (x) { return isIp(x) === ip && x.k === 'Відеопанелі' && !ACC.test(x.n); }),
           noLock && lockR(NOTE.lock), R("карта пам'яті microsd", 1, 'Запис відвідувачів (якщо є слот microSD)')];
       case 'Відеопанелі':
@@ -5904,6 +5907,16 @@ scModule(39, function () {
         if (/датчик|сповіщувач|сирена|клавіатура|keypad|брелок|кнопка|реле|розетка|вимикач/i.test(n) && !/smartbracket|кріпильна/i.test(n) && !has(cart, /\bhub\b|централь/i))
           return [R('централь ajax hub 2 ' + color(n), 1, 'Без хаба пристрої Ajax не працюють (якщо хаба ще немає)')];
         return [];
+      // 17.11.2026: пожежна лінійка Ajax EN54 — лише з EN54 Fire Hub; батарея до хаба купується окремо
+      case 'Ajax EN54 Line': {
+        var c5 = color(n);
+        if (/fire hub/i.test(n) && !/для en54 fire hub|для ппкп/i.test(n))
+          return [!has(cart, /internal battery/i) && R('батарея ajax en54 internal battery ' + c5, 1, 'Батарея в комплект хаба не входить'),
+            R('датчик диму ajax en54 fireprotect ' + c5, 2, 'Пожежні датчики EN54 для цього хаба', function (x) { return /EN54/i.test(x.n) && /диму/i.test(x.n); })];
+        if (!has(cart, /en54 fire hub/i))
+          return [R('ппкп ajax en54 fire hub ' + c5, 1, 'Пристрої EN54 працюють лише з EN54 Fire Hub', function (x) { return /EN54 Fire Hub/i.test(x.n) && !/для EN54/i.test(x.n); })];
+        return [];
+      }
       case 'Сигналізація U-Prox':
         return !/центр охорони|комплект/i.test(n) && !has(cart, /центр охорони|комплект/i) ? [R('центр охорони u-prox mpx', 1, 'Без центру пристрої U-Prox не працюють (якщо ще немає)')] : [];
       case "ІЧ-бар'єри":
@@ -6517,6 +6530,136 @@ scModule(43, function () {
     setInterval(scSafe(43, apply), 6e4);
   }
   scReady(scSafe(43, start));
+});
+
+/* =====================================================================
+ * 44. Ajax EN54 (пожежна лінійка) і відео Ajax без хаба — сумісність на картці (17.11.2026)
+ *     Блок 9 ці товари пропускає (SKIP: EN54, DoorBell, камери), тут — окремі правила.
+ *     Дані: ajax.systems/ua/tools/devices-compatibility і специфікації Ajax (листопад 2026):
+ *     • EN54 FireProtect (дим, тепло, комбіновані, оповіщувачі), EN54 I/O Module, EN54 Fire ReX — лише з
+ *       EN54 Fire Hub Jeweller (звичайні Hub / Hub 2 / Hub 2 Plus / Hub BP їх не підтримують);
+ *     • батареї EN54 Internal Battery (24 год / 72 год) — лише в EN54 Fire Hub і EN54 Fire ReX; у хабі
+ *       батареї в комплекті немає — купується окремо;
+ *     • GlandBox — лише для EN54 Fire Hub (16 кабельних вводів до 20 мм, сальники окремо);
+ *     • DoorBell і IndoorCam — хаб не потрібен (Wi-Fi 2,4 ГГц), слоту microSD немає: запис лише в Ajax NVR
+ *       або хмару Ajax; хаб (Hub 2 / Hub 2 Plus / Hub BP) — за бажанням, як резервний канал Jeweller.
+ *     На картці хаба — батарея й пристрої EN54 у наявності (спершу того ж кольору); на картці пристрою —
+ *     EN54 Fire Hub у наявності; на DoorBell / IndoorCam — реєстратори Ajax NVR у наявності.
+ *     ВІДКАТ: SC_EN54_ON = false (або ?sc_en54=0 у адресі — лише в цьому браузері).
+ * ===================================================================== */
+var SC_EN54_ON = true;
+
+scModule(44, function () {
+  'use strict';
+  var flag = location.search.match(/[?&]sc_en54=([01])/);
+  try { if (flag) localStorage.setItem('sc_en54', flag[1]); } catch (e) {}
+  var local = (function () { try { return localStorage.getItem('sc_en54'); } catch (e) { return null; } })();
+  if (!(local === '1' || (SC_EN54_ON && local !== '0'))) return;
+
+  var MAX = 6;
+  var U = function (w, b) { return { w: w, b: b || w }; };
+  var HUB = U('/bezdrotovyi-ppkp-ajax-en54-fire-hub-jeweller-white/', '/bezdrotovyi-ppkp-ajax-en54-fire-hub-jeweller-black/');
+  var REX = U('/bezdrotovyi-adresnyi-retransliator-ajax-en54-fire-rex-jeweller-white/', '/bezdrotovyi-adresnyi-retransliator-ajax-en54-fire-rex-jeweller-black/');
+  // для хаба: обов'язкова батарея, далі датчики, кнопка / модуль, ретранслятор, GlandBox
+  var FOR_HUB = [
+    U('/perezariadna-li-ion-batareia-ajax-en54-internal-battery-24h-white/', '/perezariadna-li-ion-batareia-ajax-en54-internal-battery-24h-black/'),
+    U('/perezariadna-li-ion-batareia-ajax-en54-internal-battery-72h-white/', '/perezariadna-li-ion-batareia-ajax-en54-internal-battery-72h-black/'),
+    U('/datchyk-dymu-ajax-en54-fireprotect-smoke-jeweller-white/', '/datchyk-dymu-ajax-en54-fireprotect-smoke-jeweller-black/'),
+    U('/datchyk-tepla-ajax-en54-fireprotect-heat-jeweller-white/', '/datchyk-tepla-ajax-en54-fireprotect-heat-jeweller-black/'),
+    U('/datchyk-dymu-kombinovanyi-zvukovyi-ajax-en54-fireprotect-smoke-sounder-jeweller-white/', '/datchyk-dymu-kombinovanyi-zvukovyi-ajax-en54-fireprotect-smoke-sounder-jeweller-black/'),
+    U('/adresnyi-pozhezhnyi-opovishchuvach-svitlozvukovyi-ajax-en54-fireprotect-sounder-vad-jeweller-white/', '/adresnyi-pozhezhnyi-opovishchuvach-svitlozvukovyi-ajax-en54-fireprotect-sounder-vad-jeweller-black/'),
+    U('/adresnyi-modul-podviinoho-vvodu-vyvodu-ajax-en54-i-o-module-2x2-white/', '/adresnyi-modul-podviinoho-vvodu-vyvodu-ajax-en54-i-o-module-2x2-black/'),
+    REX,
+    U('/aksesuar-dlia-pidvedennia-zhyvlennia-do-ppkp-ajax-glandbox-white/', '/aksesuar-dlia-pidvedennia-zhyvlennia-do-ppkp-ajax-glandbox-black/')
+  ];
+  var NVR = [
+    U('/merezhevyi-videoreiestrator-ajax-nvr-8ch-220v-white/', '/merezhevyi-videoreiestrator-ajax-nvr-8ch-220v-black/'),
+    U('/merezhevyi-videoreiestrator-ajax-nvr-hac-8ch-220v-white/', '/merezhevyi-videoreiestrator-ajax-nvr-hac-8ch-220v-black/'),
+    U('/ip-videoreiestrator-8-kanalnyi-12mp-ajax-nvr-h2dac-8-ch-white/'),
+    U('/merezhevyi-videoreiestrator-ajax-nvr-16ch-220v-white/', '/merezhevyi-videoreiestrator-ajax-nvr-16ch-220v-black/')
+  ];
+
+  var CSS =
+    '#sc-en54{margin:16px 0 0;padding:14px 16px;border:1px solid #f1c9c3;border-radius:10px;background:#fdf6f5;font-size:14px;line-height:1.4}' +
+    '#sc-en54 .sce-t{font-weight:700;font-size:15px;margin:0 0 4px}' +
+    '#sc-en54 .sce-x{color:#555;margin:0 0 10px;font-size:13px}' +
+    '#sc-en54 .sce-l{display:flex;flex-direction:column;gap:8px}' +
+    '#sc-en54 a.sce-i{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #efd9d5;border-radius:8px;background:#fff;color:#1a1a1a;text-decoration:none;transition:border-color .15s}' +
+    '#sc-en54 a.sce-i:hover{border-color:#d9534f}' +
+    '#sc-en54 .sce-img{flex:0 0 48px;width:48px;height:48px;object-fit:contain}' +
+    '#sc-en54 .sce-n{flex:1;min-width:0;font-size:13px;line-height:1.3}' +
+    '#sc-en54 .sce-p{flex:0 0 auto;font-weight:700;white-space:nowrap}' +
+    '#sc-en54 .sce-s{font-size:12px;color:#7a828c;margin:10px 0 0}';
+  var C = { a: 'sce-i', img: 'sce-img', name: 'sce-n', price: 'sce-p' };
+
+  function title() { return scH1().replace(/\s+/g, ' ').trim(); }
+
+  function detect(t) {
+    if (!/Ajax/i.test(t)) return null;
+    if (/EN54/i.test(t)) {
+      if (/Fire Hub/i.test(t) && !/для EN54 Fire Hub|для ППКП/i.test(t)) return 'hub';
+      if (/Internal Battery|батаре/i.test(t)) return 'battery';
+      if (/GlandBox/i.test(t)) return 'gland';
+      return 'device';
+    }
+    if (/GlandBox/i.test(t)) return 'gland';
+    if (/DoorBell|IndoorCam/i.test(t)) return 'video';
+    return null;
+  }
+
+  var TEXT = {
+    hub: ['Що потрібно до EN54 Fire Hub', 'Батарея резервного живлення в комплект хаба не входить — оберіть на 24 або 72 години. Пожежні пристрої EN54 працюють лише з цим хабом; звичайні пристрої Ajax Jeweller (кнопки ManualCallPoint, датчики) він теж підтримує.'],
+    device: ['Для роботи потрібен EN54 Fire Hub', 'Пристрої пожежної лінійки Ajax EN54 працюють лише з EN54 Fire Hub Jeweller (і через EN54 Fire ReX). Звичайні хаби Hub, Hub 2, Hub 2 Plus і Hub BP їх не підтримують.'],
+    battery: ['Для яких пристроїв', 'Батарея ставиться всередину EN54 Fire Hub Jeweller або EN54 Fire ReX Jeweller. Зі звичайними хабами Ajax не сумісна.'],
+    gland: ['Для якого хаба', 'GlandBox кріпиться лише до EN54 Fire Hub Jeweller — для вводу кабелів, прокладених не в стіні (16 вводів до 20 мм, сальники купуються окремо).'],
+    video: ['Хаб не потрібен', 'Підключається до Wi-Fi 2,4 ГГц і працює через застосунок Ajax без хаба. Слоту microSD немає — запис ведеться в реєстратор Ajax NVR або в хмару Ajax. Хаб Hub 2, Hub 2 Plus чи Hub BP — за бажанням (резервний радіоканал).']
+  };
+
+  function pickUrl(u, dark) { return SC_LANG + (dark ? u.b : u.w); }
+  function load(u, dark, retry) {
+    var url = pickUrl(u, dark);
+    return scProduct(url).then(function (p) {
+      if (!p || !scInStock(p.avail)) {
+        if (!retry && u.b !== u.w) return load(u, !dark, true);
+        return null;
+      }
+      return { url: url, name: p.name, price: p.price, img: p.img };
+    })['catch'](function () { return null; });
+  }
+
+  function init() {
+    if (document.getElementById('sc-en54')) return;
+    var anchor = scAnchor();
+    if (!anchor) return;
+    var t = title(), kind = detect(t);
+    if (!kind) return;
+    var dark = /чорн|black|graphite/i.test(t);
+    // IndoorCam: реєстратори Ajax уже показує блок 6 («Підберіть до цієї камери») — тут лише пояснення
+    var list = kind === 'hub' ? FOR_HUB : kind === 'video' ? (/IndoorCam/i.test(t) ? [] : NVR) : kind === 'battery' ? [HUB, REX] : [HUB];
+    scStyle('sc-en54-style', CSS);
+    var box = document.createElement('div');
+    box.id = 'sc-en54';
+    box.innerHTML = '<div class="sce-t"></div><div class="sce-x"></div><div class="sce-l"></div>' +
+      '<div class="sce-s">Сумісність — за даними Ajax Systems.</div>';
+    box.querySelector('.sce-t').textContent = TEXT[kind][0];
+    box.querySelector('.sce-x').textContent = TEXT[kind][1];
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
+    var listEl = box.querySelector('.sce-l');
+    scNear(box, function () {
+      Promise.all(list.map(function (u) { return load(u, dark); })).then(function (res) {
+        var seen = {}, n = 0;
+        res.forEach(function (p) {
+          if (!p || n >= MAX || seen[p.url] || p.url.replace(/\/$/, '') === location.pathname.replace(/\/$/, '')) return;
+          seen[p.url] = 1; n++;
+          listEl.appendChild(scItem(p, C));
+        });
+        if (!listEl.children.length) listEl.remove();
+        if (window.gtag && n) try { window.gtag('event', 'sc_en54_view', { kind: kind, shown: n, non_interaction: true }); } catch (e) {}
+      });
+    });
+  }
+
+  scInit(44, init);
 });
 
 /* =====================================================================
