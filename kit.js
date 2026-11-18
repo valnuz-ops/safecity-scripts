@@ -145,16 +145,16 @@
     '.sckit__q{display:inline-flex;align-items:center;border:1px solid #cfd8e2;border-radius:8px;background:#fff}' +
     '.sckit__q button{width:38px;height:36px;border:0;background:none;font-size:20px;cursor:pointer;color:#1d2733;padding:0}' +
     '.sckit__q span{min-width:34px;text-align:center;font-weight:700;font-size:16px}' +
-    '.sckit__row{display:grid;grid-template-columns:22px 56px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #e6ebf1}' +
+    '.sckit__row{display:grid;grid-template-columns:22px 56px minmax(0,1fr) 116px;gap:12px;align-items:center;padding:12px 0;border-top:1px solid #e6ebf1}' +
     '.sckit__row.off{opacity:.5}' +
     '.sckit .sckit__row>input[type=checkbox]{grid-column:1;-webkit-appearance:checkbox;appearance:auto;display:block!important;position:static!important;opacity:1!important;visibility:visible!important;width:18px;height:18px;margin:0;accent-color:#1b7fd1}' +
     '.sckit__row>.sckit__img{grid-column:2}.sckit__row>.sckit__body{grid-column:3;min-width:0}.sckit__row>.sckit__sum{grid-column:4}' +
     '.sckit__row img{width:56px;height:56px;object-fit:contain;border-radius:6px;background:#fff}' +
     '.sckit__t{font-size:12px;color:#5f6b78;text-transform:uppercase;letter-spacing:.03em}' +
-    '.sckit__n{display:block;color:#1d2733;text-decoration:none;font-weight:500;overflow-wrap:anywhere}.sckit__n:hover{text-decoration:underline}' +
-    '.sckit__hint{font-size:12px;color:#5f6b78;margin-top:2px}.sckit__hint.warn{color:#b45309}' +
-    '.sckit__row select{width:100%;max-width:100%;margin-top:6px;padding:6px 8px;border:1px solid #cfd8e2;border-radius:6px;background:#fff;color:#1d2733;font:inherit;font-size:13px}' +
-    '.sckit__sum{text-align:right;white-space:nowrap;font-weight:700}.sckit__sum small{display:block;font-weight:400;color:#5f6b78;font-size:12px}' +
+    '.sckit .sckit__n{display:block;color:#1d2733;text-decoration:none;border:0!important;box-shadow:none;font-weight:500;line-height:1.35;overflow-wrap:anywhere}.sckit .sckit__n:hover{color:#1b7fd1;text-decoration:underline}' +
+    '.sckit__t{line-height:1.2;margin:0 0 2px}.sckit__hint{font-size:12px;line-height:1.35;color:#5f6b78;margin-top:3px}.sckit__hint.warn{color:#b45309}' +
+    '.sckit .sckit__row select{display:block;width:100%!important;max-width:100%;height:34px;margin:8px 0 0;padding:0 30px 0 10px;border:1px solid #cfd8e2;border-radius:6px;background:#fff url(\"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%278%27%3E%3Cpath d=%27M1 1l5 5 5-5%27 fill=%27none%27 stroke=%27%235f6b78%27 stroke-width=%271.6%27/%3E%3C/svg%3E\") no-repeat right 11px center;-webkit-appearance:none;appearance:none;color:#1d2733;font:inherit;font-size:13px;line-height:32px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:pointer}.sckit .sckit__row select:focus{outline:2px solid #b9d8f2;border-color:#1b7fd1}' +
+    '.sckit__sum{text-align:right;white-space:nowrap;font-weight:700;font-size:15px}.sckit__sum small{display:block;font-weight:400;color:#5f6b78;font-size:12px}' +
     '.sckit__note{margin:10px 0 0;padding:10px 12px;border-radius:8px;background:#fdf2e3;font-size:13px}' +
     '.sckit__foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin-top:6px;padding:14px 0 0;border-top:2px solid #1d2733}' +
     '.sckit__total{font-size:22px;font-weight:700}.sckit__total small{display:block;font-size:12px;font-weight:400;color:#5f6b78}' +
@@ -166,7 +166,7 @@
     '.sckit-modal__x{position:absolute;top:8px;right:8px;width:40px;height:40px;border:0;background:none;font-size:28px;line-height:1;cursor:pointer;color:#5f6b78}' +
     '.sckit-inline{margin:20px 0;padding:18px 20px;border:1px solid #d6e4f0;border-radius:12px;background:#f7fbff}' +
     '@media(max-width:640px){.sckit__opts{grid-template-columns:1fr}.sckit-modal{padding:0}.sckit-modal__box{border-radius:0;min-height:100%;padding:18px 14px 90px}' +
-    '.sckit__row{grid-template-columns:22px 44px minmax(0,1fr)}.sckit__row img{width:44px;height:44px}.sckit__row>.sckit__sum{grid-column:3;text-align:left}.sckit__sum small{display:inline;margin-left:6px}' +
+    '.sckit__row{grid-template-columns:22px 44px minmax(0,1fr);gap:10px}.sckit__row img{width:44px;height:44px}.sckit__row>.sckit__sum{grid-column:3;text-align:left}.sckit__sum small{display:inline;margin-left:6px}' +
     '.sckit__foot{position:sticky;bottom:0;background:#fff;padding:10px 0;margin-top:10px}.sckit__buy{flex:1 1 auto}.sckit__h{font-size:18px;padding-right:36px}}';
 
   function chips(name, vals, cur, fmt) {
@@ -186,7 +186,7 @@
       '<div class="sckit__opt"><b>Бренд</b>' + chips('brand', D.brands, S.brand) + '</div>' +
       '<div class="sckit__opt"><b>Чіткість зображення</b>' + chips('mp', r.mps || [], S.mp, function (v) { return v + ' Мп' + (v === 2 ? ' · Full HD' : v === 8 ? ' · 4K' : ''); }) + '</div>' +
       '<div class="sckit__opt"><b>Скільки зберігати запис</b>' + chips('days', DAYS, S.days, function (v) { return v + ' ' + plural(v, ['день', 'дні', 'днів']); }) + '</div>' +
-      (r.poeChoice ? '<div class="sckit__opt"><b>Живлення камер (PoE)</b>' + chips('poe', ['nvr', 'sw'], S.poe, function (v) { return v === 'nvr' ? 'від реєстратора з PoE-портами' : 'окремий PoE-комутатор'; }) + '</div>' : '') +
+      (r.poeChoice ? '<div class="sckit__opt"><b>Живлення камер (PoE)</b>' + chips('poe', ['nvr', 'sw'], S.poe, function (v) { return v === 'nvr' ? 'від реєстратора' : 'окремий комутатор'; }) + '</div>' : '') +
       '<div class="sckit__opt"><b>Кабель</b>' + chips('cable', ['out', 'in', 'no'], S.cable, function (v) { return v === 'out' ? 'вуличний' : v === 'in' ? 'для приміщень' : 'не потрібен'; }) + '</div>' +
       '</div>';
     r.rows.forEach(function (row) {
