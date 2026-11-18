@@ -937,7 +937,7 @@ scModule(3, function () {
     // Інвертори
     inv12: [
       { url: '/akumuliatorna-batareia-12.8v-100ah-lifepo4-cyclen/' },
-      { url: '/akumuliatorna-batareia-lfp-12v100ah-lifepo4-trinix-litii-zalizo-fosfatna/' },
+      { url: '/akumuliatorna-batareia-lfp-12v100ah-lifepo4-trinix-litii-zalizo-fosfatna/', maxA: 50, note: 'Розряд до 50 А — навантаження до ≈ 550 Вт' },
       { url: '/akumuliatorna-batareia-litime-lifepo4-12v100ah-xtramini-bluetooth-l12v100-100-xtra-mini-bt-4-a55-litime/' },
       { url: '/akumuliatorna-batareia-power-queen-lifepo4-12v100ah-low-temp-p12v100-100-ltp-4-a100-power-queen/' }
     ],
@@ -945,7 +945,6 @@ scModule(3, function () {
       { url: '/akumuliatorna-batareia-sk-25.6v100ah-li-sun-series-lifepo4-sako/' },
       { url: '/akumuliatorna-batareia-power-queen-lifepo4-24v100ah-bluetooth-p24v100-100-basic-bt-8-a160-power-queen/' },
       { url: '/akumuliatorna-batareia-litii-zalizo-fosfatna-z-bluetooth-25-6v-100a-hod-lifepo4-litime-l24/' },   // LiTime L24V100 BT (24309)
-      { url: '/akkumuliatorna-batareia-litime-lifepo4-lt24v100/' },
       { url: '/akumuliatorna-batareia-100-ah-24v-tlfp-24100-ultra-lifepo4-trinix/' }
     ],
     inv48: [
@@ -964,8 +963,8 @@ scModule(3, function () {
       { url: '/akumuliatorna-batareia-tgl12v9ah-20hr-trinix-gel-super-charge/', note: '9 А·год — той самий розмір, що й 7 А·год' }
     ],
     ups7lfp: [
-      { url: '/akumuliatorna-batareia-litii-zalizo-fosfatna-12.8v-9.2ahod-trinix-tlfp-1209-ultra-lifepo4/', note: 'LiFePO4: легша і служить довше. Джампер ДБЖ — на 14 В' },
-      { url: '/akumuliatorna-batareia-lfp-12v6ah-lifepo4-trinix-litii-zalizo-fosfatna/', note: 'LiFePO4: легша і служить довше. Джампер ДБЖ — на 14 В' }
+      { url: '/akumuliatorna-batareia-litii-zalizo-fosfatna-12.8v-9.2ahod-trinix-tlfp-1209-ultra-lifepo4/', note: 'LiFePO4: легша і служить довше. Джампер ДБЖ — на 14,4 В', maxOut: 9.2 },
+      { url: '/akumuliatorna-batareia-lfp-12v6ah-lifepo4-trinix-litii-zalizo-fosfatna/', note: 'LiFePO4: легша і служить довше. Джампер ДБЖ — на 14,4 В', maxOut: 6, maxChg: 3 }
     ],
     // ДБЖ 12-24V: відсік під АКБ 18 А·год
     ups18lead: [
@@ -973,7 +972,7 @@ scModule(3, function () {
       { url: '/akumuliatorna-batareia-tgl12v18ah-20hr-trinix-gel/' }
     ],
     ups18lfp: [
-      { url: '/akumuliatorna-batareia-18-ah-12v-tlfp-1218-ultra-lifepo4-trinix/', note: 'LiFePO4: легша і служить довше. Джампер ДБЖ — на 14 В' }
+      { url: '/akumuliatorna-batareia-18-ah-12v-tlfp-1218-ultra-lifepo4-trinix/', note: 'LiFePO4: легша і служить довше. Джампер ДБЖ — на 14,4 В', maxOut: 18 }
     ]
   };
   var LINKS = {
@@ -1002,20 +1001,32 @@ scModule(3, function () {
       var nums = (bat.match(/\d+(\.\d+)?/g) || []).map(parseFloat);
       if (!nums.length || Math.max.apply(null, nums) > 70) return null;
       var v = Math.max.apply(null, nums);
+      // 18.11.2026: АКБ 100 А·год віддає не більше 100 А (BMS) — для потужного інвертора однієї замало.
+      // Струм від АКБ: «Струм розряду» інвертора з характеристик, інакше потужність / ККД 0,9 / напруга АКБ.
+      var vn = v <= 14 ? 12.8 : v <= 30 ? 25.6 : 51.2;
+      var pw = scNum(get(f, /^потужність, вт$/));
+      if (!pw) { var pm = get(f, /^потужність$/).match(/(\d+(?:[.,]\d+)?)\s*(кВт|Вт)(?!.*(?:кВт|Вт))/); if (pm) pw = parseFloat(pm[1].replace(',', '.')) * (pm[2] === 'кВт' ? 1000 : 1); }
+      var amp = scNum(get(f, /^струм розряду$/)) || (pw ? pw / 0.9 / vn : 0);
+      var need = amp ? Math.ceil(amp / 100 - 0.02) : 1;
+      var more = need > 1
+        ? ' Одна АКБ 100 А·год віддає до 100 А — це до ≈ ' + String(Math.round(vn * 100 * 0.9 / 100) / 10).replace('.', ',') +
+          ' кВт навантаження. Щоб інвертор працював на повну потужність, потрібно щонайменше ' + need + ' такі АКБ паралельно (або одна більшої ємності).'
+        : '';
+      var fitA = function (list) { return list.filter(function (b) { return !b.maxA || !amp || amp <= b.maxA; }); };
       if (v <= 14) return {
-        list: P.inv12, links: [LINKS.lfpAll, LINKS.cables],
+        list: fitA(P.inv12), links: [LINKS.lfpAll, LINKS.cables],
         title: 'Підберіть акумулятор 12 В',
-        text: 'Інвертор працює від АКБ 12 В. LiFePO4 12,8 В / 100 А·год ≈ 1,28 кВт·год запасу.'
+        text: 'Інвертор працює від АКБ 12 В. LiFePO4 12,8 В / 100 А·год ≈ 1,28 кВт·год запасу.' + more
       };
       if (v <= 30) return {
-        list: P.inv24, links: [LINKS.lfpAll, LINKS.cables],
+        list: fitA(P.inv24), links: [LINKS.lfpAll, LINKS.cables],
         title: 'Підберіть акумулятор 24 В',
-        text: 'Потрібна АКБ 24 В: LiFePO4 25,6 В або дві однакові АКБ 12 В, з’єднані послідовно.'
+        text: 'Потрібна АКБ 24 В: LiFePO4 25,6 В або дві однакові АКБ 12 В, з’єднані послідовно.' + more
       };
       return {
-        list: P.inv48, links: [LINKS.lfpAll, LINKS.cables],
+        list: fitA(P.inv48), links: [LINKS.lfpAll, LINKS.cables],
         title: 'Підберіть акумулятор 48 В',
-        text: 'Потрібна АКБ 48 В (LiFePO4 51,2 В). Для роботи з BMS перевірте, чи є батарея у списку сумісності інвертора — підкажемо.'
+        text: 'Потрібна АКБ 48 В (LiFePO4 51,2 В). Для роботи з BMS перевірте, чи є батарея у списку сумісності інвертора — підкажемо.' + more
       };
     }
 
@@ -1039,6 +1050,10 @@ scModule(3, function () {
         list = lfp ? [P.ups7lead[0], P.ups7lfp[0], P.ups7lead[1], P.ups7lfp[1]].concat(P.ups7lead.slice(2)) : P.ups7lead;
       }
       links = lfp ? [LINKS.leadAll, LINKS.lfpAll] : [LINKS.leadAll];
+      // 18.11.2026: LiFePO4 з малим струмом розряду / заряду не радимо до ДБЖ, який бере чи дає більше
+      // (TLFP-1209 — до 9,2 А, LFP 12V6Ah — розряд до 6 А, заряд до 3 А; ДБЖ (MH)/(PH)/(BH) заряджають до 4 А)
+      var iout = scNum(get(f, /^вихідний струм$/)), fastChg = /\((MH|PH|BH)\)/i.test(title);
+      list = list.filter(function (b) { return !(b.maxOut && iout > b.maxOut) && !(b.maxChg && fastChg); });
 
       var text = board && !slot
         ? 'Плата ставиться на DIN-рейку, акумулятор 12 В розміщується поруч — ємність обирайте під навантаження.'
@@ -1863,7 +1878,7 @@ scModule(9, function () {
     // Лінійка Superior (Jeweller): G3, HomeSiren, MotionCam і TouchScreen — лише Hub 2 / 2 Plus / BP; решта — усі, крім Hub
     { k: 'superiorg',  re: /Superior.*(\bG3\b|HomeSiren|MotionCam|TouchScreen)/i, cls: 'G', url: null },
     { k: 'superior',   re: /Superior/i,                       cls: 'P', url: null },
-    { k: 'motioncam',  re: /MotionCam(?! Outdoor)/i,          cls: 'C', name: 'MotionCam',     url: U('/bezdrotovyi-datchyk-rukhu-z-kameroiu-ajax-motioncam-phod-bilyi/', '/bezdrotovyi-datchyk-rukhu-z-kameroiu-ajax-motioncam-phod-chornyi/') },
+    { k: 'motioncam',  re: /MotionCam(?! Outdoor)/i,          cls: 'C', name: 'MotionCam',     url: U('/datchyk-rukhu-z-kameroiu-ajax-motioncam-with-hdr-white/', '/datchyk-rukhu-z-kameroiu-ajax-motioncam-with-hdr-black/') },
     { k: 'motion',     re: /MotionProtect(?! (Plus|Curtain|Outdoor))/i, cls: 'B', url: U('/bezdrotovyi-datchyk-rukhu-ajax-motionprotect-bilyi/', '/bezdrotovyi-datchyk-rukhu-ajax-motionprotect-chornyi/') },
     { k: 'door',       re: /DoorProtect(?! Plus)/i,           cls: 'B', url: U('/bezdrotovyi-datchyk-vidchynennia-ajax-doorprotect-bilyi/', '/bezdrotovyi-datchyk-vidchynennia-ajax-doorprotect-chornyi/') },
     { k: 'kptouch',    re: /KeyPad TouchScreen/i,             cls: 'C', reader: true, url: U('/klaviatura-ajax-keypad-touchscreen-white/', '/klaviatura-ajax-keypad-touchscreen-black/') },
@@ -2960,7 +2975,7 @@ scModule(19, function () {
     oA600: { url: '/optymizator-hs4-a-o-600-smart-600w-15a-10-70v-hiitio/', note: 'SMART · панелі до 600 Вт' },
     oA800: { url: '/optymizator-hs4-a-o-800-smart-800w-15a-10-70v-hiitio/', note: 'SMART · панелі до 800 Вт' }
   };
-  var PV_FOOT = 'Номінал DC-автомата — від 1,25 × Isc панелей, запобіжника — від 1,5 × Isc, але не більше «max series fuse» з паспорта панелі. Монтаж — електрик, ПЗІП обов’язково заземлюють.';
+  var PV_FOOT = 'Номінал запобіжника чи DC-автомата для захисту стрінга — від 1,5 до 2,4 × Isc панелі і не більше «max series fuse» з її паспорта. Монтаж — електрик, ПЗІП обов’язково заземлюють.';
   function pvVolt(t) { var m = t.match(/(\d{3,4})\s?V\b/i); return m ? +m[1] : 0; }   // клас напруги з назви: «1000V», «600V DC»
 
   // --- RECODA: нагрудні реєстратори і кріплення (сумісність — назви й поле «Сумісність» у постачальника) ---
@@ -3164,13 +3179,13 @@ scModule(19, function () {
           title: '🔌 Тримач для цього запобіжника',
           text: 'Запобіжник на 1500 V — розміру 10×85 мм, у тримачі 10×38 він не стане. Сумісний тримач (роз’єднувач) на DIN-рейку:',
           list: [PV.hHd],
-          foot: 'Запобіжник ставлять на кожен провід стрінга — на «+» і на «−», тож на стрінг потрібно 2 запобіжники і 2 тримачі.'
+          foot: 'У системах без заземленого полюса (звичайних для домашніх інверторів) запобіжник ставлять на обидва проводи стрінга — на «+» і на «−», тобто 2 запобіжники і 2 тримачі на стрінг.'
         };
         return {
           title: '🔌 Тримач для цього запобіжника',
           text: 'Запобіжник 10×38 мм ставиться в роз’єднувач на DIN-рейку. Двополюсний бере 2 запобіжники — на «+» і на «−» одного стрінга:',
           list: [PV.hTopv, PV.hPv2, PV.hPv1],
-          foot: 'Запобіжники в стрінгах потрібні, коли паралельно з’єднано 3 і більше стрінги. ' + PV_FOOT
+          foot: 'Запобіжники в стрінгах потрібні, коли паралельно з’єднано 3 і більше стрінги і зворотний струм може перевищити «max series fuse» панелі; при 1–2 стрінгах вони не потрібні. ' + PV_FOOT
         };
       }
 
@@ -3180,7 +3195,7 @@ scModule(19, function () {
         return {
           title: '⚡ Запобіжники для цього тримача',
           text: (big ? 'Тримач під запобіжники 10×85 мм на 1500 V. ' : 'Тримач під запобіжники gPV 10×38 мм. ') +
-                (two ? 'Ставиться 2 запобіжники — на «+» і на «−» стрінга. ' : 'Один тримач — один запобіжник, на стрінг їх потрібно 2 (на «+» і на «−»). ') +
+                (two ? 'Ставиться 2 запобіжники — на «+» і на «−» стрінга. ' : 'Один тримач — один запобіжник; у системах без заземленого полюса на стрінг їх ставлять 2 (на «+» і на «−»). ') +
                 'Номінал підбирають під струм панелей:',
           list: big ? [PV.f20h, PV.f15h] : [PV.f20, PV.f25, PV.f15, PV.f32],
           foot: PV_FOOT
@@ -3195,8 +3210,8 @@ scModule(19, function () {
                          : 'ПЗІП на 600 V — для інверторів із PV-входом до 500–550 В (більшість однофазних 48 В). ') +
               'Автомати на 1000 V підходять і для нижчої напруги:',
         list: [PV.b20, PV.box, PV.b25],
-        foot: 'ПЗІП обов’язково під’єднують до заземлення — без нього він не захищає. ' +
-              'Комплект — на кожен вхід MPPT, до якого під’єднано стрінг.'
+        foot: 'ПЗІП обов’язково під’єднують до заземлення — без нього він не захищає. Якщо кабель від панелей до інвертора довший за 10 м, другий ПЗІП ставлять біля панелей. ' +
+              'Якщо на будинку є блискавковідвід, потрібен ПЗІП типу 1+2 (ці — тип 2). Комплект — на кожен вхід MPPT, до якого під’єднано стрінг.'
       };
 
       // DC-автомат для сонячних панелей → ПЗІП під напругу і бокс
@@ -3208,7 +3223,7 @@ scModule(19, function () {
                      : 'Двополюсний автомат на 1000 V відключає обидва проводи стрінга. ') +
                 'Разом з ним ставлять ПЗІП DC — клас напруги ПЗІП має бути не нижчим за максимальну напругу PV-входу інвертора:',
           list: one ? [PV.s600, PV.s600l, PV.b20, PV.box] : [PV.s600, PV.s1k, PV.s600l, PV.s1kl, PV.box],
-          foot: 'Більшість DC-автоматів полярні: «+» і «−» під’єднують строго за маркуванням на корпусі, інакше автомат може не погасити дугу. ' + PV_FOOT
+          foot: 'Автомат полярний: «+» і «−» під’єднують строго за маркуванням на корпусі, інакше він може не погасити дугу. ' + PV_FOOT
         };
       }
 
@@ -3217,7 +3232,7 @@ scModule(19, function () {
         title: '🧩 До цього бокса',
         text: 'У боксі вже є двополюсний DC-автомат на 600 V, 20 А — на один стрінг інвертора з PV-входом до 500–550 В. Додайте ПЗІП DC 600 V біля інвертора і конектори MC4 для кабелю:',
         list: [PV.s600, PV.s600l, PV.mc4],
-        foot: 'ПЗІП обов’язково під’єднують до заземлення. Контакти MC4 обтискають кримпером під свій переріз кабелю.'
+        foot: 'ПЗІП обов’язково під’єднують до заземлення; якщо кабель від панелей довший за 10 м — другий ПЗІП біля панелей. Контакти MC4 обтискають кримпером під свій переріз кабелю.'
       };
 
       // Оптимізатори Hiitio: SMART (HS4-A-O) ↔ ретранслятор HS4-A-M; захист стрінга біля інвертора
@@ -3249,7 +3264,7 @@ scModule(19, function () {
           text: 'Сонячний вхід інвертора — до ' + up + ' В (робочий діапазон MPPT). Між панелями й інвертором ставлять DC-автомат, ' +
                 'щоб відключати стрінг, і ПЗІП DC на ' + (hv ? '1000' : '600') + ' V від перенапруги під час гроз:',
           list: hv ? [PV.s1k, PV.b20, PV.box, PV.s1kl, PV.b25] : [PV.s600, PV.b20, PV.box, PV.s600l, PV.b25],
-          foot: 'Комплект — на кожен вхід MPPT, до якого під’єднано стрінг. Перед покупкою звірте з паспортом інвертора максимальну вхідну напругу PV. ' + PV_FOOT
+          foot: 'Комплект — на кожен вхід MPPT, до якого під’єднано стрінг; якщо кабель від панелей довший за 10 м — ще один ПЗІП біля панелей. Перед покупкою звірте з паспортом інвертора максимальну вхідну напругу PV. ' + PV_FOOT
         };
       }
       return null;
@@ -5981,6 +5996,7 @@ scModule(39, function () {
       case 'Електромеханічні замки': case 'Електрозащіпки':
         return [R('кнопка виходу', 1, NOTE.exitBtn), noPsu && R('блок живлення 12v', 1, NOTE.psu12)];
       case 'Кнопки виходу': case 'Кодові клавіатури':
+        if (/^коробка/i.test(n)) return [];                 // монтажна коробка для кнопки — не сама кнопка
         return [noLock && lockR('Замок, яким керує кнопка / клавіатура'), noPsu && R('блок живлення 12v', 1, NOTE.psu12)];
       case 'Зчитувачі': case 'Контролери': {
         // ключі — лише коли стандарт названо в назві (UHF, Dahua / Akuvox без стандарту — не вгадуємо)
@@ -5991,7 +6007,11 @@ scModule(39, function () {
       }
       case 'ДБЖ 12-24V': {
         var ah = (n.match(/під АКБ\s*(\d+(?:\.\d+)?)Ah/i) || [])[1];
-        return ah ? [R('акумулятор 12v ' + ah + 'ah', 1, /\b24V\b/i.test(n) ? 'Для ДБЖ 24 В потрібні 2 такі акумулятори 12 В' : 'Акумулятор потрібної ємності — купується окремо')] : [];
+        // 18.11.2026: лише АКБ тієї самої ємності (пошук «12v 18ah» першою давав АКБ 100 А·год — у бокс не стане);
+        // 7 А·год = 7 / 7.2 / 9 А·год (один розмір корпусу); LiFePO4 — лише до ДБЖ з LiFePO4 у назві
+        var ahRe = +ah === 7 ? /(^|\s)(7|7\.2|9)Ah/i : new RegExp('(^|\\s)' + String(ah).replace('.', '\\.') + 'Ah', 'i'), upsLfp = /lifepo4/i.test(n);
+        return ah ? [R('акумулятор 12v ' + ah + 'ah', 1, /\b24V\b/i.test(n) ? 'Для ДБЖ 24 В потрібні 2 такі акумулятори 12 В' : 'Акумулятор потрібної ємності — купується окремо',
+          function (x) { return x.k === 'Акумулятори для ДБЖ' && /\b12(\.8)?V\b/i.test(x.n) && ahRe.test(x.n) && (upsLfp || !/lifepo4/i.test(x.n)); })] : [];
       }
       case 'Системи накопичення енергії':
         // Marstek: батареї розширення — лише своєї серії (як у блоці 19)
@@ -6003,19 +6023,26 @@ scModule(39, function () {
         return /маршрутизатор|роутер/i.test(n) && !/4g|lte/i.test(n) ? [upsR('Інтернет працює без світла', (+it.p || 0) < 3000)] : [];
       case 'Точки доступу':
         if (ACC.test(n)) return [];
-        return [noSwitch && R('poe-інжектор', 1, 'Живлення точки доступу по кабелю'), R('патч-корд мережевий utp', 1, NOTE.patch)];
+        // 18.11.2026: комплекти мостів мають свої інжектори (частина — Passive PoE 24 В, інжектор 802.3 їх не живить)
+        return [noSwitch && !/міст|мост/i.test(n) && R('poe-інжектор', 1, 'Живлення точки доступу по кабелю'), R('патч-корд мережевий utp', 1, NOTE.patch)];
       case 'Комутатори':
         return [R('патч-корд мережевий utp', 1, NOTE.patch), R('кабель вита пара utp cat5e', 1, 'Кабель до камер / точок доступу')];
       case 'Кабель вита пара':
         return [R('кримпер', 1, 'Обтиснути конектори RJ-45')];
       case 'Шафи та стійки':
         if (!/^(?:комутаційна |серверна |телекомунікаційна |настінна |підлогова )*(?:шафа|стійка)/i.test(n)) return [];   // полиці, блоки розеток, замки — це вже доповнення
-        return [R('серверна полиця', 1, 'Полиця для реєстратора / роутера'), R('патч-панель', 1, 'Акуратне підключення кабелів'), R('блок розеток', 1, 'Живлення обладнання в шафі')];
+        // 18.11.2026: лише шафи 19″ (з «6U» тощо в назві) — у металеві бокси 210×235 мм 19″-обладнання не стане;
+        // полиця «для шафи глибиною N мм» — лише якщо шафа не мілкіша (глибина — друге число «600x450x370»)
+        if (!/\d+U\b/.test(n)) return [];
+        var depth = +((n.match(/\d{3,4}[xх]\s?(\d{3,4})[xх]/i) || [])[1] || 0);
+        return [R('серверна полиця', 1, 'Полиця для реєстратора / роутера', function (x) { var d = +((x.n.match(/глибиною\s*(\d{3,4})/i) || [])[1] || 0); return !d || (depth && d <= depth); }),
+          R('патч-панель', 1, 'Акуратне підключення кабелів'), R('блок розеток', 1, 'Живлення обладнання в шафі')];
       case 'Портативні зарядні станції': {
         if (!/^портативна зарядна станція/i.test(n)) return [];
         var model = (n.match(/\b([A-Z]{1,3}\d{3,4}[A-Z]?)\b/) || [])[1];
         return [model && R('чохол для портативних зарядних станцій ' + (b || ''), 1, 'Чохол саме під цю станцію', function (x) { return new RegExp('(^|[^A-Za-z0-9])' + model + '([^A-Za-z0-9]|$)').test(x.n); }),
-          R('сонячна панель для зарядних станцій', 1, 'Заряджати станцію від сонця')];
+          // 18.11.2026: панелі з XT60i — лише до станцій, названих у назві панелі (Oukitel, BigBlue, Ecoflow)
+          /oukitel|bigblue|ecoflow/i.test(n) && R('сонячна панель для зарядних станцій', 1, 'Заряджати станцію від сонця (вхід XT60)', function (x) { return /xt60/i.test(x.n); })];
       }
       case 'Аксесуари для Старлінка':
         if (/прикурювач/i.test(n)) return [R('кронштейн на магнітах starlink mini', 1, 'Кріплення Starlink Mini на дах авто')];
@@ -6057,17 +6084,22 @@ scModule(39, function () {
       case 'Сигналізація U-Prox':
         return !/центр охорони|комплект/i.test(n) && !has(cart, /центр охорони|комплект/i) ? [R('центр охорони u-prox mpx', 1, 'Без центру пристрої U-Prox не працюють (якщо ще немає)')] : [];
       case "ІЧ-бар'єри":
-        return /бар'єр/i.test(n) ? [R("кронштейн для іч-бар'єрів", 1, 'Кріплення бар\'єра'), R('термоелемент', 1, 'Обігрів узимку на вулиці')] : [];
+        return /бар'єр/i.test(n) && !ACC.test(n) ? [R("кронштейн для іч-бар'єрів", 1, 'Кріплення бар\'єра'), R('термоелемент', 1, 'Обігрів узимку на вулиці')] : [];
       case 'Інвертори гібридні та автономні': {
         if (/мікроінвертор/i.test(n)) return [];            // балконний мікроінвертор: ні АКБ, ні АВР йому не потрібні
         var v = (n.match(/(\d+)V\b/) || [])[1];
         var bat = v === '48' ? 'акумулятор lifepo4 51.2v' : v === '24' ? 'акумулятор lifepo4 25.6v' : v === '12' ? 'акумулятор lifepo4 12.8v' : null;
-        return [bat && !/мережевий|on-grid/i.test(n) && R(bat, 1, 'Акумулятор під напругу інвертора ' + v + ' В'), R('кабель силовий awg', 1, 'Підключення акумулятора'), R('авр', 1, 'Автоматичне перемикання на інвертор')];
+        // 18.11.2026: гібридні інвертори самі перемикаються між мережею й АКБ — зовнішній АВР їм не потрібен
+        return [bat && !/мережевий|on-grid/i.test(n) && R(bat, 1, 'Акумулятор під напругу інвертора ' + v + ' В'), R('кабель силовий awg', 1, 'Підключення акумулятора'),
+          !/^гібридн/i.test(n) && R('авр', 1, 'Перемикання на інвертор — якщо в ньому немає входу від мережі')];
       }
       case 'Акумулятори для ДБЖ':
-        return /lifepo4/i.test(n) && /12\.8V/.test(n) ? [R('зарядний пристрій lifepo4', 1, 'Зарядка LiFePO4 12.8 В')] : [];
+        // 18.11.2026: лише зарядний на 14.6 В і зі струмом не більше 0,5C (40 А — від 80 А·год; до АКБ 12 А·год не радимо)
+        var bah = parseFloat((n.match(/(\d+(?:\.\d+)?)Ah/i) || [])[1]) || 0;
+        return /lifepo4/i.test(n) && /12\.8V/.test(n) && bah ? [R('зарядний пристрій lifepo4', 1, 'Зарядка LiFePO4 12.8 В', function (x) {
+          var ca = +((x.n.match(/14\.6V\s?\/\s?(\d+)A/i) || [])[1] || 0); return ca && ca <= bah * 0.5; })] : [];
       case 'Сонячні панелі':
-        if (/^сонячна панель/i.test(n)) return [R('конектор mc4 для сонячних панелей', 1, 'Підключення панелей', function (x) { return /^конектор/i.test(x.n); }), R('кабель силовий для сонячних панелей', 1, 'Кабель від панелей до інвертора'), R('ключ для конектора mc4', 1, 'Монтаж конекторів')];
+        if (/^сонячна панель/i.test(n) && !/xt60|dc5521|gx20|зарядних станцій/i.test(n)) return [R('конектор mc4 для сонячних панелей', 1, 'Підключення панелей', function (x) { return /^конектор/i.test(x.n); }), R('кабель силовий для сонячних панелей', 1, 'Кабель від панелей до інвертора'), R('ключ для конектора mc4', 1, 'Монтаж конекторів')];
         if (/^конектор/i.test(n)) return [R('ключ для конектора mc4', 1, 'Затягнути й розібрати конектори'), R('кабель силовий для сонячних панелей', 1, 'Кабель під ці конектори')];
         return [];
       case 'Повербанки':
