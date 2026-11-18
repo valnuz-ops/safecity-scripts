@@ -1658,7 +1658,7 @@ scModule(8, function () {
       { id: 'ont',    name: 'ONU / оптичний термінал', v: 6 }
     ];
     if (maxW >= 45) l.push({ id: 'laptop', name: 'Ноутбук (USB-C)', v: 45 });
-    if (maxW >= 100) l.push({ id: 'mini', name: 'Starlink Mini', v: 40, hint: 'у середньому 25–40 Вт' });
+    if (maxW >= 65) l.push({ id: 'mini', name: 'Starlink Mini', v: 40, hint: 'у середньому 25–40 Вт' });
     return l;
   }
 
