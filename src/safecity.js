@@ -1618,6 +1618,8 @@ scModule(7, function () {
 
 /* =====================================================================
  * 8. Картки зарядних станцій, систем накопичення і ДБЖ 12 В → калькулятор автономності
+ *    + з 18.11.2026 — ДБЖ для роутера (Вт·год з назви, ×0.85) і повербанки (мА·год × 3,7 В × 0,7, як у статті
+ *    про повербанки): свій короткий список пристроїв і рядок-підсумок під «Купити» («Роутер + ONU — ~2 год»)
  *    Коефіцієнти — як у текстах описів:
  *    станції ×0.85, системи накопичення ×0.9×0.9 = 0.81, ДБЖ 12 В — А·год ÷ А без втрат
  * ===================================================================== */
@@ -1644,7 +1646,25 @@ scModule(8, function () {
     { id: 'lock',     name: 'Електромагнітний замок', v: 0.5, qty: true }
   ];
 
+  // ДБЖ для роутера і повербанки: споживання — ті самі орієнтири, що в калькуляторі статей (блок 22)
+  var DEV_MINI = [
+    { id: 'router', name: 'Wi-Fi роутер', v: 8 },
+    { id: 'ont',    name: 'ONU / оптичний термінал', v: 6, hint: 'коробочка провайдера, до якої підключено оптику' },
+    { id: 'cam',    name: 'IP-камера', v: 6.5, qty: true }
+  ];
+  function devPb(maxW) {
+    var l = [
+      { id: 'router', name: 'Wi-Fi роутер', v: 8, hint: 'через кабель-тригер USB → 9/12 В' },
+      { id: 'ont',    name: 'ONU / оптичний термінал', v: 6 }
+    ];
+    if (maxW >= 45) l.push({ id: 'laptop', name: 'Ноутбук (USB-C)', v: 45 });
+    if (maxW >= 100) l.push({ id: 'mini', name: 'Starlink Mini', v: 40, hint: 'у середньому 25–40 Вт' });
+    return l;
+  }
+
   var CSS =
+    '#sc-calc-sum{margin:10px 0;padding:9px 12px;border-radius:8px;background:#f1f8f3;font-size:14px;line-height:1.4;color:#1d2733}' +
+    '#sc-calc-sum a{white-space:nowrap}' +
     '#sc-calc{margin:20px 0;padding:16px;border:1px solid #d6e4f0;border-radius:10px;background:#f7fbff;font-size:14px;line-height:1.4;color:#1d2733;max-width:900px;box-sizing:border-box}' +
     '#sc-calc *{box-sizing:border-box}' +
     '#sc-calc .scc-t{font-weight:700;font-size:16px;margin:0 0 4px}' +
@@ -1696,6 +1716,22 @@ scModule(8, function () {
       return { mode: 'wh', wh: wh2, k: 0.81, maxW: w2, preset: { fridge: 1, boiler: 1, router: 1, lamp: 4 },
         formula: 'Розрахунково: ' + wh2 + ' Вт·год × 0.9 (глибина розряду) × 0.9 (ККД) ÷ навантаження.' };
     }
+    var whT = (title.replace(',', '.').match(/(\d+(?:\.\d+)?)\s?Wh\b/i) || [])[1];
+    if (/безперебійн|бесперебойн/i.test(type) && whT && !/PSU-/i.test(title)) {
+      var wm = watts(get(f, /^вихідна потужність$|^выходная мощность$|^потужність, вт$/)) || 1e9;
+      return { mode: 'wh', wh: +whT, k: 0.85, maxW: wm, preset: { router: 1, ont: 1 }, devs: DEV_MINI,
+        sum: [['Роутер + ONU', 14], ['лише роутер', 8]],
+        formula: 'Розрахунково: ємність ' + String(+whT).replace('.', ',') + ' Вт·год × 0.85 ÷ навантаження. 0.85 — запас на втрати перетворення; споживання свого роутера дивіться на його блоці живлення (В × А — це максимум, у роботі зазвичай удвічі менше).' };
+    }
+    if (/повербанк|павербанк|power\s?bank/i.test(type)) {
+      var mah = num(get(f, /^ємність, ма·год$|^ємність батареї$|^емкость/)) || +((title.match(/(\d{4,6})\s?mAh/i) || [])[1] || 0);
+      if (!mah) return null;
+      var whP = Math.round(mah * 3.7 / 100) / 10, wp = watts(get(f, /^вихідна потужність$|^выходная мощность$|^потужність, вт$/)) || 1e9;
+      var ph = Math.round(whP * 0.7 / 19.25 * 10) / 10;
+      return { mode: 'wh', wh: whP, k: 0.7, maxW: wp, preset: { router: 1 }, devs: devPb(wp),
+        sum: [['Роутер', 8]], sumExtra: 'смартфон 5000 мА·год — ≈' + String(ph).replace('.', ',') + ' заряду',
+        formula: 'Розрахунково: ' + mah + ' мА·год × 3,7 В = ' + String(whP).replace('.', ',') + ' Вт·год × 0.7 ÷ навантаження. 0.7 — втрати на підвищення напруги й кабель. Смартфон з батареєю 5000 мА·год зарядить приблизно ' + String(ph).replace('.', ',') + ' раза.' };
+    }
     if (/безперебійн|бесперебойн/i.test(type) && /PSU-/i.test(title)) {
       var a = num(get(f, /^вихідний струм$|^выходной ток$/));
       if (!a) return null;
@@ -1715,7 +1751,7 @@ scModule(8, function () {
   }
 
   function build(cfg, bats) {
-    var list = cfg.mode === 'ah' ? DEV_DC : DEV_AC, unit = cfg.mode === 'ah' ? 'А' : 'Вт';
+    var list = cfg.devs || (cfg.mode === 'ah' ? DEV_DC : DEV_AC), unit = cfg.mode === 'ah' ? 'А' : 'Вт';
     var state = {};
     list.forEach(function (d) { state[d.id] = { on: !!cfg.preset[d.id], qty: cfg.preset[d.id] || 1, v: d.v }; });
 
@@ -1840,6 +1876,19 @@ scModule(8, function () {
     }
     scStyle('sc-calc-style', CSS);
     place(build(cfg, cfg.bats || []));
+    // короткий підсумок під «Купити» — щоб відповідь «на скільки вистачить» була на першому екрані
+    var anchor = cfg.sum && scAnchor();
+    if (anchor && !document.getElementById('sc-calc-sum')) {
+      var sm = document.createElement('div');
+      sm.id = 'sc-calc-sum';
+      sm.innerHTML = '🔋 ' + cfg.sum.map(function (p) { return p[0] + ' (' + p[1] + ' Вт) — <b>' + fmtH(cfg.wh * cfg.k / p[1]) + '</b>'; }).join(' · ') +
+        (cfg.sumExtra ? ' · ' + cfg.sumExtra : '') + '. <a href="#sc-calc">Порахувати для свого</a>';
+      sm.querySelector('a').onclick = function (e) {
+        var c = document.getElementById('sc-calc');
+        if (c) { e.preventDefault(); c.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+      };
+      anchor.parentNode.insertBefore(sm, anchor.nextSibling);
+    }
   }
 
   scInit(8, init);
@@ -4867,7 +4916,7 @@ scModule(37, function () {
     // 18.11.2026: міста, магазини, «який краще» — з запитів у Google; товарів не уточнюють
     'київ': 1, 'киев': 1, 'києві': 1, 'киеве': 1, 'дніпро': 1, 'днепр': 1, 'львів': 1, 'львов': 1, 'одеса': 1, 'одесса': 1, 'харків': 1, 'харьков': 1, 'україна': 1, 'украина': 1, 'україні': 1, 'украине': 1,
     'епіцентр': 1, 'эпицентр': 1, 'фокстрот': 1, 'комфи': 1, 'комфі': 1, 'олх': 1, 'olx': 1, 'rozetka': 1, 'дома': 1, 'дому': 1, 'будинку': 1, 'квартиры': 1, 'квартири': 1, 'квартиру': 1, 'дачу': 1, 'дачи': 1, 'дачі': 1, 'частного': 1, 'приватного': 1,
-    'відгуки': 1, 'отзывы': 1, 'який': 1, 'яка': 1, 'яку': 1, 'какой': 1, 'какая': 1, 'краще': 1, 'лучше': 1, 'кращий': 1, 'лучший': 1, 'найкращий': 1, 'найкраща': 1, 'вибрати': 1, 'выбрать': 1, 'що': 1, 'что': 1, 'такое': 1, 'купити': 1, 'купить': 1, 'замовити': 1, 'заказать': 1, 'интернет-магазин': 1, 'інтернет-магазин': 1 };
+    'відгуки': 1, 'отзывы': 1, 'який': 1, 'яка': 1, 'яку': 1, 'какой': 1, 'какая': 1, 'краще': 1, 'лучше': 1, 'кращий': 1, 'лучший': 1, 'найкращий': 1, 'найкраща': 1, 'вибрати': 1, 'выбрать': 1, 'що': 1, 'что': 1, 'такое': 1, 'замовити': 1, 'заказать': 1, 'интернет-магазин': 1, 'інтернет-магазин': 1 };
   var ENDINGS = ['ями', 'ами', 'ові', 'ого', 'ому', 'ими', 'ій', 'ий', 'их', 'ів', 'ах', 'ям', 'ам', 'ою', 'ею', 'ой', 'ая', 'яя', 'ое', 'ые', 'ие', 'а', 'я', 'и', 'і', 'у', 'ю', 'е', 'о', 'ь', 'ы'];
   var L2C = { q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з', '[': 'х', ']': 'ї', a: 'ф', s: 'і', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д', ';': 'ж', "'": 'є', z: 'я', x: 'ч', c: 'с', v: 'м', b: 'и', n: 'т', m: 'ь', ',': 'б', '.': 'ю' };
   var C2L = {};
@@ -5346,7 +5395,8 @@ scModule(37, function () {
   window.scSearchApi = {
     load: load,
     search: function (q) { return search(IDX, q); },
-    byUrl: function (u) { return IDX && IDX.byUrl[u]; }
+    byUrl: function (u) { return IDX && IDX.byUrl[u]; },
+    items: function () { return IDX ? IDX.docs.map(function (d) { return d.it; }) : []; }   // для збирача комплекту (блок 46)
   };
   // для перевірки з консолі: SC_SEARCH_TEST('павербанк') → перші 10 назв
   window.SC_SEARCH_TEST = function (q, n) { return IDX ? search(IDX, q).items.slice(0, n || 10).map(function (it) { return (it.s ? '+ ' : '- ') + it.n; }) : (load(function () {}), 'індекс ще вантажиться'); };
@@ -5587,6 +5637,8 @@ scModule(37, function () {
     // одразу під полем, над клавіатурою; «Усі результати» внизу списку на телефоні не видно
     if (top.length && window.innerWidth < 768) html = '<a class="sc37-go sc37-nav" href="' + resultsUrl(q) + '"><span>Шукати «' + esc(q.slice(0, 40)) + '»</span><b>' + r.total + ' ' + plural(r.total, ['товар', 'товари', 'товарів']) + ' →</b></a>' + html;
     var fx = top.length ? fixedText(q, r) : '';
+    // «комплект відеоспостереження на 4 камери» — готових комплектів немає, пропонуємо зібрати (блок 46)
+    if (/комплект|набор|набір/i.test(q) && /в[іи]део|камер|спостереж|наблюд/i.test(q)) html += '<a class="sc37-fix sc37-kit" href="#kit" style="display:block;font-weight:700">🎥 Зібрати комплект відеоспостереження під себе →</a>';
     if (fx) html += '<div class="sc37-fix">Показано для: <b>' + esc(fx) + '</b></div>';
     if (r.qnote && top.length) html += '<div class="sc37-fix">Підходять: <b>' + esc(r.qnote) + '</b></div>';
     top.forEach(function (it, i) {
@@ -6910,6 +6962,162 @@ scModule(44, function () {
 
   scInit(44, init);
 });
+
+/* =====================================================================
+ * 45. Картка товару → підказки до термінів у характеристиках (18.11.2026)
+ *     «IP67», «PoE+», «MPPT», «gPV» у таблиці характеристик підкреслено пунктиром; наведення / дотик —
+ *     одне речення простими словами. Словник — search/terms.json (157 термінів), вантажиться окремо
+ *     лише на картках товарів, коли браузер вільний; основний скрипт від нього не важчає.
+ *     Кожен термін позначається раз на сторінку. Записи з полем h діють лише в рядках, де назва
+ *     характеристики підходить під цей вираз («2.8 мм» — лише у «Фокусна відстань»).
+ *     ВІДКАТ: SC_TIPS_ON = false.
+ * ===================================================================== */
+var SC_TIPS_ON = true;
+var SC_TERMS_URL = 'https://valnuz-ops.github.io/safecity-scripts/search/terms.json';
+
+scModule(45, function () {
+  'use strict';
+  if (!SC_TIPS_ON) return;
+  var terms = null, loading = false, seen = {}, re = null, map = {};
+  var L = 'A-Za-zА-Яа-яІЇЄҐіїєґЁё0-9';
+
+  function prep() {
+    var keys = [];
+    terms.forEach(function (e) {
+      e.k.forEach(function (k) { var l = k.toLowerCase(); if (!map[l]) { map[l] = e; keys.push(k); } });
+      if (e.h) e.hre = new RegExp(e.h, 'i');
+    });
+    keys.sort(function (a, b) { return b.length - a.length; });
+    re = new RegExp('(^|[^' + L + '])(' + keys.map(function (k) { return k.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&'); }).join('|') + ')(?![' + L + '])', 'ig');
+  }
+
+  function mark(node, head) {
+    var text = node.nodeValue, m;
+    re.lastIndex = 0;
+    while ((m = re.exec(text))) {
+      var key = m[2].toLowerCase(), e = map[key], at = m.index + m[1].length;
+      // «5 ГГц» усередині «2.5 ГГц» — не термін
+      var frac = /\d/.test(key.charAt(0)) && /\d[.,]$/.test(text.slice(0, at));
+      if (!e || seen[e.d] || frac || (e.hre && !e.hre.test(head))) { re.lastIndex = at + 1; continue; }
+      seen[e.d] = 1;
+      var rest = node.splitText(at); rest.nodeValue = rest.nodeValue.slice(m[2].length);
+      var sp = document.createElement('span');
+      sp.className = 'sc-tip'; sp.tabIndex = 0; sp.setAttribute('data-d', e.d); sp.textContent = m[2];
+      node.parentNode.insertBefore(sp, rest);
+      return rest;
+    }
+    return null;
+  }
+
+  function apply() {
+    if (!re) return;
+    [].forEach.call(document.querySelectorAll('.product-features__row'), function (row) {
+      var cells = row.children;
+      if (cells.length !== 2) return;
+      var head = cells[0].textContent;
+      [].forEach.call(cells, function (cell) {
+        var w = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT, null), nodes = [], n;
+        while ((n = w.nextNode())) if (!(n.parentNode.closest && n.parentNode.closest('a, .sc-tip, script, style'))) nodes.push(n);
+        nodes.forEach(function (node) { var guard = 0; while (node && guard++ < 6) node = mark(node, head); });
+      });
+    });
+  }
+
+  var box = null, cur = null;
+  function hide() { if (box) box.style.display = 'none'; cur = null; }
+  function show(el) {
+    if (!box) { box = document.createElement('div'); box.id = 'sc-tipbox'; box.setAttribute('role', 'tooltip'); document.body.appendChild(box); }
+    cur = el; box.textContent = el.getAttribute('data-d'); box.style.display = 'block';
+    var r = el.getBoundingClientRect(), bw = box.offsetWidth, bh = box.offsetHeight, vw = document.documentElement.clientWidth;
+    var left = Math.max(8, Math.min(vw - bw - 8, r.left + r.width / 2 - bw / 2));
+    var top = r.top - bh - 8; if (top < 8) top = r.bottom + 8;
+    box.style.left = left + 'px'; box.style.top = top + 'px';
+  }
+
+  function init() {
+    if (!document.querySelector('[itemtype*="schema.org/Product"]') || !document.querySelector('.product-features__row')) return;
+    if (terms) { apply(); return; }
+    if (loading) return;
+    loading = true;
+    fetch(SC_TERMS_URL).then(function (r) { return r.ok ? r.json() : null; }).then(scSafe(45, function (t) {
+      if (!t || !t.length) return;
+      terms = t; prep();
+      scStyle('sc45-css',
+        '.sc-tip{border-bottom:1px dotted #7a828c;cursor:help}.sc-tip:focus{outline:none;background:#eef5fc}' +
+        '#sc-tipbox{position:fixed;z-index:2147482000;display:none;max-width:300px;padding:9px 12px;border-radius:8px;background:#1d2733;color:#fff;' +
+        'font-size:13px;line-height:1.4;box-shadow:0 6px 20px rgba(0,0,0,.25);pointer-events:none}');
+      apply();
+      document.addEventListener('mouseover', scSafe(45, function (e) { var t = e.target.closest && e.target.closest('.sc-tip'); if (t) show(t); else if (cur) hide(); }));
+      document.addEventListener('focusin', scSafe(45, function (e) { var t = e.target.closest && e.target.closest('.sc-tip'); if (t) show(t); }));
+      document.addEventListener('focusout', hide);
+      document.addEventListener('click', scSafe(45, function (e) { var t = e.target.closest && e.target.closest('.sc-tip'); if (t && cur !== t) show(t); else if (!t) hide(); }));
+      window.addEventListener('scroll', hide, { passive: true });
+    }))['catch'](function () { loading = false; });
+  }
+  scInit(45, init);
+});
+
+
+/* =====================================================================
+ * 46. Збирач комплекту відеоспостереження (18.11.2026)
+ *     Покупець вказує кількість камер, бренд, чіткість і глибину архіву — отримує сумісні камери,
+ *     реєстратор, PoE-комутатор (якщо потрібен), диск і кабель з наявності та кнопку «Додати все в кошик».
+ *     Сам збирач — окремий файл kit.js (правила підбору описані там), вантажиться лише коли його відкрили:
+ *       • посилання з href="#kit" будь-де на сайті (статті блогу, банери) або адреса …/#kit;
+ *       • кнопка під заголовком категорій відеокамер і відеореєстраторів;
+ *       • рядок у підказках пошуку на запити «комплект відеоспостереження…» (блок 37);
+ *       • вбудовано в текст сторінки: <div data-sc-kit="cctv"></div>.
+ *     GA4: sc_kit_open (from), sc_kit_add (value, cams, brand).
+ *     ВІДКАТ: SC_KIT_ON = false.
+ * ===================================================================== */
+var SC_KIT_ON = true;
+var SC_KIT_URL = 'https://valnuz-ops.github.io/safecity-scripts/kit.js';
+
+scModule(46, function () {
+  'use strict';
+  if (!SC_KIT_ON) return;
+  var queue = null;
+  function load(cb) {
+    if (window.scKit) { cb(); return; }
+    if (!queue) {
+      queue = [];
+      var s = document.createElement('script');
+      s.src = SC_KIT_URL + '?v=' + encodeURIComponent(SC_BUILD); s.async = true;
+      s.onload = scSafe(46, function () { var q = queue; queue = []; q.forEach(function (f) { f(); }); });
+      s.onerror = function () { queue = null; };
+      document.head.appendChild(s);
+    }
+    queue.push(cb);
+  }
+  function open(from) { load(function () { if (window.scKit) window.scKit.open(from); }); }
+  window.scKitOpen = open;
+
+  document.addEventListener('click', scSafe(46, function (e) {
+    var a = e.target.closest && e.target.closest('a[href$="#kit"], [data-sc-kit-open]');
+    if (!a) return;
+    e.preventDefault();
+    open(a.classList.contains('sc37-kit') ? 'search' : a.classList.contains('sc46-btn') ? 'category' : 'link');
+  }), true);
+  function hash() { if (/^#(sc-)?kit$/.test(location.hash)) open('hash'); }
+  window.addEventListener('hashchange', scSafe(46, hash));
+
+  scReady(scSafe(46, function () {
+    hash();
+    var inl = document.querySelector('div[data-sc-kit]');
+    if (inl) scIdle(scSafe(46, function () { load(function () { window.scKit.inline(inl); }); }));
+    // кнопка в категоріях відеокамер і реєстраторів
+    var h1 = document.querySelector('h1');
+    if (h1 && !document.querySelector('[itemtype*="schema.org/Product"]') && document.querySelector('.j-catalog-card') &&
+        /^\s*(IP-)?(відеокамери|відеореєстратори|відеоспостереження|видеокамеры|видеорегистраторы|видеонаблюдение)/i.test(h1.textContent) &&
+        !document.querySelector('.sc46-btn')) {
+      scStyle('sc46-css', '.sc46-btn{display:inline-block;margin:8px 0 12px;padding:9px 14px;border:1px solid #b9d8f2;border-radius:8px;background:#f1f8fe;color:#12609f;font-size:14px;font-weight:700;text-decoration:none;line-height:1.3}.sc46-btn:hover{background:#e3f0fb}');
+      var b = document.createElement('a');
+      b.className = 'sc46-btn'; b.href = '#kit'; b.textContent = '🎥 Зібрати комплект відеоспостереження під себе';
+      h1.parentNode.insertBefore(b, h1.nextSibling);
+    }
+  }));
+});
+
 
 /* =====================================================================
  * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
