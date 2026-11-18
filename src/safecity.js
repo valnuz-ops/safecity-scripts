@@ -6980,6 +6980,8 @@ scModule(45, function () {
   if (!SC_TIPS_ON) return;
   var terms = null, loading = false, seen = {}, re = null, map = {};
   var L = 'A-Za-zА-Яа-яІЇЄҐіїєґЁё0-9';
+  // таблиця характеристик і таблиці «назва — значення» в описі товару
+  var ROWS = '.product-features__row, .product-description tr, [itemprop="description"] tr';
 
   function prep() {
     var keys = [];
@@ -7011,7 +7013,7 @@ scModule(45, function () {
 
   function apply() {
     if (!re) return;
-    [].forEach.call(document.querySelectorAll('.product-features__row'), function (row) {
+    [].forEach.call(document.querySelectorAll(ROWS), function (row) {
       var cells = row.children;
       if (cells.length !== 2) return;
       var head = cells[0].textContent;
@@ -7035,7 +7037,7 @@ scModule(45, function () {
   }
 
   function init() {
-    if (!document.querySelector('[itemtype*="schema.org/Product"]') || !document.querySelector('.product-features__row')) return;
+    if (!document.querySelector('[itemtype*="schema.org/Product"]') || !document.querySelector(ROWS)) return;
     if (terms) { apply(); return; }
     if (loading) return;
     loading = true;
@@ -7110,7 +7112,7 @@ scModule(46, function () {
     if (h1 && !document.querySelector('[itemtype*="schema.org/Product"]') && document.querySelector('.j-catalog-card') &&
         /^\s*(IP-)?(відеокамери|відеореєстратори|відеоспостереження|видеокамеры|видеорегистраторы|видеонаблюдение)/i.test(h1.textContent) &&
         !document.querySelector('.sc46-btn')) {
-      scStyle('sc46-css', '.sc46-btn{display:inline-block;margin:8px 0 12px;padding:9px 14px;border:1px solid #b9d8f2;border-radius:8px;background:#f1f8fe;color:#12609f;font-size:14px;font-weight:700;text-decoration:none;line-height:1.3}.sc46-btn:hover{background:#e3f0fb}');
+      scStyle('sc46-css', '.sc46-btn{display:inline-block;width:fit-content;max-width:100%;align-self:flex-start;margin:8px 0 12px;padding:9px 14px;border:1px solid #b9d8f2;border-radius:8px;background:#f1f8fe;color:#12609f;font-size:14px;font-weight:700;text-decoration:none;line-height:1.3}.sc46-btn:hover{background:#e3f0fb}');
       var b = document.createElement('a');
       b.className = 'sc46-btn'; b.href = '#kit'; b.textContent = '🎥 Зібрати комплект відеоспостереження під себе';
       h1.parentNode.insertBefore(b, h1.nextSibling);
