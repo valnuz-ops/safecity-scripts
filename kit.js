@@ -167,7 +167,7 @@
     '.sckit-inline{margin:20px 0;padding:18px 20px;border:1px solid #d6e4f0;border-radius:12px;background:#f7fbff}' +
     '@media(max-width:640px){.sckit__opts{grid-template-columns:1fr}.sckit-modal{padding:0}.sckit-modal__box{border-radius:0;min-height:100%;padding:18px 14px 90px}' +
     '.sckit__row{grid-template-columns:22px 44px minmax(0,1fr);gap:10px}.sckit__row img{width:44px;height:44px}.sckit__row>.sckit__sum{grid-column:3;text-align:left}.sckit__sum small{display:inline;margin-left:6px}' +
-    '.sckit__foot{position:sticky;bottom:0;background:#fff;padding:10px 0;margin-top:10px}.sckit__buy{flex:1 1 auto}.sckit__h{font-size:18px;padding-right:36px}}';
+    '.sckit__foot{position:sticky;bottom:0;z-index:2;background:#fff;padding:10px 14px;margin:10px -14px 0;box-shadow:0 -8px 14px -10px rgba(15,23,32,.35)}.sckit-inline .sckit__foot{background:#f7fbff;margin:10px -20px 0;padding:10px 20px}.sckit__buy{flex:1 1 auto}.sckit__h{font-size:18px;padding-right:36px}}';
 
   function chips(name, vals, cur, fmt) {
     return '<div class="sckit__chips">' + vals.map(function (v) {
