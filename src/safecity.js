@@ -4911,6 +4911,19 @@ scModule(37, function () {
   Object.keys(SYN6).forEach(function (k) { SYN5[k] = SYN5[k] ? SYN5[k].concat(SYN6[k]) : SYN6[k]; });
   Object.keys(SYN5).forEach(function (k) { SYN4[k] = SYN4[k] ? SYN4[k].concat(SYN5[k]) : SYN5[k]; });
   Object.keys(SYN4).forEach(function (k) { SYN3[k] = SYN3[k] ? SYN3[k].concat(SYN4[k]) : SYN4[k]; });
+  // 18.11.2026: кольори в назвах тепер латиницею (White/Black/Gray…), а шукають кирилицею; плюс слова, що зникли з назв
+  var SYN7 = {
+    'білий': ['white', 'білий'], 'біла': ['white', 'біла'], 'біле': ['white', 'біле'], 'білі': ['white', 'білі'], 'белый': ['white', 'білий'], 'белая': ['white', 'біла'],
+    'чорний': ['black', 'чорний'], 'чорна': ['black', 'чорна'], 'чорне': ['black', 'чорне'], 'чорні': ['black', 'чорні'], 'черный': ['black', 'чорний'], 'черная': ['black', 'чорна'],
+    'сірий': ['gray', 'grey', 'сірий'], 'сіра': ['gray', 'grey', 'сіра'], 'серый': ['gray', 'grey', 'сірий'], 'серая': ['gray', 'grey', 'сіра'],
+    'графіт': ['graphite'], 'графітовий': ['graphite'], 'графітова': ['graphite'], 'графит': ['graphite'],
+    'синій': ['blue', 'синій'], 'синя': ['blue', 'синя'], 'синий': ['blue', 'синій'], 'жовтий': ['yellow', 'жовтий'], 'желтый': ['yellow', 'жовтий'],
+    'червоний': ['red', 'червоний'], 'червона': ['red', 'червона'], 'красный': ['red', 'червоний'], 'зелений': ['green', 'зелений'], 'зеленый': ['green', 'зелений'],
+    'помаранчевий': ['orange'], 'оранжевый': ['orange'], 'сріблястий': ['silver'], 'серебристый': ['silver'], 'оливковий': ['olive'], 'оливкова': ['olive'],
+    'кардридер': ['зчитувач'], 'картридер': ['зчитувач'], 'інтерком': ['відеопанель', 'домофон'], 'интерком': ['відеопанель', 'домофон'],
+    'витой': ['вита'], 'витую': ['вита'], 'обжим': ['обтискання', 'кримпер'], 'обжимка': ['обтискання', 'кримпер'], 'соединитель': ["з'єднувач"], 'зєднувач': ["з'єднувач"]
+  };
+  Object.keys(SYN7).forEach(function (k) { SYN3[k] = SYN3[k] ? SYN3[k].concat(SYN7[k]) : SYN7[k]; });
   Object.keys(SYN3).forEach(function (k) { SYN2[k] = SYN2[k] ? SYN2[k].concat(SYN3[k]) : SYN3[k]; });
   Object.keys(SYN2).forEach(function (k) { SYN[k] = SYN[k] ? SYN[k].concat(SYN2[k].filter(function (x) { return SYN[k].indexOf(x) < 0; })) : SYN2[k]; });
   var SYN_KEYS = Object.keys(SYN).filter(function (k) { return k.length >= 4 && /^[a-zа-яіїєґ']+$/.test(k); });
@@ -6072,7 +6085,11 @@ scModule(39, function () {
   'use strict';
   var MAX = 4;
 
-  function color(n) { return /чорн|black|graphite|графіт/i.test(n) ? 'чорний' : 'білий'; }
+  // 18.11.2026: колір Ajax у назвах тепер латиницею (White/Black/Graphite…), частина ще кирилицею —
+  // шукаємо без кольору, а колір звіряємо з назвою знайденого товару (обидва написання)
+  var DARK = /чорн|black|graphite|графіт/i;
+  function sameColor(n) { var d = DARK.test(n); return function (x) { return d ? DARK.test(x.n) : /біл|white/i.test(x.n); }; }
+  function both(f, g) { return function (x) { return f(x) && (!g || g(x)); }; }
   function R(q, n, note, f) { return { q: q, n: n, note: note, f: f }; }
   // 11.11.2026: замок до панелі / кнопки / зчитувача — накладний на 280–300 кг (універсальний для вхідних дверей),
   // а не перший у пошуку (врізний вологозахищений)
@@ -6209,21 +6226,21 @@ scModule(39, function () {
         return /^генератор/i.test(n) && !has(cart, /авр/i) ? [R('авр', 1, 'Автоматичне перемикання між мережею та генератором', function (x) { return /^АВР/i.test(x.n); })] : [];
       case 'Сигналізація Ajax':
         if (/\bhub\b|централь|^комплект/i.test(n)) {
-          var c = color(n), dev = function (x) { return !/smartbracket|кріпильна|кронштейн/i.test(x.n); };
-          return [R('датчик руху ajax motionprotect ' + c, 1, 'Датчик руху в приміщення', dev), R('датчик відкриття ajax doorprotect ' + c, 1, 'На вхідні двері / вікна', dev),
-            R('сирена ajax homesiren ' + c, 1, 'Гучне сповіщення в будинку', dev), R('клавіатура ajax keypad ' + c, 1, 'Ставити й знімати з охорони', dev)];
+          var c = sameColor(n), dev = both(function (x) { return !/smartbracket|кріпильна|кронштейн|dummybox|муляж/i.test(x.n); }, c);
+          return [R('датчик руху ajax motionprotect', 1, 'Датчик руху в приміщення', dev), R('датчик відкриття ajax doorprotect', 1, 'На вхідні двері / вікна', dev),
+            R('сирена ajax homesiren', 1, 'Гучне сповіщення в будинку', dev), R('клавіатура ajax keypad', 1, 'Ставити й знімати з охорони', dev)];
         }
-        if (/датчик|сповіщувач|сирена|клавіатура|keypad|брелок|кнопка|реле|розетка|вимикач/i.test(n) && !/smartbracket|кріпильна/i.test(n) && !has(cart, /\bhub\b|централь/i))
-          return [R('централь ajax hub 2 ' + color(n), 1, 'Без хаба пристрої Ajax не працюють (якщо хаба ще немає)')];
+        if (/датчик|сповіщувач|сирена|клавіатура|keypad|брелок|кнопка|реле|розетка|вимикач/i.test(n) && !/smartbracket|кріпильна|\bframe\b|рамка/i.test(n) && !has(cart, /\bhub\b|централь/i))
+          return [R('централь ajax hub 2', 1, 'Без хаба пристрої Ajax не працюють (якщо хаба ще немає)', sameColor(n))];
         return [];
       // 17.11.2026: пожежна лінійка Ajax EN54 — лише з EN54 Fire Hub; батарея до хаба купується окремо
       case 'Ajax EN54 Line': {
-        var c5 = color(n);
+        var c5 = sameColor(n);
         if (/fire hub/i.test(n) && !/для en54 fire hub|для ппкп/i.test(n))
-          return [!has(cart, /internal battery/i) && R('батарея ajax en54 internal battery ' + c5, 1, 'Батарея в комплект хаба не входить'),
-            R('датчик диму ajax en54 fireprotect ' + c5, 2, 'Пожежні датчики EN54 для цього хаба', function (x) { return /EN54/i.test(x.n) && /диму/i.test(x.n); })];
+          return [!has(cart, /internal battery/i) && R('батарея ajax en54 internal battery', 1, 'Батарея в комплект хаба не входить', c5),
+            R('датчик диму ajax en54 fireprotect', 2, 'Пожежні датчики EN54 для цього хаба', both(function (x) { return /EN54/i.test(x.n) && /диму/i.test(x.n); }, c5))];
         if (!has(cart, /en54 fire hub/i))
-          return [R('ппкп ajax en54 fire hub ' + c5, 1, 'Пристрої EN54 працюють лише з EN54 Fire Hub', function (x) { return /EN54 Fire Hub/i.test(x.n) && !/для EN54/i.test(x.n); })];
+          return [R('ппкп ajax en54 fire hub', 1, 'Пристрої EN54 працюють лише з EN54 Fire Hub', both(function (x) { return /EN54 Fire Hub/i.test(x.n) && !/для EN54/i.test(x.n); }, c5))];
         return [];
       }
       case 'Сигналізація U-Prox':
