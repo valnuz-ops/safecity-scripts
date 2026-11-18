@@ -1,7 +1,7 @@
 name: search-index
 on:
   schedule:
-    - cron: '17 2 * * *'   # щоночі ~04:17 за Києвом, після нічного оновлення фідів Хорошопа
+    - cron: '17 2,5,8,11,14,17 * * *'   # ~04:17 вночі + кожні 3 год 07:17–19:17 за Києвом (UTC+2), 18.11.2026
   workflow_dispatch:
 permissions:
   contents: write
