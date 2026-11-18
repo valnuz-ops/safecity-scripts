@@ -21,7 +21,7 @@
   var GB_DAY = 10.8;             // ГБ на добу на 1 Мбіт/с
   var CABLE_M = 30;              // орієнтовно метрів кабелю на камеру
   var DAYS = [7, 14, 30];
-  var S = { n: 4, brand: '', mp: 0, days: 14, cam: '', nvr: '', sw: '', hdd: '', cable: 'out', off: {} };
+  var S = { n: 4, brand: '', mp: 0, days: 14, cam: '', nvr: '', sw: '', hdd: '', cable: 'out', poe: '', off: {} };
   var D = null;                  // розібраний каталог
   var root = null, modal = null;
 
@@ -86,6 +86,14 @@
       return r;
     }
     function cost(v) { return v.p + (v.poe >= S.n ? 0 : (swOk[0] ? swOk[0].p : 1e9)); }
+    // живлення камер: від PoE-портів самого реєстратора або від окремого комутатора — вибір покупця,
+    // якщо є обидва варіанти; типово — дешевший у сумі
+    var withPoe = nvrList.filter(function (v) { return v.poe >= S.n; }), noPoe = nvrList.filter(function (v) { return v.poe < S.n; });
+    r.poeChoice = withPoe.length && noPoe.length;
+    if (r.poeChoice) {
+      if (S.poe !== 'nvr' && S.poe !== 'sw') S.poe = nvrList.slice().sort(function (a, b) { return cost(a) - cost(b); })[0].poe >= S.n ? 'nvr' : 'sw';
+      nvrList = S.poe === 'nvr' ? withPoe : noPoe;
+    }
     var nvr = find(nvrList, S.nvr) || nvrList.slice().sort(function (a, b) { return cost(a) - cost(b); })[0];
     S.nvr = nvr.it.u;
     r.rows.push({ id: 'nvr', title: 'Відеореєстратор', sel: nvr, list: nvrList, qty: 1,
@@ -178,6 +186,7 @@
       '<div class="sckit__opt"><b>Бренд</b>' + chips('brand', D.brands, S.brand) + '</div>' +
       '<div class="sckit__opt"><b>Чіткість зображення</b>' + chips('mp', r.mps || [], S.mp, function (v) { return v + ' Мп' + (v === 2 ? ' · Full HD' : v === 8 ? ' · 4K' : ''); }) + '</div>' +
       '<div class="sckit__opt"><b>Скільки зберігати запис</b>' + chips('days', DAYS, S.days, function (v) { return v + ' ' + plural(v, ['день', 'дні', 'днів']); }) + '</div>' +
+      (r.poeChoice ? '<div class="sckit__opt"><b>Живлення камер (PoE)</b>' + chips('poe', ['nvr', 'sw'], S.poe, function (v) { return v === 'nvr' ? 'від реєстратора з PoE-портами' : 'окремий PoE-комутатор'; }) + '</div>' : '') +
       '<div class="sckit__opt"><b>Кабель</b>' + chips('cable', ['out', 'in', 'no'], S.cable, function (v) { return v === 'out' ? 'вуличний' : v === 'in' ? 'для приміщень' : 'не потрібен'; }) + '</div>' +
       '</div>';
     r.rows.forEach(function (row) {
@@ -211,10 +220,11 @@
     if (!b) return;
     var k = b.getAttribute('data-k'), v = b.getAttribute('data-v');
     if (k === 'n') { S.n = Math.max(1, Math.min(32, S.n + (+v))); S.nvr = S.sw = S.hdd = ''; }
-    else if (k === 'brand') { S.brand = v; S.cam = S.nvr = S.sw = S.hdd = ''; S.mp = 0; }
+    else if (k === 'brand') { S.brand = v; S.cam = S.nvr = S.sw = S.hdd = S.poe = ''; S.mp = 0; }
     else if (k === 'mp') { S.mp = +v; S.cam = S.nvr = S.hdd = ''; }
     else if (k === 'days') { S.days = +v; S.hdd = ''; }
     else if (k === 'cable') S.cable = v;
+    else if (k === 'poe') { S.poe = v; S.nvr = S.sw = S.hdd = ''; }
     render();
   }
   function onChange(e) {
