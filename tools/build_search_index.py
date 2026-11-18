@@ -10,7 +10,7 @@
 
 Запуск: FB_FEED_URL=... GOOGLE_FEED_URL=... python3 tools/build_search_index.py
 """
-import json, os, re, sys, urllib.request, xml.etree.ElementTree as ET
+import json, os, re, sys, time, urllib.request, xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'search', 'index.json')
@@ -116,6 +116,19 @@ def get(url, timeout=180):
         return r.read()
 
 
+def get_xml(url, timeout=180, tries=3, pause=60):
+    """Завантажити й розібрати XML-фід; якщо фід прийшов обрізаним (Хорошоп саме перегенеровує його —
+    18.11.2026: ParseError «no element found»), почекати й спробувати ще раз, до tries разів."""
+    for n in range(1, tries + 1):
+        try:
+            return ET.fromstring(get(url, timeout))
+        except Exception as e:
+            if n == tries:
+                raise
+            print('feed attempt %d failed (%s), retry in %ds: %s' % (n, e, pause, url[:60]))
+            time.sleep(pause)
+
+
 def text(el, tag):
     x = el.find(G + tag)
     if x is None:
@@ -141,7 +154,7 @@ def main():
     g_items = []                  # товари Google-фіду — нові з'являються в ньому раніше, ніж у Facebook-фіді
     if g_url:
         try:
-            groot = ET.fromstring(get(g_url))
+            groot = get_xml(g_url)
             for it in groot.iter('item'):
                 link2code[text(it, 'link')] = text(it, 'id')
                 g_stock[text(it, 'link')] = text(it, 'availability') == 'in stock'
@@ -151,7 +164,7 @@ def main():
 
     specs, ranges, qtys = {}, {}, {}
     try:
-        sroot = ET.fromstring(get(SUPPLIER, 300))
+        sroot = get_xml(SUPPLIER, 300)
         for o in sroot.iter('offer'):
             vals, params = [], {}
             for p in o.findall('param'):
@@ -184,7 +197,7 @@ def main():
     except Exception as e:
         print('supplier feed failed:', e)
 
-    root = ET.fromstring(get(fb_url))
+    root = get_xml(fb_url)
     fb_items = list(root.iter('item'))
     # 16.11.2026: нових товарів (кабелі Starlink Gen3 30 м) ще не було у Facebook-фіді, лише в Google-фіді —
     # і пошук їх не знаходив. Тепер беремо всі товари Facebook-фіду + ті з Google-фіду, яких у ньому немає.
