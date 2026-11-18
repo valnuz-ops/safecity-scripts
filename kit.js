@@ -139,7 +139,8 @@
     '.sckit__q span{min-width:34px;text-align:center;font-weight:700;font-size:16px}' +
     '.sckit__row{display:grid;grid-template-columns:22px 56px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #e6ebf1}' +
     '.sckit__row.off{opacity:.5}' +
-    '.sckit__row input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:#1b7fd1}' +
+    '.sckit .sckit__row>input[type=checkbox]{grid-column:1;-webkit-appearance:checkbox;appearance:auto;display:block!important;position:static!important;opacity:1!important;visibility:visible!important;width:18px;height:18px;margin:0;accent-color:#1b7fd1}' +
+    '.sckit__row>.sckit__img{grid-column:2}.sckit__row>.sckit__body{grid-column:3;min-width:0}.sckit__row>.sckit__sum{grid-column:4}' +
     '.sckit__row img{width:56px;height:56px;object-fit:contain;border-radius:6px;background:#fff}' +
     '.sckit__t{font-size:12px;color:#5f6b78;text-transform:uppercase;letter-spacing:.03em}' +
     '.sckit__n{display:block;color:#1d2733;text-decoration:none;font-weight:500;overflow-wrap:anywhere}.sckit__n:hover{text-decoration:underline}' +
@@ -150,14 +151,14 @@
     '.sckit__foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin-top:6px;padding:14px 0 0;border-top:2px solid #1d2733}' +
     '.sckit__total{font-size:22px;font-weight:700}.sckit__total small{display:block;font-size:12px;font-weight:400;color:#5f6b78}' +
     '.sckit__buy{padding:13px 22px;border:0;border-radius:8px;background:#1f8a4c;color:#fff;font:inherit;font-weight:700;font-size:16px;cursor:pointer}' +
-    '.sckit__buy[disabled]{opacity:.6;cursor:default}' +
+    '.sckit__buy[disabled]{opacity:.6;cursor:default}a.sckit__buy{display:inline-block;text-decoration:none;margin:0 8px 8px 0}.sckit__done{padding:10px 0}' +
     '.sckit__f{font-size:12px;color:#7a828c;margin:12px 0 0}' +
     '.sckit-modal{position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,32,.55);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px;-webkit-overflow-scrolling:touch}' +
     '.sckit-modal__box{position:relative;width:100%;max-width:900px;background:#fff;border-radius:12px;padding:22px 24px 24px;box-shadow:0 12px 40px rgba(0,0,0,.25)}' +
     '.sckit-modal__x{position:absolute;top:8px;right:8px;width:40px;height:40px;border:0;background:none;font-size:28px;line-height:1;cursor:pointer;color:#5f6b78}' +
     '.sckit-inline{margin:20px 0;padding:18px 20px;border:1px solid #d6e4f0;border-radius:12px;background:#f7fbff}' +
     '@media(max-width:640px){.sckit__opts{grid-template-columns:1fr}.sckit-modal{padding:0}.sckit-modal__box{border-radius:0;min-height:100%;padding:18px 14px 90px}' +
-    '.sckit__row{grid-template-columns:22px 44px minmax(0,1fr)}.sckit__row img{width:44px;height:44px}.sckit__sum{grid-column:3;text-align:left}.sckit__sum small{display:inline;margin-left:6px}' +
+    '.sckit__row{grid-template-columns:22px 44px minmax(0,1fr)}.sckit__row img{width:44px;height:44px}.sckit__row>.sckit__sum{grid-column:3;text-align:left}.sckit__sum small{display:inline;margin-left:6px}' +
     '.sckit__foot{position:sticky;bottom:0;background:#fff;padding:10px 0;margin-top:10px}.sckit__buy{flex:1 1 auto}.sckit__h{font-size:18px;padding-right:36px}}';
 
   function chips(name, vals, cur, fmt) {
@@ -184,8 +185,8 @@
       if (!off) total += sum;
       h += '<div class="sckit__row' + (off ? ' off' : '') + '">' +
         '<input type="checkbox" data-k="off" data-v="' + row.id + '"' + (off ? '' : ' checked') + ' aria-label="' + esc(row.title) + '">' +
-        (x.i ? '<img src="' + esc(x.i) + '" alt="" loading="lazy">' : '<span></span>') +
-        '<div><div class="sckit__t">' + esc(row.title) + '</div><a class="sckit__n" href="' + esc(x.u) + '" target="_blank" rel="noopener">' + esc(x.n) + '</a>' +
+        (x.i ? '<img class="sckit__img" src="' + esc(x.i) + '" alt="" loading="lazy">' : '<span class="sckit__img"></span>') +
+        '<div class="sckit__body"><div class="sckit__t">' + esc(row.title) + '</div><a class="sckit__n" href="' + esc(x.u) + '" target="_blank" rel="noopener">' + esc(x.n) + '</a>' +
         (row.hint ? '<div class="sckit__hint' + (row.warn ? ' warn' : '') + '">' + esc(row.hint) + '</div>' : '') +
         (row.list.length > 1 ? '<select data-k="' + row.id + '" aria-label="Замінити: ' + esc(row.title) + '">' + row.list.map(function (o) {
           return '<option value="' + esc(o.it.u) + '"' + (o === row.sel ? ' selected' : '') + '>' + esc(row.label(o)) + '</option>';
@@ -204,7 +205,8 @@
 
   function onClick(e) {
     var t = e.target;
-    if (t.closest && t.closest('.sckit__buy')) { buy(t.closest('.sckit__buy')); return; }
+    if (t.closest && t.closest('.sckit__again')) { render(); return; }
+    if (t.closest && t.closest('button.sckit__buy')) { buy(t.closest('.sckit__buy')); return; }
     var b = t.closest && t.closest('button[data-k]');
     if (!b) return;
     var k = b.getAttribute('data-k'), v = b.getAttribute('data-v');
@@ -238,8 +240,15 @@
       // останній товар — штатним «Купити»: Хорошоп сам відкриє вікно кошика з усім набором
       setTimeout(function () {
         cart.appendProduct(last, undefined, true);
-        btn.textContent = 'Додано в кошик ✓';
-        setTimeout(function () { close(); btn.disabled = false; btn.textContent = 'Додати все в кошик'; }, 900);
+        // кошик Хорошопу сам не відкривається — показуємо підтвердження з переходом до оформлення
+        setTimeout(function () {
+          if (!root) return;
+          var lang = (location.pathname.match(/^\/(ru|en)\//) || [])[1];
+          root.innerHTML = '<div class="sckit__done"><div class="sckit__h">Комплект у кошику ✓</div>' +
+            '<div class="sckit__s">' + rows.length + ' ' + plural(rows.length, ['позиція', 'позиції', 'позицій']) + ' на ' + money(root._total) + '. Кількість і склад можна змінити в кошику.</div>' +
+            '<a class="sckit__buy" href="' + (lang ? '/' + lang : '') + '/checkout/">Оформити замовлення</a> ' +
+            '<button type="button" class="sckit__chip sckit__again">Змінити комплект</button></div>';
+        }, 1200);
       }, prods.length ? 1500 : 0);
     })['catch'](function () {
       btn.disabled = false; btn.textContent = 'Не вдалося — спробуйте ще раз';
