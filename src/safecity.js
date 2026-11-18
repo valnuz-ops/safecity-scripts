@@ -709,6 +709,8 @@ scModule(1, function () {
 
   // Той самий розрахунок використовує сторінка оформлення (блок 10)
   window.scShipText = buildText;
+  // Сирий розрахунок відправки (offset, minutesLeft, weekday) — для верхньої стрічки (блок 47)
+  window.scShipCalc = function () { var r = calculate(); r.weekend = isWeekendPeriod(); return r; };
   // Орієнтовна дата доставки (YYYY-MM-DD) для Google Customer Reviews (блок 12)
   window.scDeliveryDate = function () {
     var r = calculate();
@@ -7120,6 +7122,106 @@ scModule(46, function () {
   }));
 });
 
+
+/* =====================================================================
+ * 47. Верхня стрічка Хорошопа (ribbon-banner) → «жива» стрічка (18.11.2026)
+ *     Замість статичного «Знижка до 6% постійним клієнтам» (це вже є в картці й кошику) по черзі:
+ *       1) відправка за розкладом блоку 1 (Київ, будні до 15:00): «Замовте до 15:00 — відправимо сьогодні»
+ *          (+ «залишилось N год M хв» за 3 год до 15:00) / «…відправка завтра» / «…в понеділок»;
+ *       2) кошик 1–2999 грн: «До безкоштовної доставки залишилось N грн», інакше «Безкоштовна доставка від 3 000 грн»;
+ *       3) «Оплата при отриманні з оглядом · Гарантія 12 місяців».
+ *     Стрічку вмикають і вимикають в адмінці Хорошопа — скрипт лише міняє її текст. Якщо скрипт не
+ *     завантажився, видно текст з адмінки. Хрестик Хорошопа працює як і раніше.
+ *     ВІДКАТ: SC_RIBBON_ON = false (або ?sc_ribbon=0 у адресі — лише в цьому браузері).
+ * ===================================================================== */
+var SC_RIBBON_ON = true;
+
+scModule(47, function () {
+  'use strict';
+  var flag = location.search.match(/[?&]sc_ribbon=([01])/);
+  try { if (flag) localStorage.setItem('sc_ribbon', flag[1]); } catch (e) {}
+  var local = (function () { try { return localStorage.getItem('sc_ribbon'); } catch (e) { return null; } })();
+  if (!(local === '1' || (SC_RIBBON_ON && local !== '0'))) return;
+
+  var CONFIG = {
+    freeFrom: 3000,          // безкоштовна доставка від (грн) — як у блоці 5
+    rotateMs: 6000,          // зміна повідомлення
+    texts: {
+      today: '🚚 Замовте до 15:00 — відправимо сьогодні',
+      left: ' · залишилось {time}',
+      tomorrow: '🚚 Замовлення зараз — відправка завтра',
+      later: '🚚 Замовлення зараз — відправка {day}',
+      freeLeft: '🎁 До безкоштовної доставки залишилось {sum} грн',
+      freeFrom: '🎁 Безкоштовна доставка від 3 000 грн',
+      trust: '✅ Оплата при отриманні з оглядом · Гарантія 12 місяців'
+    },
+    // телефон (до 767 px): коротші тексти, щоб стрічка лишалась в один рядок
+    textsMobile: {
+      today: '🚚 До 15:00 — відправимо сьогодні',
+      left: '🚚 Відправимо сьогодні · ще {time}',
+      tomorrow: '🚚 Замовлення зараз — відправка завтра',
+      later: '🚚 Замовлення зараз — відправка {day}',
+      freeLeft: '🎁 До безкоштовної доставки ще {sum} грн',
+      freeFrom: '🎁 Безкоштовна доставка від 3 000 грн',
+      trust: '✅ Оплата при отриманні · Гарантія 12 міс'
+    }
+  };
+  function TX() { return window.matchMedia && matchMedia('(max-width:767px)').matches ? CONFIG.textsMobile : CONFIG.texts; }
+  var MOBILE = function () { return TX() === CONFIG.textsMobile; };
+  var DAYS_ACC = ['в неділю', 'в понеділок', 'у вівторок', 'в середу', 'в четвер', 'в п’ятницю', 'в суботу'];
+
+  function shipMsg() {
+    if (typeof window.scShipCalc !== 'function') return '';
+    var r = window.scShipCalc(), T = TX();
+    if (r.offset === 0) {
+      if (r.minutesLeft > 180) return T.today;
+      var h = Math.floor(r.minutesLeft / 60), m = r.minutesLeft % 60, time = (h ? h + ' год ' : '') + m + ' хв';
+      // десктоп: «…сьогодні · залишилось 2 год 14 хв»; телефон: «Відправимо сьогодні · ще 2 год 14 хв»
+      return MOBILE() ? T.left.replace('{time}', time) : T.today + T.left.replace('{time}', time);
+    }
+    if (r.offset === 1) return T.tomorrow;
+    return T.later.replace('{day}', DAYS_ACC[r.weekday]);
+  }
+  function cartSum() {
+    var el = document.querySelector('#cart .j-total-sum') || document.querySelector('.j-total-sum');
+    return el ? scSum(el.textContent) : 0;
+  }
+  function freeMsg() {
+    var s = cartSum();
+    if (s > 0 && s < CONFIG.freeFrom) return TX().freeLeft.replace('{sum}', Math.ceil(CONFIG.freeFrom - s).toLocaleString('uk-UA'));
+    if (s >= CONFIG.freeFrom) return '';                 // уже безкоштовно — не нагадуємо
+    return TX().freeFrom;
+  }
+  function messages() {
+    return [shipMsg(), freeMsg(), TX().trust].filter(Boolean);
+  }
+
+  scStyle('sc47-css',
+    '.j-ribbon-banner .ribbon-banner__text{transition:opacity .35s ease}' +
+    '.j-ribbon-banner .ribbon-banner__text.sc47-fade{opacity:0}' +
+    '@media (max-width:767px){.j-ribbon-banner .ribbon-banner__text{font-size:13px;line-height:1.25}}');
+
+  var i = 0, box = null;
+  function show(next) {
+    if (!box || !document.body.contains(box)) box = document.querySelector('.j-ribbon-banner .ribbon-banner__text');
+    if (!box) return;
+    var list = messages();
+    if (!list.length) return;
+    if (next) i = (i + 1) % list.length;
+    if (i >= list.length) i = 0;
+    var text = list[i];
+    if (box.textContent.trim() === text) return;
+    if (!next) { box.textContent = text; return; }
+    box.classList.add('sc47-fade');
+    setTimeout(scSafe(47, function () { box.textContent = text; box.classList.remove('sc47-fade'); }), 350);
+  }
+  function start() {
+    if (!document.querySelector('.j-ribbon-banner .ribbon-banner__text')) return;
+    show(false);
+    setInterval(scSafe(47, function () { if (document.visibilityState !== 'hidden') show(true); }), CONFIG.rotateMs);
+  }
+  scReady(scSafe(47, start));
+});
 
 /* =====================================================================
  * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
