@@ -2698,16 +2698,9 @@ scModule(15, function () {
       ul.appendChild(li);
     });
 
-    // одразу під «Купити» / плашкою відправки (блок 1), перед «Знайшли дешевше?» (блок 14)
-    var cheaper = document.getElementById('sc-cheaper');
-    if (cheaper && cheaper.parentNode) {
-      cheaper.parentNode.insertBefore(ul, cheaper);
-      cheaper.style.marginTop = '';                                  // відступ тепер у плашки довіри
-    } else {
-      var ship = document.getElementById('ship-info');
-      var after = ship && ship.parentNode === anchor.parentNode ? ship : anchor;
-      after.parentNode.insertBefore(ul, after.nextSibling);
-    }
+    // під кнопками «Купити / Замовити швидко» (блок «Або напишіть нам» потім стане між ними — блок 35).
+    // До 19.11.2026 рівнялися на «Знайшли дешевше?» (блок 14, прибрано); без нього не ставимо над кнопками
+    anchor.parentNode.insertBefore(ul, anchor.nextSibling);
     // на десктопі блок кнопок має великий нижній відступ — підтягуємо плашку ближче до кнопок
     var prev = ul.previousElementSibling;
     var mb = prev ? parseFloat(getComputedStyle(prev).marginBottom) || 0 : 0;
