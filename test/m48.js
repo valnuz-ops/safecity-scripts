@@ -38,7 +38,7 @@ scModule(48, function () {
     var jq = $();
     if (jq) {
       jq(s).val(v).trigger('change');
-      try { var sb = jq(s).data('selectBox-selectBoxIt'); if (sb) sb.refresh(); } catch (x) {}
+      try { var sb = jq(s).data('selectBoxSelectBoxIt'); if (sb) sb.refresh(); } catch (x) {}
     } else { s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); }
   }
 
@@ -105,12 +105,24 @@ scModule(48, function () {
     }).then(function () {
       return wait(function () { return hasRef(ref); }, 12000);
     }).then(function () {
-      setSelect(whSel(), ref);
-      return wait(function () { var w = whSel(); return w && w.value === ref; }, 3000);
+      var w = whSel();
+      setSelect(w, ref);
+      // блок 33: перше значення списку без кліку вважає «не обрано» — позначаємо вибір явно
+      w.setAttribute('data-sc33', 'picked');
+      return wait(function () { var x = whSel(); return x && x.value === ref; }, 3000);
+    }).then(function () {
+      var w = whSel(), t = w && (document.getElementById(w.id + 'SelectBoxItText') || w.parentElement.querySelector('.selectboxit-text, .select__text'));
+      if (t && w.selectedIndex >= 0) t.textContent = w.options[w.selectedIndex].textContent;
+      var c = t && t.closest('.selectboxit-container'); if (c) c.classList.remove('sc33-empty', 'sc33-err');
+      var e = document.getElementById('sc33-wh-msg'); if (e) e.remove();
     });
   }
 
+  // Хорошоп перемальовує блок доставки після кожної зміни — пишемо в поточну кнопку і пам'ятаємо текст
+  var last = null;
   function msg(box, cls, text) {
+    last = { cls: cls, text: text };
+    box = document.getElementById('sc-npmap') || box;
     var m = box.querySelector('.sc-npmap__msg');
     if (!m) { m = document.createElement('div'); box.appendChild(m); }
     m.className = 'sc-npmap__msg ' + cls; m.textContent = text;
@@ -194,6 +206,7 @@ scModule(48, function () {
     }
     box.style.display = '';
     row.parentNode.insertBefore(box, row.nextSibling);
+    if (last && !box.querySelector('.sc-npmap__msg')) msg(box, last.cls, last.text);
   }
 
   scReady(scSafe(48, function () {
