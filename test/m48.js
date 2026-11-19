@@ -83,13 +83,9 @@ scModule(48, function () {
   function apply(d) {
     var ref = d.externalId;
     var t = d.divisionCategory === 'Postomat' ? TYPE.postomat : TYPE.branch;
-    var ts = typeSel();
-    var p = Promise.resolve();
-    if (ts && ts.value !== t) {
-      p = p.then(function () { setSelect(ts, t); return new Promise(function (r) { setTimeout(r, 600); }); });
-    }
-    return p.then(function () {
-      if (hasRef(ref)) return;
+    var want = parseCity((d.settlement && d.settlement.name) || (d.addressParts && d.addressParts.city) || d.city);
+    return Promise.resolve().then(function () {
+      if (hasRef(ref) || sameCity(want)) return;
       var jq = $(), inp = document.getElementById('checkout-city') || q('[name="Recipient[delivery_city]"]');
       var ac = jq && inp && jq(inp).data('ui-autocomplete');
       if (!ac) throw new Error('no autocomplete');
@@ -101,7 +97,12 @@ scModule(48, function () {
         return items.length && pickCity(items, d);
       }, 8000).then(function (li) {
         ac.menu.focus(null, jq(li)); ac.menu.select();
+        return wait(function () { return cityId(); }, 8000);
       });
+    }).then(function () {
+      // тип доставки (відділення / поштомат) — коли місто вже є, інакше Хорошоп поле не приймає
+      var ts = typeSel();
+      if (ts && ts.value !== t) return wait(function () { return typeSel(); }, 5000).then(function (x) { setSelect(x, t); });
     }).then(function () {
       return wait(function () { return hasRef(ref); }, 12000);
     }).then(function () {
@@ -139,6 +140,13 @@ scModule(48, function () {
     return sdkP;
   }
 
+  function cityId() { var h = q('[name="Recipient[delivery_city_id]"]'); return h && h.value; }
+  function sameCity(want) {
+    var inp = document.getElementById('checkout-city');
+    if (!cityId() || !inp || !inp.value) return false;
+    var L = parseLabel(inp.value);
+    return norm(L.base) === norm(want.base) && (!want.kind || !L.kind || L.kind === want.kind) && !L.rest;
+  }
   function currentCity() {
     var inp = document.getElementById('checkout-city');
     return inp && inp.value ? parseLabel(inp.value).base : '';
@@ -190,21 +198,27 @@ scModule(48, function () {
     }).then(function () { busy = false; });
   }
 
+  function setLabel(box, t) { var l = box.querySelector('.sc-npmap__lbl'); if (l && l.textContent !== t) l.textContent = t; }
+
   function mount() {
     var ts = typeSel();
     var box = document.getElementById('sc-npmap');
     if (!ts || ts.value === TYPE.courier) { if (box) box.style.display = 'none'; return; }
-    var row = ts.closest('.form-item, .form-row') || ts.parentElement;
-    if (box && box.parentNode && box.previousElementSibling === row) { box.style.display = ''; return; }
+    var cityInp = document.getElementById('checkout-city');
+    var anchor = !cityId() && cityInp ? cityInp : ts;     // міста ще немає — кнопка під полем «Місто»
+    var row = anchor.closest('.form-item, .form-row') || anchor.parentElement;
+    var label = cityId() ? 'Обрати відділення на карті' : 'Або оберіть місто й відділення на карті';
+    if (box && box.parentNode && box.previousElementSibling === row) { box.style.display = ''; setLabel(box, label); return; }
     if (!box) {
       scStyle('sc-npmap-style', CSS);
       box = document.createElement('div');
       box.id = 'sc-npmap';
-      box.innerHTML = '<button type="button" class="sc-npmap__btn"><img src="' + SC_NP_LOGO + '" alt="" aria-hidden="true">Обрати відділення на карті</button>';
+      box.innerHTML = '<button type="button" class="sc-npmap__btn"><img src="' + SC_NP_LOGO + '" alt="" aria-hidden="true"><span class="sc-npmap__lbl"></span></button>';
       box.querySelector('img').onerror = function () { this.remove(); };
       box.querySelector('button').addEventListener('click', function (e) { e.preventDefault(); open(box); });
     }
     box.style.display = '';
+    setLabel(box, label);
     row.parentNode.insertBefore(box, row.nextSibling);
     if (last && !box.querySelector('.sc-npmap__msg')) msg(box, last.cls, last.text);
   }
