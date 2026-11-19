@@ -7559,6 +7559,44 @@ scModule(48, function () {
 });
 
 /* =====================================================================
+ * 49. Картка товару: «Характеристики» Хорошопа — перші 5 рядків + «Усі характеристики (N)» (19.11.2026)
+ *     Повністю не ховаємо: у багатьох товарів таблиці в описі немає або вона коротша (Wi-Fi, температура,
+ *     гарантія…), а цей список — ті самі дані, що й у фільтрах. Рядки лишаються в DOM (пошуковики, scFeatures).
+ * ===================================================================== */
+scModule(49, function () {
+  'use strict';
+  var SHOW = 5;          // скільки рядків видно одразу
+  var MIN_HIDE = 3;      // ховаємо, лише якщо під кнопкою буде хоча б 3 рядки (інакше кнопка не варта місця)
+  var CSS =
+    '.product-features__row.sc-fx{display:none}' +
+    '.product-features.sc-fx-open .product-features__row.sc-fx{display:table-row}' +
+    '.sc-fx-btn{display:inline-block;margin:8px 0 0;padding:0;background:none;border:0;font:inherit;font-size:14px;color:#1f6fd1;' +
+    'text-decoration:underline;text-underline-offset:2px;cursor:pointer}';
+  function run() {
+    [].forEach.call(document.querySelectorAll('.product-features'), function (pf) {
+      if (pf.getAttribute('data-sc-fx') || pf.closest('.product-description, [itemprop="description"]')) return;
+      var rows = pf.querySelectorAll('.product-features__row');
+      if (rows.length < SHOW + MIN_HIDE) return;
+      pf.setAttribute('data-sc-fx', '1');
+      scStyle('sc-fx-style', CSS);
+      for (var i = SHOW; i < rows.length; i++) rows[i].classList.add('sc-fx');
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'sc-fx-btn';
+      var more = 'Усі характеристики (' + rows.length + ')';
+      btn.textContent = more;
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var open = pf.classList.toggle('sc-fx-open');
+        btn.textContent = open ? 'Згорнути' : more;
+      });
+      pf.appendChild(btn);
+    });
+  }
+  if (!document.querySelector('[itemtype*="schema.org/Product"]')) return;
+  scInit(49, run);
+});
+
+/* =====================================================================
  * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
  *     Хорошоп змінив шаблон — блоки мовчки перестають з'являтися. Раз за перегляд, через ~5 с після
  *     завантаження (сторінка дорисована), перевіряємо те, без чого блоки не працюють, і надсилаємо звіт
