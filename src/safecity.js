@@ -759,10 +759,12 @@ scModule(1, function () {
     var title = range ? 'Отримаєте <span class="ship-info__date">' + range + '</span>' : ship;
     var lines = range ? [ship] : [];
     var timer = '';
+    // з таймером рядок «Відправимо сьогодні з Києва» не дублюємо — він у самій плашці
     if (!weekend && r.offset === 0 && r.minutesLeft <= CONFIG.cardCountdownHours * 60) {
       var h = Math.floor(r.minutesLeft / 60), m = r.minutesLeft % 60;
       timer = '<div class="ship-info__timer' + (r.minutesLeft <= 60 ? ' ship-info__timer--hot' : '') + '">' +
-        '<span aria-hidden="true">⏱</span> Замовте протягом <b>' + (h ? h + ' год ' : '') + m + ' хв</b> — відправимо сьогодні</div>';
+        '<span aria-hidden="true">⏱</span> Замовте протягом <b>' + (h ? h + ' год ' : '') + m + ' хв</b> — відправимо сьогодні з Києва</div>';
+      if (range) lines = [];
     }
     var dl = deliveryLine();
     var html =
