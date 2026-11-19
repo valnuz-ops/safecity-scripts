@@ -7302,6 +7302,7 @@ scModule(47, function () {
  *     Не вдалося — підказка «оберіть у списку вручну», форма не ламається.
  *     АКБ від 7 А·год у кошику (блок 10) → на карті без поштоматів.
  *     Кнопка — у колонці поля: під «Відділення», а поки міста немає — під «Місто».
+ *     Мобільна версія Хорошопа (?v=mobile): місто — не автокомплит, а свій список зі шторкою пошуку.
  *     Карта не відповіла за 10 с → закриваємо, підказка «оберіть у списку» (список Хорошопа завжди працює).
  *     GA4: sc_npmap_open, sc_npmap_pick (result: ok / fail / foreign).
  * ===================================================================== */
@@ -7346,6 +7347,8 @@ scModule(48, function () {
       jq(s).val(v).trigger('change');
       try { var sb = jq(s).data('selectBoxSelectBoxIt'); if (sb) sb.refresh(); } catch (x) {}
     } else { s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); }
+    var box = s.closest && s.closest('.select'), tx = box && box.querySelector('.select__text');
+    if (tx && s.selectedIndex >= 0) tx.textContent = s.options[s.selectedIndex].textContent.trim();
   }
 
   // «місто Львів» / «село Сокільники» → { kind, base }
@@ -7392,10 +7395,11 @@ scModule(48, function () {
     var want = parseCity((d.settlement && d.settlement.name) || (d.addressParts && d.addressParts.city) || d.city);
     return Promise.resolve().then(function () {
       if (hasRef(ref) || sameCity(want)) return;
-      var jq = $(), inp = document.getElementById('checkout-city') || q('[name="Recipient[delivery_city]"]');
-      var ac = jq && inp && jq(inp).data('ui-autocomplete');
+      var c = want;
+      var jq = $(), inp = document.getElementById('checkout-city');
+      if (!inp) return pickCityMobile(c, d);
+      var ac = jq && jq(inp).data('ui-autocomplete');
       if (!ac) throw new Error('no autocomplete');
-      var c = parseCity((d.settlement && d.settlement.name) || (d.addressParts && d.addressParts.city) || d.city);
       inp.value = c.base;
       ac.search(c.base);
       return wait(function () {
@@ -7447,15 +7451,49 @@ scModule(48, function () {
   }
 
   function cityId() { var h = q('[name="Recipient[delivery_city_id]"]'); return h && h.value; }
-  function sameCity(want) {
+  function cityText() {
     var inp = document.getElementById('checkout-city');
-    if (!cityId() || !inp || !inp.value) return false;
-    var L = parseLabel(inp.value);
+    if (inp) return inp.value;
+    var s = q('select[name="Recipient[delivery_city]"]');            // мобільна версія
+    return s && s.value ? s.value : '';
+  }
+  function cityAnchor() {
+    return document.getElementById('checkout-city') || q('.j-delivery-city-select') || q('select[name="Recipient[delivery_city]"]');
+  }
+  // мобільна: відкриваємо шторку міста, шукаємо, клікаємо потрібний пункт (шторка закривається сама)
+  function pickCityMobile(c, d) {
+    var sel = q('.j-delivery-city-select');
+    if (!sel) return Promise.reject(new Error('no city control'));
+    sel.click();
+    return wait(function () {
+      return [].filter.call(document.querySelectorAll('input.j-search'), function (i) { return i.offsetParent !== null; })[0];
+    }, 4000).then(function (inp) {
+      inp.value = c.base;
+      ['input', 'keyup', 'change'].forEach(function (t) { inp.dispatchEvent(new Event(t, { bubbles: true })); });
+      // чекаємо саме результати пошуку («м. Львів», «с. …»), а не обрані міста, що видно одразу
+      return wait(function () {
+        var items = [].filter.call(document.querySelectorAll('li.j-option-item'), function (l) { return l.offsetParent !== null; });
+        var found = items.filter(function (l) { return /^(м|с|смт|с-ще|сщ)\.?\s/i.test(l.getAttribute('data-value') || l.textContent.trim()); });
+        return found.length && pickCity(found, d);
+      }, 8000);
+    }).then(function (li) {
+      li.click();
+      return wait(function () { return cityId() && norm(parseLabel(cityText()).base) === norm(c.base); }, 8000);
+    }).catch(function (e) {
+      var x = document.querySelector('.mm-opened [data-panel-close], .mm-opened .mm-navbar__btn');
+      try { if (x && document.documentElement.classList.contains('mm-opened')) x.click(); } catch (z) {}
+      throw e;
+    });
+  }
+  function sameCity(want) {
+    var t = cityText();
+    if (!cityId() || !t) return false;
+    var L = parseLabel(t);
     return norm(L.base) === norm(want.base) && (!want.kind || !L.kind || L.kind === want.kind) && !L.rest;
   }
   function currentCity() {
-    var inp = document.getElementById('checkout-city');
-    return inp && inp.value ? parseLabel(inp.value).base : '';
+    var t = cityText();
+    return t ? parseLabel(t).base : '';
   }
 
   function open(box) {
@@ -7524,11 +7562,14 @@ scModule(48, function () {
     var ts = typeSel();
     var box = document.getElementById('sc-npmap');
     if (!ts || ts.value === TYPE.courier) { if (box) box.style.display = 'none'; return; }
-    var cityInp = document.getElementById('checkout-city');
+    var cityEl = cityAnchor();
     var wh = whSel();
-    // місце: з містом — під полем «Відділення/Поштомат», без міста — під полем «Місто»; всередині колонки поля (dd)
-    var anchor = cityId() ? (wh && wh.parentElement && wh.parentElement.getClientRects().length ? wh : ts) : (cityInp || ts);
-    var cell = anchor.closest('dd, .form-item') || anchor.parentElement;
+    // місце: з містом — під полем «Відділення/Поштомат», без міста — під полем «Місто»; у колонці поля
+    // (десктоп: <dd>; мобільна: обгортка .select — кнопку ставимо після неї, не всередину)
+    var anchor = cityId() ? (wh && wh.parentElement && wh.parentElement.getClientRects().length ? wh : ts) : (cityEl || ts);
+    var dd = anchor.closest('dd');
+    var wrap = dd ? null : (anchor.closest('.select') || anchor);
+    var cell = dd || wrap.parentElement;
     var label = cityId() ? 'Обрати на карті' : 'Або оберіть місто й відділення на карті';
     if (!box) {
       scStyle('sc-npmap-style', CSS);
@@ -7540,7 +7581,7 @@ scModule(48, function () {
     }
     box.style.display = '';
     setLabel(box, label);
-    if (box.parentNode !== cell) cell.appendChild(box);
+    if (box.parentNode !== cell) { if (wrap) cell.insertBefore(box, wrap.nextSibling); else cell.appendChild(box); }
     if (last && !box.querySelector('.sc-npmap__msg')) msg(box, last.cls, last.text);
   }
 
