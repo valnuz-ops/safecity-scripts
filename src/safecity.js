@@ -839,7 +839,7 @@ scModule(1, function () {
 
   var CSS =
     '#ship-info{box-sizing:border-box;width:100%;flex:0 0 100%;clear:both;margin:12px 0;padding:12px 14px;border-radius:10px;' +
-    'background:#f6faf6;border:1px solid #cfe5cf;font-size:14px;line-height:1.4;display:flex;align-items:flex-start;gap:12px}' +
+    'background:#f6faf6;border:1px solid #cfe5cf;font-size:14px;line-height:1.4;display:flex;align-items:center;gap:14px}' +
     '#ship-info .ship-info__logo{flex:0 0 34px;width:34px;height:34px;display:flex;align-items:center;justify-content:center}' +
     '#ship-info .ship-info__logo img{width:34px;height:34px;display:block;object-fit:contain}' +
     '#ship-info .ship-info__emoji{font-size:24px;line-height:1}' +
