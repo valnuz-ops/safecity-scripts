@@ -7301,6 +7301,8 @@ scModule(47, function () {
  *     місто (через його ж автокомплит) і відділення — за externalId (= Ref НП, value опцій Хорошопа).
  *     Не вдалося — підказка «оберіть у списку вручну», форма не ламається.
  *     АКБ від 7 А·год у кошику (блок 10) → на карті без поштоматів.
+ *     Кнопка — у колонці поля: під «Відділення», а поки міста немає — під «Місто».
+ *     Карта не відповіла за 10 с → закриваємо, підказка «оберіть у списку» (список Хорошопа завжди працює).
  *     GA4: sc_npmap_open, sc_npmap_pick (result: ok / fail / foreign).
  * ===================================================================== */
 scModule(48, function () {
@@ -7310,16 +7312,16 @@ scModule(48, function () {
   var SDK = 'https://integration-widget.novapost.com/sdk.min.js';
   var TYPE = { branch: '3', postomat: '17', courier: '16' };
   var $ = function () { return window.jQuery; };
-  var widget = null, busy = false, sdkP = null;
+  var widget = null, busy = false, sdkP = null, ready = false;
 
   var CSS =
-    '#sc-npmap{margin:6px 0 10px}' +
-    '#sc-npmap .sc-npmap__btn{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid #e3242b;border-radius:8px;' +
-    'background:#fff;color:#c8161d;font-size:14px;font-weight:600;cursor:pointer;line-height:1.2}' +
-    '#sc-npmap .sc-npmap__btn:hover{background:#fff3f3}' +
-    '#sc-npmap .sc-npmap__btn img{width:20px;height:20px;display:block;object-fit:contain}' +
+    '#sc-npmap{margin:8px 0 2px;width:100%;flex:0 0 100%}' +
+    '#sc-npmap .sc-npmap__btn{display:inline-flex;align-items:center;gap:7px;padding:6px 12px 6px 8px;border:1px solid #f1c9cb;border-radius:18px;' +
+    'background:#fff7f7;color:#c8161d;font-size:13.5px;font-weight:600;cursor:pointer;line-height:1.2;transition:background .15s,border-color .15s}' +
+    '#sc-npmap .sc-npmap__btn:hover{background:#ffecec;border-color:#e3242b}' +
+    '#sc-npmap .sc-npmap__btn img{width:18px;height:18px;display:block;object-fit:contain}' +
     '#sc-npmap .sc-npmap__btn[disabled]{opacity:.6;cursor:wait}' +
-    '#sc-npmap .sc-npmap__msg{font-size:13px;margin-top:6px;color:#4c5a67}' +
+    '#sc-npmap .sc-npmap__msg{font-size:13px;margin-top:6px;color:#4c5a67;line-height:1.35}' +
     '#sc-npmap .sc-npmap__msg.ok{color:#1a7f37}#sc-npmap .sc-npmap__msg.err{color:#a0251a}' +
     '#sc-npmap-host{position:absolute;width:0;height:0;overflow:hidden}';
 
@@ -7387,13 +7389,9 @@ scModule(48, function () {
   function apply(d) {
     var ref = d.externalId;
     var t = d.divisionCategory === 'Postomat' ? TYPE.postomat : TYPE.branch;
-    var ts = typeSel();
-    var p = Promise.resolve();
-    if (ts && ts.value !== t) {
-      p = p.then(function () { setSelect(ts, t); return new Promise(function (r) { setTimeout(r, 600); }); });
-    }
-    return p.then(function () {
-      if (hasRef(ref)) return;
+    var want = parseCity((d.settlement && d.settlement.name) || (d.addressParts && d.addressParts.city) || d.city);
+    return Promise.resolve().then(function () {
+      if (hasRef(ref) || sameCity(want)) return;
       var jq = $(), inp = document.getElementById('checkout-city') || q('[name="Recipient[delivery_city]"]');
       var ac = jq && inp && jq(inp).data('ui-autocomplete');
       if (!ac) throw new Error('no autocomplete');
@@ -7405,7 +7403,12 @@ scModule(48, function () {
         return items.length && pickCity(items, d);
       }, 8000).then(function (li) {
         ac.menu.focus(null, jq(li)); ac.menu.select();
+        return wait(function () { return cityId(); }, 8000);
       });
+    }).then(function () {
+      // тип доставки (відділення / поштомат) — коли місто вже є, інакше Хорошоп поле не приймає
+      var ts = typeSel();
+      if (ts && ts.value !== t) return wait(function () { return typeSel(); }, 5000).then(function (x) { setSelect(x, t); });
     }).then(function () {
       return wait(function () { return hasRef(ref); }, 12000);
     }).then(function () {
@@ -7443,6 +7446,13 @@ scModule(48, function () {
     return sdkP;
   }
 
+  function cityId() { var h = q('[name="Recipient[delivery_city_id]"]'); return h && h.value; }
+  function sameCity(want) {
+    var inp = document.getElementById('checkout-city');
+    if (!cityId() || !inp || !inp.value) return false;
+    var L = parseLabel(inp.value);
+    return norm(L.base) === norm(want.base) && (!want.kind || !L.kind || L.kind === want.kind) && !L.rest;
+  }
   function currentCity() {
     var inp = document.getElementById('checkout-city');
     return inp && inp.value ? parseLabel(inp.value).base : '';
@@ -7455,6 +7465,7 @@ scModule(48, function () {
     loadSdk().then(function () {
       btn.disabled = false;
       var bat = typeof window.scCoHasBattery === 'function' && window.scCoHasBattery();
+      var c = currentCity();
       if (widget) { try { widget.destroy(); } catch (x) {} widget = null; }
       var host = document.getElementById('sc-npmap-host');
       if (!host) { host = document.createElement('div'); host.id = 'sc-npmap-host'; document.body.appendChild(host); }
@@ -7462,15 +7473,28 @@ scModule(48, function () {
         container: host, variant: 'widget', viewMode: 'popup', locale: 'uk', country: 'UA',
         divisionCategories: bat ? ['CargoBranch', 'PostBranch'] : ['PostBranch', 'CargoBranch', 'Postomat'],
         onSelect: function (d) { onPick(box, d); },
+        onReady: function () {
+          ready = true;
+          // на телефоні віджет інколи відкривається з останнім своїм містом — ставимо наше ще раз
+          if (c) { try { widget.updateParams({ city: c }); } catch (x) {} }
+        },
         onError: function (e) { scErr(48, e && e.message ? e : new Error(String(e))); }
       };
-      var c = currentCity();
       if (c) cfg.city = c;
+      ready = false;
       widget = new window.NovaPostWidget.NovaPostWidget(cfg);
       widget.show();
+      // запасний варіант: віджет не відповів за 10 с — закриваємо, звичайний список Хорошопа працює як завжди
+      setTimeout(function () {
+        if (ready || !widget) return;
+        try { widget.destroy(); } catch (x) {}
+        widget = null;
+        ga('sc_npmap_pick', { result: 'timeout' });
+        msg(box, 'err', 'Карта зараз не завантажилась — оберіть, будь ласка, відділення у списку.');
+      }, 10000);
     }).catch(function () {
       btn.disabled = false;
-      msg(box, 'err', 'Карта зараз не завантажилась — оберіть місто й відділення у полях нижче.');
+      msg(box, 'err', 'Карта зараз не завантажилась — оберіть, будь ласка, місто й відділення у полях форми.');
     });
   }
 
@@ -7494,22 +7518,29 @@ scModule(48, function () {
     }).then(function () { busy = false; });
   }
 
+  function setLabel(box, t) { var l = box.querySelector('.sc-npmap__lbl'); if (l && l.textContent !== t) l.textContent = t; }
+
   function mount() {
     var ts = typeSel();
     var box = document.getElementById('sc-npmap');
     if (!ts || ts.value === TYPE.courier) { if (box) box.style.display = 'none'; return; }
-    var row = ts.closest('.form-item, .form-row') || ts.parentElement;
-    if (box && box.parentNode && box.previousElementSibling === row) { box.style.display = ''; return; }
+    var cityInp = document.getElementById('checkout-city');
+    var wh = whSel();
+    // місце: з містом — під полем «Відділення/Поштомат», без міста — під полем «Місто»; всередині колонки поля (dd)
+    var anchor = cityId() ? (wh && wh.parentElement && wh.parentElement.getClientRects().length ? wh : ts) : (cityInp || ts);
+    var cell = anchor.closest('dd, .form-item') || anchor.parentElement;
+    var label = cityId() ? 'Обрати на карті' : 'Або оберіть місто й відділення на карті';
     if (!box) {
       scStyle('sc-npmap-style', CSS);
       box = document.createElement('div');
       box.id = 'sc-npmap';
-      box.innerHTML = '<button type="button" class="sc-npmap__btn"><img src="' + SC_NP_LOGO + '" alt="" aria-hidden="true">Обрати відділення на карті</button>';
+      box.innerHTML = '<button type="button" class="sc-npmap__btn"><img src="' + SC_NP_LOGO + '" alt="" aria-hidden="true"><span class="sc-npmap__lbl"></span></button>';
       box.querySelector('img').onerror = function () { this.remove(); };
       box.querySelector('button').addEventListener('click', function (e) { e.preventDefault(); open(box); });
     }
     box.style.display = '';
-    row.parentNode.insertBefore(box, row.nextSibling);
+    setLabel(box, label);
+    if (box.parentNode !== cell) cell.appendChild(box);
     if (last && !box.querySelector('.sc-npmap__msg')) msg(box, last.cls, last.text);
   }
 
