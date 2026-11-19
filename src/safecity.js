@@ -7601,7 +7601,8 @@ scModule(49, function () {
  *     Були замовлення з неправильним номером. Хорошоп сам лише підсвічує поле рамкою — без тексту.
  *     • під полем: підказка «прийде SMS з ТТН»; коли номер повний — показуємо його цілком для перевірки;
  *     • неповний / зайві цифри / «380» на початку / неіснуючий код оператора — червоний текст під полем;
- *     • явно вигадані номери (111 11 11, 123 45 67) — теж помилка;
+ *     • номери, схожі на вигадані (111 11 11, 123 45 67), — лише попередження, оформити можна
+ *       (такі номери теоретично існують);
  *     • з помилкою кнопка «Оформити» не відправляє форму (як блок 33 з відділенням).
  *     Діє на вкладках «Я новий покупець» і «Швидке замовлення». Інша країна (не +380) — не перевіряємо.
  *     ВІДКАТ: SC50_OFF = true.
@@ -7622,7 +7623,7 @@ scModule(50, function () {
     long: 'Забагато цифр: після +380 потрібно 9 цифр (зараз {n})',
     c380: 'Введіть номер без «380» на початку — код країни +380 уже стоїть перед полем',
     code: 'Перевірте код оператора — такого номера не існує',
-    fake: 'Схоже, номер введено навмання — вкажіть справжній, щоб ми могли зв’язатися щодо замовлення'
+    fake: 'Перевірте, будь ласка, номер: '
   };
 
   scStyle('sc50-style',
@@ -7630,6 +7631,7 @@ scModule(50, function () {
     '.sc50-msg b{color:#1E1F1E;white-space:nowrap}' +
     '.sc50-msg.sc50-ok b{color:#2E9E4F}' +
     '.sc50-msg.sc50-bad{color:#B23A36;font-weight:600}' +
+    '.sc50-msg.sc50-warn{color:#8A5A00;font-weight:600}.sc50-msg.sc50-warn b{color:#8A5A00}' +
     'input.iti__tel-input.sc50-err{border-color:#D9534F!important;box-shadow:0 0 0 3px rgba(217,83,79,.15)!important}');
 
   // поле телефону (видиме) в кожній формі
@@ -7642,7 +7644,7 @@ scModule(50, function () {
     var w = inp.closest('.iti'), d = w && w.querySelector('.iti__selected-dial-code');
     return d ? d.textContent.trim() : '+380';
   }
-  // перевірка: { st: 'empty'|'ok'|'bad'|'skip', msg, nat }
+  // перевірка: { st: 'empty'|'ok'|'warn'|'bad'|'skip', msg, nat }
   function check(inp) {
     var raw = (inp.value || '').trim();
     var d = raw.replace(/\D/g, '');
@@ -7659,7 +7661,8 @@ scModule(50, function () {
     if (d.length > 9) return { st: 'bad', msg: TXT.long.replace('{n}', d.length) };
     var tail = d.slice(2);
     if (/^(\d)\1{6}$/.test(tail) || '01234567890'.indexOf(tail) !== -1 || '98765432109'.indexOf(tail) !== -1 || /^(\d)\1{8}$/.test(d)) {
-      return { st: 'bad', msg: TXT.fake };
+      if (inp.classList.contains('__error')) return { st: 'bad', msg: TXT.code };
+      return { st: 'warn', nat: d };   // схожий на вигаданий — лише попередження, не блокуємо
     }
     if (inp.classList.contains('__error')) return { st: 'bad', msg: TXT.code };   // перевірка Хорошопа (код оператора)
     return { st: 'ok', nat: d };
@@ -7684,12 +7687,14 @@ scModule(50, function () {
     var html, cls = 'sc50-msg';
     if (r.st === 'ok') {
       html = TXT.ok + '<b>' + fmt(r.nat) + '</b>' + TXT.okTail; cls += ' sc50-ok';
+    } else if (r.st === 'warn') {
+      html = TXT.fake + '<b>' + fmt(r.nat) + '</b>' + TXT.okTail; cls += ' sc50-warn';
     } else if (r.st === 'skip' || !loud) {
       html = TXT.hint;
     } else {
       html = r.msg; cls += ' sc50-bad';
     }
-    inp.classList.toggle('sc50-err', loud && r.st !== 'ok' && r.st !== 'skip');
+    inp.classList.toggle('sc50-err', loud && r.st !== 'ok' && r.st !== 'warn' && r.st !== 'skip');
     if (m._scHtml !== html) { m.innerHTML = html; m._scHtml = html; }
     if (m.className !== cls) m.className = cls;
     return r;
@@ -7712,7 +7717,7 @@ scModule(50, function () {
     })[0];
     if (!inp) return;
     var r = render(inp, true);
-    if (r.st === 'ok' || r.st === 'skip') return;
+    if (r.st === 'ok' || r.st === 'warn' || r.st === 'skip') return;
     e.preventDefault(); e.stopImmediatePropagation();
     inp.scrollIntoView({ block: 'center', behavior: 'smooth' });
     try { inp.focus({ preventScroll: true }); } catch (x) {}
