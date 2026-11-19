@@ -2638,6 +2638,9 @@ scModule(15, function () {
   'use strict';
 
   var GREEN = '#38ab87';
+  // 19.11.2026: компактний вигляд — один рядок «іконка + текст» замість трьох карток (картка товару перевантажена).
+  // Повернути картки — TRUST_COMPACT = false.
+  var TRUST_COMPACT = true;
   var ICONS = {
     pay: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#38ab87" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><circle cx="12" cy="12.5" r="2.6"/><path d="M6 9.5v.01M18 15.5v.01"/></svg>',
     warranty: '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="#f59e0b"/><path d="M8.3 12.2l2.5 2.5 4.9-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -2656,7 +2659,16 @@ scModule(15, function () {
     // широка колонка (десктоп) — іконка зліва, як у TRINITI
     '#sc-trust.wide li{display:flex}#sc-trust.wide .sct-in{display:flex;align-items:center;gap:10px;width:100%}' +
     '#sc-trust.wide .sct-i{flex:0 0 22px;margin:0}' +
-    '#sc-trust li:hover{border-color:#cfd8e2}';
+    '#sc-trust li:hover{border-color:#cfd8e2}' +
+    // компактний рядок
+    '#sc-trust.compact{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0 0}' +
+    '#sc-trust.compact li{padding:0;border:0;background:none;border-radius:0}' +
+    '#sc-trust.compact .sct-in{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;color:#3d4a57;line-height:1.3}' +
+    '#sc-trust.compact a.sct-in:hover{color:#1d2733;text-decoration:underline;text-underline-offset:2px}' +
+    '#sc-trust.compact .sct-i{flex:0 0 16px;width:16px;height:16px;margin:0}' +
+    '#sc-trust.compact .sct-i svg{width:16px;height:16px}' +
+    '#sc-trust.compact .sct-t,#sc-trust.compact .sct-v{display:inline;font-size:inherit;font-weight:400;color:inherit;margin:0}' +
+    '#sc-trust.compact .sct-t:after{content:" "}';
 
   // «24 міс.» / «12 місяців» / «1 рік» → 24 / 12 / 12
   function warrantyMonths() {
@@ -2678,7 +2690,7 @@ scModule(15, function () {
     if (!anchor) return;
     var items = [{ i: 'pay', t: 'Оплата', v: 'при отриманні', href: '/oplata-i-dostavka/' }];
     var w = warrantyMonths();
-    if (w) items.push({ i: 'warranty', t: 'Гарантія', v: months(w) });
+    if (w) items.push({ i: 'warranty', t: 'Гарантія', v: TRUST_COMPACT ? w + ' міс.' : months(w) });
     items.push({ i: 'ret', t: 'Повернення', v: '14 днів', href: '/obmin-ta-povernennya/' });
 
     scStyle('sc-trust-style', CSS);
@@ -2692,7 +2704,7 @@ scModule(15, function () {
       inner.className = 'sct-in';
       if (it.href) { inner.href = lang + it.href; inner.target = '_blank'; inner.rel = 'noopener'; }
       inner.innerHTML = '<span class="sct-i" aria-hidden="true">' + ICONS[it.i] + '</span><span><span class="sct-t"></span><span class="sct-v"></span></span>';
-      inner.querySelector('.sct-t').textContent = it.t;
+      inner.querySelector('.sct-t').textContent = TRUST_COMPACT && it.i === 'pay' ? 'Оплата' : it.t;
       inner.querySelector('.sct-v').textContent = it.v;
       li.appendChild(inner);
       ul.appendChild(li);
@@ -2705,6 +2717,7 @@ scModule(15, function () {
     var prev = ul.previousElementSibling;
     var mb = prev ? parseFloat(getComputedStyle(prev).marginBottom) || 0 : 0;
     if (mb > 16) ul.style.marginTop = (12 - mb) + 'px';
+    if (TRUST_COMPACT) { ul.className = 'compact'; return; }
     // кожна картка ширша за 150 px — іконку ставимо зліва
     if (ul.offsetWidth / items.length >= 150) ul.className = 'wide';
   }
@@ -3587,7 +3600,9 @@ scModule(24, function () {
     '.product__block--user-discount{margin-top:8px!important}' +
     '.product__block--user-discount .user-discount{align-items:center}' +
     '.product__block--user-discount .user-discount__icon{flex:0 0 auto}' +
-    '.product__block--user-discount .user-discount__text{padding-left:18px!important}';
+    '.product__block--user-discount .user-discount__text{padding-left:18px!important}' +
+    '.user-discount__text .sc-disc-more{background:none;border:0;padding:0;font:inherit;color:#1f6fd1;text-decoration:underline;text-underline-offset:2px;cursor:pointer}' +
+    '.user-discount__text .sc-disc-det{display:block;margin-top:4px}.user-discount__text .sc-disc-det[hidden]{display:none}';
   function run() {
     scDiscTipWrap_();   // якщо main.js Хорошопа підвантажився пізніше за наш скрипт
     [].forEach.call(document.querySelectorAll('.user-discount__text'), function (t) {
@@ -3595,10 +3610,19 @@ scModule(24, function () {
       var a = t.querySelector('a[href="#auth"], a[data-modal="#sign-in"]');   // мобільна / десктопна версія
       if (!a || !/для відображення/.test(t.textContent)) return;          // зареєстрований — не чіпаємо
       t.setAttribute('data-sc-disc', '1');
+      // 19.11.2026: коротко в один рядок, пороги — по кнопці «умови» (картка товару перевантажена)
       t.textContent = '';
-      t.appendChild(document.createTextNode('Знижка постійним клієнтам: коли сума ваших виконаних замовлень досягне 5 000 грн — 2% на наступні покупки, 15 000 грн — 4%, 40 000 грн — 6%. '));
-      t.appendChild(a);
-      t.appendChild(document.createTextNode(', щоб побачити свою'));
+      t.appendChild(document.createTextNode('Знижка постійним клієнтам до 6% · '));
+      var more = document.createElement('button');
+      more.type = 'button'; more.className = 'sc-disc-more'; more.textContent = 'умови';
+      var det = document.createElement('span');
+      det.className = 'sc-disc-det'; det.hidden = true;
+      det.appendChild(document.createTextNode('Коли сума ваших виконаних замовлень досягне 5 000 грн — 2% на наступні покупки, 15 000 грн — 4%, 40 000 грн — 6%. '));
+      det.appendChild(a);
+      det.appendChild(document.createTextNode(', щоб побачити свою.'));
+      more.addEventListener('click', function (e) { e.preventDefault(); det.hidden = !det.hidden; more.textContent = det.hidden ? 'умови' : 'сховати'; });
+      t.appendChild(more);
+      t.appendChild(det);
     });
     // Кошик / оформлення: кнопка «Увійти для відображення накопичувальної знижки» (вся кнопка — посилання на вхід)
     [].forEach.call(document.querySelectorAll('a[href="#login"], a[href="#auth"], button[onclick*="sign-in"]'), function (a) {
@@ -7149,6 +7173,12 @@ scModule(47, function () {
   var flag = location.search.match(/[?&]sc_ribbon=([01])/);
   try { if (flag) localStorage.setItem('sc_ribbon', flag[1]); } catch (e) {}
   var local = (function () { try { return localStorage.getItem('sc_ribbon'); } catch (e) { return null; } })();
+  // 19.11.2026: на картці товару стрічку ховаємо — усе з неї вже є на картці (плашка відправки з таймером,
+  // безкоштовна доставка, оплата/гарантія). На інших сторінках — як було.
+  if (document.querySelector('[itemtype*="schema.org/Product"]')) {
+    scStyle('sc-ribbon-product', '.j-ribbon-banner{display:none!important}');
+    return;
+  }
   if (!(local === '1' || (SC_RIBBON_ON && local !== '0'))) return;
 
   var CONFIG = {
