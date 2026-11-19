@@ -7597,6 +7597,139 @@ scModule(49, function () {
 });
 
 /* =====================================================================
+ * 50. Оформлення: перевірка номера телефону (19.11.2026)
+ *     Були замовлення з неправильним номером. Хорошоп сам лише підсвічує поле рамкою — без тексту.
+ *     • під полем: підказка «прийде SMS з ТТН»; коли номер повний — показуємо його цілком для перевірки;
+ *     • неповний / зайві цифри / «380» на початку / неіснуючий код оператора — червоний текст під полем;
+ *     • явно вигадані номери (111 11 11, 123 45 67) — теж помилка;
+ *     • з помилкою кнопка «Оформити» не відправляє форму (як блок 33 з відділенням).
+ *     Діє на вкладках «Я новий покупець» і «Швидке замовлення». Інша країна (не +380) — не перевіряємо.
+ *     ВІДКАТ: SC50_OFF = true.
+ * ===================================================================== */
+scModule(50, function () {
+  'use strict';
+  var SC50_OFF = false;
+  if (SC50_OFF) return;
+  if (location.pathname.indexOf('/checkout') === -1 || /checkout.*complete|complete.*order/i.test(location.pathname)) return;
+
+  var FORMS = '#checkout-container, #quick-container';
+  var TXT = {
+    hint: 'На цей номер прийде SMS з номером ТТН',
+    ok: 'Перевірте номер: ',
+    okTail: ' — на нього прийде SMS з ТТН',
+    empty: 'Вкажіть номер телефону — на нього прийде SMS з номером ТТН',
+    short: 'Номер неповний: після +380 потрібно 9 цифр (зараз {n})',
+    long: 'Забагато цифр: після +380 потрібно 9 цифр (зараз {n})',
+    c380: 'Введіть номер без «380» на початку — код країни +380 уже стоїть перед полем',
+    code: 'Перевірте код оператора — такого номера не існує',
+    fake: 'Схоже, номер введено навмання — вкажіть справжній, щоб ми могли зв’язатися щодо замовлення'
+  };
+
+  scStyle('sc50-style',
+    '.sc50-msg{margin:5px 0 2px;font-size:13px;line-height:1.35;color:#6B716D}' +
+    '.sc50-msg b{color:#1E1F1E;white-space:nowrap}' +
+    '.sc50-msg.sc50-ok b{color:#2E9E4F}' +
+    '.sc50-msg.sc50-bad{color:#B23A36;font-weight:600}' +
+    'input.iti__tel-input.sc50-err{border-color:#D9534F!important;box-shadow:0 0 0 3px rgba(217,83,79,.15)!important}');
+
+  // поле телефону (видиме) в кожній формі
+  function inputs() {
+    return [].filter.call(document.querySelectorAll('#checkout-container input.iti__tel-input, #quick-container input.iti__tel-input'), function (i) {
+      return /delivery_phone/.test(i.getAttribute('data-relation-input') || '');
+    });
+  }
+  function dial(inp) {
+    var w = inp.closest('.iti'), d = w && w.querySelector('.iti__selected-dial-code');
+    return d ? d.textContent.trim() : '+380';
+  }
+  // перевірка: { st: 'empty'|'ok'|'bad'|'skip', msg, nat }
+  function check(inp) {
+    var raw = (inp.value || '').trim();
+    var d = raw.replace(/\D/g, '');
+    if (!d) return { st: 'empty', msg: TXT.empty };
+    if (raw.charAt(0) === '+') {
+      if (d.indexOf('380') !== 0) return { st: 'skip' };   // ввели номер іншої країни з «+»
+      d = d.slice(3);
+    } else {
+      if (dial(inp) !== '+380') return { st: 'skip' };    // обрана інша країна
+      if (d.length === 12 && d.indexOf('380') === 0) return { st: 'bad', msg: TXT.c380 };
+      if (d.charAt(0) === '0') d = d.slice(1);             // 050… → 50…
+    }
+    if (d.length < 9) return { st: 'bad', msg: TXT.short.replace('{n}', d.length) };
+    if (d.length > 9) return { st: 'bad', msg: TXT.long.replace('{n}', d.length) };
+    var tail = d.slice(2);
+    if (/^(\d)\1{6}$/.test(tail) || '01234567890'.indexOf(tail) !== -1 || '98765432109'.indexOf(tail) !== -1 || /^(\d)\1{8}$/.test(d)) {
+      return { st: 'bad', msg: TXT.fake };
+    }
+    if (inp.classList.contains('__error')) return { st: 'bad', msg: TXT.code };   // перевірка Хорошопа (код оператора)
+    return { st: 'ok', nat: d };
+  }
+  function fmt(n) { return '+380 ' + n.slice(0, 2) + ' ' + n.slice(2, 5) + ' ' + n.slice(5, 7) + ' ' + n.slice(7); }
+
+  function box(inp) {
+    var w = inp.closest('.iti') || inp;
+    var m = w.nextElementSibling;
+    if (!m || !m.classList.contains('sc50-msg')) {
+      m = document.createElement('div');
+      m.className = 'sc50-msg';
+      w.parentNode.insertBefore(m, w.nextSibling);
+    }
+    return m;
+  }
+  // loud = показувати помилку (після виходу з поля або спроби оформити); інакше лише нейтральна підказка
+  function render(inp, loud) {
+    var r = check(inp), m = box(inp);
+    if (loud) inp.setAttribute('data-sc50-loud', '1');
+    loud = loud || inp.getAttribute('data-sc50-loud') === '1';
+    var html, cls = 'sc50-msg';
+    if (r.st === 'ok') {
+      html = TXT.ok + '<b>' + fmt(r.nat) + '</b>' + TXT.okTail; cls += ' sc50-ok';
+    } else if (r.st === 'skip' || !loud) {
+      html = TXT.hint;
+    } else {
+      html = r.msg; cls += ' sc50-bad';
+    }
+    inp.classList.toggle('sc50-err', loud && r.st !== 'ok' && r.st !== 'skip');
+    if (m._scHtml !== html) { m.innerHTML = html; m._scHtml = html; }
+    if (m.className !== cls) m.className = cls;
+    return r;
+  }
+
+  function bind(inp) {
+    if (inp._sc50) { render(inp); return; }
+    inp._sc50 = 1;
+    inp.addEventListener('input', function () { setTimeout(function () { render(inp); }, 0); });
+    inp.addEventListener('blur', function () { setTimeout(function () { if (inp.value.trim()) render(inp, true); else render(inp); }, 150); });
+    render(inp);
+  }
+  function tick() { inputs().forEach(bind); }
+
+  // «Оформити» з помилкою в номері — не відправляємо, показуємо поле
+  function guard(e, form) {
+    if (!form) return;
+    var inp = [].filter.call(form.querySelectorAll('input.iti__tel-input'), function (i) {
+      return /delivery_phone/.test(i.getAttribute('data-relation-input') || '') && i.getClientRects().length;
+    })[0];
+    if (!inp) return;
+    var r = render(inp, true);
+    if (r.st === 'ok' || r.st === 'skip') return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    inp.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    try { inp.focus({ preventScroll: true }); } catch (x) {}
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('.j-submit, button[type="submit"], input[type="submit"]');
+    var f = b && b.closest(FORMS);
+    if (f) guard(e, f);
+  }, true);
+  document.addEventListener('submit', function (e) {
+    if (e.target.matches && e.target.matches(FORMS)) guard(e, e.target);
+  }, true);
+
+  scReady(scSafe(50, function () { tick(); setInterval(scSafe(50, tick), 700); }));
+});
+
+/* =====================================================================
  * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
  *     Хорошоп змінив шаблон — блоки мовчки перестають з'являтися. Раз за перегляд, через ~5 с після
  *     завантаження (сторінка дорисована), перевіряємо те, без чого блоки не працюють, і надсилаємо звіт
