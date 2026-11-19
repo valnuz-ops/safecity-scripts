@@ -14,7 +14,7 @@
 
 /* ===== Загальні налаштування ===== */
 var SC_TG_BOT = 'clienttext_bot'; // username Telegram-бота БЕЗ @ (підтвердження замовлень)
-var SC_CLIENT_BOT = 'SafeCityUA_bot';          // username клієнтського бота (наявність, менеджер) — для «Знайшли дешевше?»; порожньо = без кнопки Telegram
+var SC_CLIENT_BOT = 'SafeCityUA_bot';          // username клієнтського бота (наявність, менеджер) — для «Повідомити про наявність» і «Замовити в месенджері»; порожньо = без кнопки Telegram
 var SC_PHONE  = '380503941500';     // номер для Viber і WhatsApp (лише цифри, з 380)
 // Сторож (блок 20): URL веб-застосунку Google Apps Script з apps-script/health/Code.gs
 // (https://script.google.com/macros/s/…/exec). Порожньо — сторож нічого не робить і нічого не надсилає.
@@ -2625,65 +2625,9 @@ scModule(13, function () {
 
 
 /* =====================================================================
- * 14. Картка товару → «Знайшли дешевше? Напишіть нам»
- *     Telegram-бот (start=cheaper_<артикул>), Viber і WhatsApp з готовим текстом
+ * 14. «Знайшли дешевше? Напишіть нам» — ВИДАЛЕНО 19.11.2026 (за весь час ніхто не написав).
+ *     Код — в історії git (коміт до 19.11.2026), якщо знадобиться повернути.
  * ===================================================================== */
-scModule(14, function () {
-  'use strict';
-
-  var CSS =
-    '#sc-cheaper{margin:10px 0 0;font-size:14px;line-height:1.4}' +
-    '#sc-cheaper .scc-open{background:none;border:0;padding:0;color:#2b7de9;cursor:pointer;font:inherit;text-decoration:underline;text-underline-offset:2px}' +
-    '#sc-cheaper .scc-box{margin-top:8px;padding:12px;border:1px solid #dbe5ef;border-radius:10px;background:#f6f9fc}' +
-    '#sc-cheaper .scc-t{color:#3d4a57;margin:0 0 10px;font-size:13px}' +
-    '#sc-cheaper .scc-b{display:flex;flex-wrap:wrap;gap:8px}' +
-    '#sc-cheaper .scc-b a{flex:1 1 0;min-width:0;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 10px;border-radius:8px;color:#fff;text-decoration:none;font-weight:600;font-size:14px}';
-
-  function init() {
-    if (document.getElementById('sc-cheaper')) return;
-    var anchor = scAnchor();
-    if (!anchor) return;
-    if (!document.querySelector(SC_AVAIL_SEL)) return;
-    var name = scH1().replace(/\s+/g, ' ').trim();
-    if (!name) return;
-    var art = scArt();
-    var url = location.origin + location.pathname;
-    var msg = 'Добрий день! Знайшов дешевше: ' + name + (art ? ' (арт. ' + art + ')' : '') + '\n' + url +
-              '\nПосилання на іншу пропозицію: ';
-
-    scStyle('sc-cheaper-style', CSS);
-    var box = document.createElement('div');
-    box.id = 'sc-cheaper';
-    box.innerHTML =
-      '<button type="button" class="scc-open">Знайшли дешевше? Напишіть нам</button>' +
-      '<div class="scc-box" hidden>' +
-        '<div class="scc-t">Надішліть посилання на пропозицію — перевіримо й запропонуємо ціну.</div>' +
-        '<div class="scc-b">' +
-          (SC_CLIENT_BOT ? '<a target="_blank" rel="noopener" style="background:#2AABEE" data-m="tg">✈️ Telegram</a>' : '') +
-          '<a style="background:#7360F2" data-m="viber">📞 Viber</a>' +
-          '<a target="_blank" rel="noopener" style="background:#25D366" data-m="wa">💬 WhatsApp</a>' +
-        '</div>' +
-      '</div>';
-    if (SC_CLIENT_BOT) box.querySelector('[data-m="tg"]').href = 'https://t.me/' + SC_CLIENT_BOT + '?start=cheaper_' + (art || 'x').replace(/[^\w-]/g, '').slice(0, 50);
-    box.querySelector('[data-m="viber"]').href = 'viber://chat?number=%2B' + SC_PHONE + '&draft=' + encodeURIComponent(msg);
-    box.querySelector('[data-m="wa"]').href = 'https://wa.me/' + SC_PHONE + '?text=' + encodeURIComponent(msg);
-    box.querySelector('.scc-open').addEventListener('click', function () {
-      var b = box.querySelector('.scc-box'); b.hidden = !b.hidden;
-    });
-
-    var trust = document.getElementById('sc-trust');               // після плашки довіри (блок 15), якщо вона вже є
-    if (trust && trust.parentNode) { trust.parentNode.insertBefore(box, trust.nextSibling); return; }
-    var ship = document.getElementById('ship-info');               // одразу під блоком «Купити» / плашкою відправки
-    var after = anchor.nextElementSibling && anchor.nextElementSibling.id === 'ship-info' ? anchor.nextElementSibling : anchor;
-    if (ship && ship.compareDocumentPosition(anchor) & Node.DOCUMENT_POSITION_PRECEDING) after = ship;
-    after.parentNode.insertBefore(box, after.nextSibling);
-    // на десктопі блок кнопок має великий нижній відступ — підтягуємо посилання ближче до кнопок
-    var mb = parseFloat(getComputedStyle(after).marginBottom) || 0;
-    if (mb > 16) box.style.marginTop = (10 - mb) + 'px';
-  }
-
-  scInit(14, init);
-});
 
 
 /* =====================================================================
