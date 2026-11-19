@@ -511,6 +511,8 @@ scModule(1, function () {
       '2027-01-01'
     ],
     countdownHours: 3,
+    cardCountdownHours: 6,      // на картці таймер «Замовте протягом…» — з 9:00 до 15:00 (на оформленні лишається 3 год)
+    logo: 'https://valnuz-ops.github.io/safecity-scripts/img/np.svg',   // логотип Нової пошти (якщо файл не відкриється — 🚚)
     showDelivery: true,
     deliveryDaysMin: 1,
     deliveryDaysMax: 2,
@@ -741,18 +743,43 @@ scModule(1, function () {
     return dlvLine;
   }
 
+  // Картка: логотип НП · крупно дата отримання · відправка · таймер до 15:00 · вартість доставки.
+  // Оформлення (блок 10) і далі бере текст зі scShipText — там нічого не змінюється.
   function render(box) {
-    var t = buildText();
+    var r = calculate();
+    var T = CONFIG.texts;
+    var weekend = CONFIG.weekendMode === 'soft' && isWeekendPeriod();
+    var range = '';
+    if (CONFIG.showDelivery) {
+      var min = CONFIG.deliveryDaysMin, max = Math.max(min, CONFIG.deliveryDaysMax);
+      range = formatRange(addDeliveryDays(r.shipDate, min), addDeliveryDays(r.shipDate, max));
+    }
+    var ship = weekend ? T.weekendSub.replace('{day}', DAYS_ACC[r.weekday])
+      : r.offset === 0 ? T.today : r.offset === 1 ? T.tomorrow : T.later.replace('{day}', DAYS_ACC[r.weekday]);
+    var title = range ? 'Отримаєте <span class="ship-info__date">' + range + '</span>' : ship;
+    var lines = range ? [ship] : [];
+    var timer = '';
+    if (!weekend && r.offset === 0 && r.minutesLeft <= CONFIG.cardCountdownHours * 60) {
+      var h = Math.floor(r.minutesLeft / 60), m = r.minutesLeft % 60;
+      timer = '<div class="ship-info__timer' + (r.minutesLeft <= 60 ? ' ship-info__timer--hot' : '') + '">' +
+        '<span aria-hidden="true">⏱</span> Замовте протягом <b>' + (h ? h + ' год ' : '') + m + ' хв</b> — відправимо сьогодні</div>';
+    }
     var dl = deliveryLine();
     var html =
-      '<span class="ship-info__icon" aria-hidden="true">🚚</span> ' +
-      '<strong>' + t.main + '</strong>' +
-      t.lines.concat(dl ? [dl] : []).map(function (l) {
-        return '<div class="ship-info__sub">' + l + '</div>';
-      }).join('');
+      '<span class="ship-info__logo">' + (logoOk ? '<img src="' + CONFIG.logo + '" alt="Нова пошта" width="34" height="34">' : '<span class="ship-info__emoji" aria-hidden="true">🚚</span>') + '</span>' +
+      '<div class="ship-info__body"><div class="ship-info__title">' + title + '</div>' +
+      lines.map(function (l) { return '<div class="ship-info__sub">' + l + '</div>'; }).join('') +
+      timer +
+      (dl ? '<div class="ship-info__sub ship-info__cost">' + dl + '</div>' : '') +
+      '</div>';
     // щохвилинне оновлення: не перемальовуємо без змін (зайві мутації будять спостерігачі блоків 1 і 5)
-    if (box._scHtml !== html) { box.innerHTML = html; box._scHtml = html; }
+    if (box._scHtml !== html) {
+      box.innerHTML = html; box._scHtml = html;
+      var img = box.querySelector('.ship-info__logo img');
+      if (img) img.onerror = function () { logoOk = false; box._scHtml = ''; render(box); };
+    }
   }
+  var logoOk = !!CONFIG.logo;
 
   function isMulti(el) {
     var cs = window.getComputedStyle(el);
@@ -808,9 +835,19 @@ scModule(1, function () {
   }
 
   var CSS =
-    '#ship-info{box-sizing:border-box;width:100%;flex:0 0 100%;clear:both;margin:12px 0;padding:10px 14px;border-radius:8px;' +
-    'background:#f1f8f1;border:1px solid #cfe5cf;font-size:15px;line-height:1.4}' +
-    '#ship-info .ship-info__sub{font-size:13px;color:#555;margin-top:2px}';
+    '#ship-info{box-sizing:border-box;width:100%;flex:0 0 100%;clear:both;margin:12px 0;padding:12px 14px;border-radius:10px;' +
+    'background:#f6faf6;border:1px solid #cfe5cf;font-size:14px;line-height:1.4;display:flex;align-items:flex-start;gap:12px}' +
+    '#ship-info .ship-info__logo{flex:0 0 34px;width:34px;height:34px;display:flex;align-items:center;justify-content:center}' +
+    '#ship-info .ship-info__logo img{width:34px;height:34px;display:block;object-fit:contain}' +
+    '#ship-info .ship-info__emoji{font-size:24px;line-height:1}' +
+    '#ship-info .ship-info__body{flex:1;min-width:0}' +
+    '#ship-info .ship-info__title{font-size:16px;font-weight:700;color:#1a1a1a}' +
+    '#ship-info .ship-info__date{color:#1a7f37}' +
+    '#ship-info .ship-info__sub{font-size:13px;color:#555;margin-top:2px}' +
+    '#ship-info .ship-info__cost{color:#777}' +
+    '#ship-info .ship-info__timer{display:inline-block;margin:6px 0 2px;padding:4px 10px;border-radius:14px;background:#fff4e0;' +
+    'border:1px solid #f5c26b;color:#7a4b00;font-size:13px}' +
+    '#ship-info .ship-info__timer--hot{background:#ffe8e6;border-color:#f19a92;color:#a0251a}';
 
   function removeBox() {
     var box = document.getElementById('ship-info');
