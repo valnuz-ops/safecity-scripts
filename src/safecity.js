@@ -7272,6 +7272,8 @@ scModule(47, function () {
  *     Мобільна версія Хорошопа (?v=mobile): місто — не автокомплит, а свій список зі шторкою пошуку.
  *     Карта не відповіла за 10 с → закриваємо, підказка «оберіть у списку» (список Хорошопа завжди працює).
  *     GA4: sc_npmap_open, sc_npmap_pick (result: ok / fail / foreign).
+ *     20.11.2026: місто з карти не знаходилось (десктоп) — перед пошуком шлемо полю подію input;
+ *     «✓ Обрано» зникає, якщо відділення у формі змінили; підказка без «нижче», з назвою поля.
  * ===================================================================== */
 scModule(48, function () {
   'use strict';
@@ -7368,6 +7370,9 @@ scModule(48, function () {
       var ac = jq && jq(inp).data('ui-autocomplete');
       if (!ac) throw new Error('no autocomplete');
       inp.value = c.base;
+      // без події input Хорошоп лишає в підказках 6 популярних міст і не шукає інші (20.11.2026)
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      try { ac.menu.element[0].innerHTML = ''; } catch (x) {}
       ac.search(c.base);
       return wait(function () {
         var items = [].slice.call(ac.menu.element[0].querySelectorAll('li'));
@@ -7398,8 +7403,8 @@ scModule(48, function () {
 
   // Хорошоп перемальовує блок доставки після кожної зміни — пишемо в поточну кнопку і пам'ятаємо текст
   var last = null;
-  function msg(box, cls, text) {
-    last = { cls: cls, text: text };
+  function msg(box, cls, text, ref) {
+    last = { cls: cls, text: text, ref: ref || null };
     box = document.getElementById('sc-npmap') || box;
     var m = box.querySelector('.sc-npmap__msg');
     if (!m) { m = document.createElement('div'); box.appendChild(m); }
@@ -7515,11 +7520,12 @@ scModule(48, function () {
     msg(box, '', 'Підставляємо «' + name + '»…');
     apply(d).then(function () {
       ga('sc_npmap_pick', { result: 'ok', category: d.divisionCategory });
-      msg(box, 'ok', '✓ Обрано: ' + name);
+      msg(box, 'ok', '✓ Обрано: ' + name, d.externalId);
     }).catch(function (e) {
       ga('sc_npmap_pick', { result: 'fail', category: d.divisionCategory });
       scHealth('блок 48: не підставилось', (e && e.message || e) + ' | ' + name);
-      msg(box, 'err', 'Не вдалося підставити автоматично. Оберіть, будь ласка, «' + name + '» у полі «Відділення» нижче.');
+      msg(box, 'err', 'Не вдалося підставити автоматично. Оберіть, будь ласка, «' + name + '» у полі «' +
+        (d.divisionCategory === 'Postomat' ? 'Поштомат' : 'Відділення') + '».', d.externalId);
     }).then(function () { busy = false; });
   }
 
@@ -7549,7 +7555,15 @@ scModule(48, function () {
     box.style.display = '';
     setLabel(box, label);
     if (box.parentNode !== cell) { if (wrap) cell.insertBefore(box, wrap.nextSibling); else cell.appendChild(box); }
-    if (last && !box.querySelector('.sc-npmap__msg')) msg(box, last.cls, last.text);
+    // повідомлення застаріло: «✓ Обрано», а у формі вже інше відділення; або підказку виконали — обрали вручну
+    if (last && last.ref && !busy && wh) {
+      var v = wh && wh.value;
+      if ((last.cls === 'ok' && v !== last.ref) || (last.cls === 'err' && v === last.ref)) {
+        last = null;
+        var m = box.querySelector('.sc-npmap__msg'); if (m) m.remove();
+      }
+    }
+    if (last && !box.querySelector('.sc-npmap__msg')) msg(box, last.cls, last.text, last.ref);
   }
 
   scReady(scSafe(48, function () {
