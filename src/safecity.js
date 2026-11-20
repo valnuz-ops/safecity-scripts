@@ -7353,6 +7353,12 @@ scModule(48, function () {
     return best;
   }
 
+  // Хорошоп оновлює блок доставки ajax-запитами — чекаємо, поки вони стихнуть (~0,6 с без запитів)
+  function settle(ms) {
+    var quiet = 0;
+    return wait(function () { var jq = $(); if (jq && jq.active) { quiet = 0; return false; } return ++quiet >= 4; }, ms || 8000);
+  }
+
   function hasRef(ref) {
     var w = whSel();
     return w && [].some.call(w.options, function (o) { return o.value === ref; }) && w;
@@ -7362,6 +7368,7 @@ scModule(48, function () {
     var ref = d.externalId;
     var t = d.divisionCategory === 'Postomat' ? TYPE.postomat : TYPE.branch;
     var want = parseCity((d.settlement && d.settlement.name) || (d.addressParts && d.addressParts.city) || d.city);
+    var stage = 'місто';
     return Promise.resolve().then(function () {
       if (hasRef(ref) || sameCity(want)) return;
       var c = want;
@@ -7378,16 +7385,35 @@ scModule(48, function () {
         var items = [].slice.call(ac.menu.element[0].querySelectorAll('li'));
         return items.length && pickCity(items, d);
       }, 8000).then(function (li) {
+        stage = 'місто: збереження';
+        var oldId = cityId(), same = norm(parseLabel(cityText()).base) === norm(c.base);
         ac.menu.focus(null, jq(li)); ac.menu.select();
-        return wait(function () { return cityId(); }, 8000);
+        // чекаємо саме НОВЕ місто (старе id одразу є в полі)
+        return wait(function () {
+          var id = cityId();
+          return id && (id !== oldId || same) && norm(parseLabel(cityText()).base) === norm(c.base);
+        }, 8000);
       });
     }).then(function () {
+      // поки Хорошоп оновлює доставку під нове місто, тип не міняємо — інакше лишається список старого міста (20.11.2026)
+      stage = 'оновлення доставки';
+      return settle(8000);
+    }).then(function () {
       // тип доставки (відділення / поштомат) — коли місто вже є, інакше Хорошоп поле не приймає
+      stage = 'тип доставки';
       var ts = typeSel();
       if (ts && ts.value !== t) return wait(function () { return typeSel(); }, 5000).then(function (x) { setSelect(x, t); });
     }).then(function () {
-      return wait(function () { return hasRef(ref); }, 12000);
+      stage = 'список відділень';
+      return wait(function () { return hasRef(ref); }, 8000).catch(function () {
+        // запасний хід: список не оновився — ще раз дочекатися тиші й повторити тип доставки
+        return settle(5000).then(function () {
+          var x = typeSel(); if (x) setSelect(x, t);
+          return wait(function () { return hasRef(ref); }, 8000);
+        });
+      });
     }).then(function () {
+      stage = 'вибір відділення';
       var w = whSel();
       setSelect(w, ref);
       // блок 33: перше значення списку без кліку вважає «не обрано» — позначаємо вибір явно
@@ -7398,6 +7424,9 @@ scModule(48, function () {
       if (t && w.selectedIndex >= 0) t.textContent = w.options[w.selectedIndex].textContent;
       var c = t && t.closest('.selectboxit-container'); if (c) c.classList.remove('sc33-empty', 'sc33-err');
       var e = document.getElementById('sc33-wh-msg'); if (e) e.remove();
+    }).catch(function (e) {
+      var m = (e && e.message) || String(e);
+      throw new Error(m + ' @ ' + stage + ' | місто у формі: ' + (cityText() || '—'));
     });
   }
 
