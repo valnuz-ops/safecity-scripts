@@ -3007,7 +3007,7 @@ scModule(19, function () {
     f32:   { url: '/plavkyi-zapobizhnyk-bx0234-32a-1000v-leader/', note: '32 А · 1000 V · 10×38' },
     f15h:  { url: '/plavkyi-zapobizhnyk-fskdc15al-15a-1500v-leader/', note: '15 А · 1500 V · 10×85' },
     f20h:  { url: '/plavkyi-zapobizhnyk-fskdc20al-20a-1500v-leader/', note: '20 А · 1500 V · 10×85' },
-    hTopv: { url: '/roziednuvach-zapobizhnykiv-topv-32-2p-dc-tomzn/', note: 'На 2 запобіжники (+ і −) · 10×38 · до 30 А · 1100 V' },
+    hTopv: { url: '/roziednuvach-zapobizhnykiv-topv-32-2p-dc-tomzn/', note: 'На 2 запобіжники (+ і −) · 10×38 · до 32 А · 1100 V' },
     hPv2:  { url: '/roziednuvach-zapobizhnykiv-pv0191-2p-dc-leader/', note: 'На 2 запобіжники (+ і −) · 10×38 · до 32 А · 1000 V' },
     hPv1:  { url: '/roziednuvach-zapobizhnykiv-pv0191-1p-dc-leader/', note: 'На 1 запобіжник · 10×38 · до 32 А · 1000 V' },
     hHd:   { url: '/roziednuvach-zapobizhnykiv-hdkdc-32al-1p-dc-leader/', note: 'На 1 запобіжник · 10×85 · 1500 V' },
@@ -3299,7 +3299,7 @@ scModule(19, function () {
         return {
           title: '🔌 Тримач для цього запобіжника',
           text: 'Запобіжник 10×38 мм ставиться в роз’єднувач на DIN-рейку. Двополюсний бере 2 запобіжники — на «+» і на «−» одного стрінга:',
-          list: /\b32A\b/i.test(t) ? [PV.hPv2, PV.hPv1] : [PV.hTopv, PV.hPv2, PV.hPv1],   // TOPV-32 — до 30 А (даташит)
+          list: [PV.hTopv, PV.hPv2, PV.hPv1],   // TOPV-32 — запобіжники 3–32 А (дані TOMZN; у назві постачальника — 30 А)
           foot: 'Запобіжники в стрінгах потрібні, коли паралельно з’єднано 3 і більше стрінги і зворотний струм може перевищити «max series fuse» панелі; при 1–2 стрінгах вони не потрібні. ' + PV_FOOT
         };
       }
@@ -3312,7 +3312,7 @@ scModule(19, function () {
           text: (big ? 'Тримач під запобіжники 10×85 мм на 1500 V. ' : 'Тримач під запобіжники gPV 10×38 мм. ') +
                 (two ? 'Ставиться 2 запобіжники — на «+» і на «−» стрінга. ' : 'Один тримач — один запобіжник; у системах без заземленого полюса на стрінг їх ставлять 2 (на «+» і на «−»). ') +
                 'Номінал підбирають під струм панелей:',
-          list: big ? [PV.f20h, PV.f15h] : /TOPV/i.test(t) ? [PV.f20, PV.f25, PV.f15] : [PV.f20, PV.f25, PV.f15, PV.f32],
+          list: big ? [PV.f20h, PV.f15h] : [PV.f20, PV.f25, PV.f15, PV.f32],
           foot: PV_FOOT
         };
       }
