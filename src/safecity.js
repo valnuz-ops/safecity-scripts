@@ -3312,7 +3312,7 @@ scModule(19, function () {
           text: (big ? 'Тримач під запобіжники 10×85 мм на 1500 V. ' : 'Тримач під запобіжники gPV 10×38 мм. ') +
                 (two ? 'Ставиться 2 запобіжники — на «+» і на «−» стрінга. ' : 'Один тримач — один запобіжник; у системах без заземленого полюса на стрінг їх ставлять 2 (на «+» і на «−»). ') +
                 'Номінал підбирають під струм панелей:',
-          list: big ? [PV.f20h, PV.f15h] : [PV.f20, PV.f25, PV.f15, PV.f32],
+          list: big ? [PV.f20h, PV.f15h] : [PV.f20, PV.f25, PV.f15, PV.f32], max: 4,   // 21.11.2026: усі чотири номінали 10×38
           foot: PV_FOOT
         };
       }
@@ -3443,7 +3443,7 @@ scModule(19, function () {
 
     var listEl = box.querySelector('.scs-l');
     scNear(box, function () { Promise.all(cfg.list.map(load)).then(function (items) {
-      items.filter(Boolean).slice(0, MAX).forEach(function (p) { listEl.appendChild(scItem(p, C)); });
+      items.filter(Boolean).slice(0, cfg.max || MAX).forEach(function (p) { listEl.appendChild(scItem(p, C)); });
       // нічого немає в наявності: без посилань блок прибираємо, з посиланнями — лишаємо їх
       if (!listEl.children.length) { if (cfg.links) listEl.remove(); else box.remove(); }
     }); });
