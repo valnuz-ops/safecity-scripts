@@ -5456,6 +5456,9 @@ scModule(37, function () {
   /* ---------- завантаження індексу ---------- */
   var IDX = null, loading = null, waiters = [];
   function load(cb) {
+    // 21.11.2026: виклик без функції (load(), load(undefined) з консолі чи стороннього коду) клав чергу:
+    // «K is not a function» і решта очікувачів не отримувала індекс
+    if (typeof cb !== 'function') cb = function () {};
     if (IDX) return cb(IDX);
     waiters.push(cb);
     if (loading) return;
@@ -5487,7 +5490,8 @@ scModule(37, function () {
             }
             applyLive(IDX);                                    // з карток сайту — найсвіжіше, поверх stock.json
             document.documentElement.classList.add('sc-srch');
-            waiters.splice(0).forEach(function (f) { f(IDX); });
+            // кожен очікувач — окремо: помилка в одному (блоки 39, 42, 46…) не зупиняє решту
+            waiters.splice(0).forEach(function (f) { try { f(IDX); } catch (e) { scErr(37, e); } });
           }));
         }));
       }))['catch'](function (e) { loading = null; scErr(37, e); });
