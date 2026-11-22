@@ -7890,6 +7890,75 @@ scModule(50, function () {
 });
 
 /* =====================================================================
+ * 51. Аналітика блоків підбору на картці товару (22.11.2026)
+ *     Чи дивляться й клікають блоки 2 (БП до ДБЖ), 3 (АКБ), 6 (до камери), 7 (до реєстратора), 19 (супутні).
+ *     Самі блоки не змінюються: цей блок лише знаходить їх на сторінці й надсилає події в GA4.
+ *     Назва блоку — у назві події (у GA4 немає власних параметрів, тож так її видно у звітах без налаштувань):
+ *       sc_reco_view_<блок>  — блок реально з'явився на екрані (раз за перегляд сторінки);
+ *       sc_reco_click_<блок> — клік по товару / фішці / посиланню в блоці (kind: item | chip | link, pos, item_url);
+ *       sc_reco_add_<блок>   — на сторінці товару, куди перейшли з блоку (протягом 30 хв), натиснули «Купити».
+ *     <блок>: psu, akb, cam, nvr, pick. Вимкнути: SC_RECO_ON = false.
+ * ===================================================================== */
+scModule(51, function () {
+  'use strict';
+  var SC_RECO_ON = true;
+  if (!SC_RECO_ON) return;
+
+  var BOXES = { 'sc-psu': 'psu', 'sc-akb': 'akb', 'sc-cam': 'cam', 'sc-nvr': 'nvr', 'sc-pick': 'pick' };
+  var KEY = 'sc_reco_last', TTL = 30 * 60 * 1000;
+  var BUY = '.j-buy-button-add, .product-card__buy-button button';
+
+  function ga(ev, p) { try { if (typeof window.gtag === 'function') window.gtag('event', ev, p || {}); } catch (x) {} }
+  function path(u) { try { return new URL(u, location.href).pathname.replace(/\/$/, ''); } catch (x) { return ''; } }
+  var here = path(location.href);
+
+  // Кліки — один слухач на весь документ (блоки дорисовуються пізніше й можуть перебудовуватись)
+  document.addEventListener('click', scSafe(51, function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var a = t.closest('a[href]');
+    if (a) {
+      for (var id in BOXES) {
+        var box = a.closest('#' + id);
+        if (!box) continue;
+        var kind = a.classList.contains('sc-chip') ? 'chip' : a.querySelector('img') || /__item|scs-i/.test(a.className) ? 'item' : 'link';
+        var links = [].slice.call(box.querySelectorAll('a[href]'));
+        ga('sc_reco_click_' + BOXES[id], { kind: kind, pos: links.indexOf(a) + 1, item_url: path(a.href), item_id: scArt() });
+        try { sessionStorage.setItem(KEY, JSON.stringify({ b: BOXES[id], u: path(a.href), t: Date.now() })); } catch (x) {}
+        return;
+      }
+    }
+    // «Купити» на товарі, куди перейшли з блоку підбору
+    if (t.closest(BUY)) {
+      var last = null;
+      try { last = JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch (x) {}
+      if (last && last.u === here && Date.now() - last.t < TTL) {
+        ga('sc_reco_add_' + last.b, { item_url: here, item_id: scArt() });
+        try { sessionStorage.removeItem(KEY); } catch (x) {}
+      }
+    }
+  }), true);
+
+  // Перегляди: блок справді на екрані (не просто вставлений нижче)
+  var seen = {};
+  function watch() {
+    Object.keys(BOXES).forEach(function (id) {
+      var box = document.getElementById(id);
+      if (!box || seen[id]) return;
+      seen[id] = 1;
+      function fire() { ga('sc_reco_view_' + BOXES[id], { shown: box.querySelectorAll('a[href]').length, item_id: scArt(), non_interaction: true }); }
+      if (!('IntersectionObserver' in window)) { fire(); return; }
+      var io = new IntersectionObserver(function (es) {
+        if (es[0].isIntersecting) { io.disconnect(); setTimeout(scSafe(51, fire), 600); }   // 0,6 с — товари блоку встигають підвантажитись
+      }, { threshold: 0.15 });
+      io.observe(box);
+    });
+  }
+  // блоки 2–19 вставляються через scInit (idle + повтор через 2 с) — шукаємо їх двічі
+  scIdle(scSafe(51, function () { setTimeout(scSafe(51, watch), 2500); setTimeout(scSafe(51, watch), 6000); }));
+});
+
+/* =====================================================================
  * 20. Сторож: чи на місці опорні елементи верстки Хорошопа
  *     Хорошоп змінив шаблон — блоки мовчки перестають з'являтися. Раз за перегляд, через ~5 с після
  *     завантаження (сторінка дорисована), перевіряємо те, без чого блоки не працюють, і надсилаємо звіт
