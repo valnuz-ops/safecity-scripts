@@ -8461,3 +8461,52 @@ function scHealthCheck() {
     else window.addEventListener('load', run);
   } catch (x) {}
 })();
+
+
+/* =====================================================================
+ * 52. Картка камери / реєстратора, що входить у готовий комплект (23.11.2026)
+ *     → блок «Ця модель є в готовому комплекті — на 10% дешевше» з комплектами в наявності (до 3).
+ *     Ключ — «Артикул для відображення на сайті» (meta itemprop=sku, = код постачальника).
+ *     Склад комплектів — claude/safecity-kits-state.json (проєкт); при зміні складу оновити KITS / MAP.
+ * ===================================================================== */
+scModule(52, function () {
+  'use strict';
+  var KITS = ["komplekt-ip-videonahliadu-na-1-kameru-2mp-hikvision-1-kupolna-4-kanalnyi-reiestrator-poe-k","komplekt-ip-videonahliadu-na-1-kameru-2mp-hikvision-1-tsylindrychna-4-kanalnyi-reiestrator","komplekt-ip-videonahliadu-na-10-kamer-5mp-ajax-10-tsylindrychnykh-16-kanalnyi-reiestrator-","komplekt-ip-videonahliadu-na-10-kamer-5mp-ajax-5-white-5-black-10-tsylindrychnykh-16-kanal","komplekt-ip-videonahliadu-na-10-kamer-5mp-ajax-5-white-5-black-f-4mm-10-tsylindrychnykh-16","komplekt-ip-videonahliadu-na-12-kamer-5mp-ajax-12-tsylindrychnykh-16-kanalnyi-reiestrator-","komplekt-ip-videonahliadu-na-12-kamer-5mp-ajax-f-4mm-12-tsylindrychnykh-16-kanalnyi-reiest","komplekt-ip-videonahliadu-na-12-kamer-8mp-ajax-6-tsylindrychnykh-6-kupolnykh-16-kanalnyi-r","komplekt-ip-videonahliadu-na-16-kamer-5mp-ajax-16-tsylindrychnykh-16-kanalnyi-reiestrator-","komplekt-ip-videonahliadu-na-16-kamer-5mp-ajax-bulletcam-domecam-mini-8-tsylindrychnykh-8-","komplekt-ip-videonahliadu-na-16-kamer-5mp-ajax-bulletcam-turretcam-8-tsylindrychnykh-8-kup","komplekt-ip-videonahliadu-na-2-kamery-2mp-hikvision-2-kupolni-4-kanalnyi-reiestrator-poe-k","komplekt-ip-videonahliadu-na-2-kamery-2mp-hikvision-2-tsylindrychni-4-kanalnyi-reiestrator","komplekt-ip-videonahliadu-na-2-kamery-5mp-ajax-2-kupolni-8-kanalnyi-reiestrator-poe-komuta","komplekt-ip-videonahliadu-na-2-kamery-5mp-ajax-2-tsylindrychni-8-kanalnyi-reiestrator-poe-","komplekt-ip-videonahliadu-na-24-kamery-6mp-tvt-12-kupolnykh-12-tsylindrychnykh-32-kanalnyi","komplekt-ip-videonahliadu-na-24-kamery-6mp-tvt-24-kupolni-32-kanalnyi-reiestrator-poe-komu","komplekt-ip-videonahliadu-na-24-kamery-6mp-tvt-24-tsylindrychni-32-kanalnyi-reiestrator-po","komplekt-ip-videonahliadu-na-3-kamery-2mp-hikvision-3-kupolni-4-kanalnyi-reiestrator-poe-k","komplekt-ip-videonahliadu-na-3-kamery-2mp-hikvision-3-tsylindrychni-4-kanalnyi-reiestrator","komplekt-ip-videonahliadu-na-4-kamery-2mp-hikvision-4-kupolni-4-kanalnyi-reiestrator-poe-k","komplekt-ip-videonahliadu-na-4-kamery-2mp-hikvision-4-tsylindrychni-4-kanalnyi-reiestrator","komplekt-ip-videonahliadu-na-4-kamery-4mp-tvt-2-kupolni-2-tsylindrychni-4-kanalnyi-reiestr","komplekt-ip-videonahliadu-na-4-kamery-4mp-tvt-4-kupolni-4-kanalnyi-reiestrator-z-poe-hdd-2","komplekt-ip-videonahliadu-na-4-kamery-4mp-tvt-4-tsylindrychni-4-kanalnyi-reiestrator-z-poe","komplekt-ip-videonahliadu-na-4-kamery-5mp-ajax-2-tsylindrychni-2-kupolni-8-kanalnyi-reiest","komplekt-ip-videonahliadu-na-4-kamery-5mp-ajax-4-kupolni-8-kanalnyi-reiestrator-poe-komuta","komplekt-ip-videonahliadu-na-4-kamery-5mp-ajax-4-tsylindrychni-8-kanalnyi-reiestrator-poe-","komplekt-ip-videonahliadu-na-5-kamer-4mp-dahua-dh-ipc-hdbw1431ep-s4-5-kupolnykh-hibrydnyi-","komplekt-ip-videonahliadu-na-5-kamer-4mp-dahua-dh-ipc-hdw2449t-s-il-5-kupolnykh-hibrydnyi-","komplekt-ip-videonahliadu-na-5-kamer-4mp-dahua-dh-ipc-hfw2449s-s-il-5-tsylindrychnykh-hibr","komplekt-ip-videonahliadu-na-6-kamer-4mp-dahua-dh-ipc-hdbw1431ep-s4-6-kupolnykh-hibrydnyi-","komplekt-ip-videonahliadu-na-6-kamer-4mp-dahua-dh-ipc-hdw2449t-s-il-6-kupolnykh-hibrydnyi-","komplekt-ip-videonahliadu-na-6-kamer-4mp-dahua-dh-ipc-hfw2449s-s-il-6-tsylindrychnykh-hibr","komplekt-ip-videonahliadu-na-8-kamer-2mp-hikvision-4-kupolni-4-tsylindrychni-8-kanalnyi-re","komplekt-ip-videonahliadu-na-8-kamer-2mp-hikvision-8-kupolnykh-8-kanalnyi-reiestrator-poe-","komplekt-ip-videonahliadu-na-8-kamer-2mp-hikvision-8-tsylindrychnykh-8-kanalnyi-reiestrato","komplekt-ip-videonahliadu-na-8-kamer-4mp-tvt-4-kupolni-4-tsylindrychni-8-kanalnyi-reiestra","komplekt-ip-videonahliadu-na-8-kamer-4mp-tvt-8-kupolnykh-8-kanalnyi-reiestrator-z-poe-hdd-","komplekt-ip-videonahliadu-na-8-kamer-4mp-tvt-8-tsylindrychnykh-8-kanalnyi-reiestrator-z-po","komplekt-ip-videonahliadu-na-8-kamer-5mp-ajax-4-tsylindrychni-4-kupolni-8-kanalnyi-reiestr","komplekt-ip-videonahliadu-na-8-kamer-5mp-ajax-8-kupolnykh-8-kanalnyi-reiestrator-poe-komut","komplekt-ip-videonahliadu-na-8-kamer-5mp-ajax-8-tsylindrychnykh-8-kanalnyi-reiestrator-poe","komplekt-ip-videonahliadu-z-wi-fi-na-1-kameru-4mp-hikvision-1-kubichna-4-kanalnyi-reiestra","komplekt-ip-videonahliadu-z-wi-fi-na-2-kamery-5mp-tvt-1-kupolna-1-tsylindrychna-4-kanalnyi","komplekt-ip-videonahliadu-z-wi-fi-na-2-kamery-5mp-tvt-2-kupolni-4-kanalnyi-reiestrator-hdd","komplekt-ip-videonahliadu-z-wi-fi-na-2-kamery-5mp-tvt-2-tsylindrychni-4-kanalnyi-reiestrat","komplekt-ip-videonahliadu-z-wi-fi-na-3-kamery-4mp-hikvision-3-kubichni-4-kanalnyi-reiestra","komplekt-ip-videonahliadu-z-wi-fi-na-4-kamery-4mp-hikvision-4-kubichni-4-kanalnyi-reiestra","komplekt-ip-videonahliadu-z-wi-fi-na-4-kamery-5mp-tvt-2-kupolni-2-tsylindrychni-4-kanalnyi","komplekt-ip-videonahliadu-z-wi-fi-na-4-kamery-5mp-tvt-4-kupolni-4-kanalnyi-reiestrator-mon","komplekt-ip-videonahliadu-z-wi-fi-na-4-kamery-5mp-tvt-4-tsylindrychni-4-kanalnyi-reiestrat","komplekt-ip-videonahliadu-z-wi-fi-na-8-kamer-5mp-tvt-4-kupolni-4-tsylindrychni-8-kanalnyi-","komplekt-ip-videonahliadu-z-wi-fi-na-8-kamer-5mp-tvt-8-kupolnykh-8-kanalnyi-reiestrator-hd","komplekt-ip-videonahliadu-z-wi-fi-na-8-kamer-5mp-tvt-8-tsylindrychnykh-8-kanalnyi-reiestra"];
+  var MAP = {"99-00014082":[1,19,21,0,18,20,43,47,48,12,11],"99-00019934":[1,19,21,12,36,34],"99-00020387":[0,18,20,11,35,34],"99-00020933":[43,47,48],"99-00014083":[36,35,34],"26-00322":[2,5,8,6,10,7],"26-00367":[2,5,8,3,10,9,14,27,25,42,40],"26-00369":[6,4],"26-00321":[3,4,9],"26-00368":[3],"26-00370":[4],"26-00371":[10,13,26,25,41,40],"26-00376":[9],"26-00379":[7],"26-00671":[7],"26-00324":[14,13,27,26,25,42,41,40],"99-00004548":[28,31,30,33,29,32],"99-00003082":[28,31],"99-00010272":[30,33],"99-00010268":[29,32],"77-00464":[23,24,22],"77-00470":[23,22,38,37],"77-00469":[24,22,39,37],"77-00465":[38,39,37],"77-00480":[45,46,44,50,51,49],"77-00473":[45,44,53,52,50,49],"77-00472":[46,44,54,52,51,49],"77-00481":[53,54,52],"77-00407":[17,16,15],"77-00361":[17,15],"77-00388":[16,15]};
+  var MAX = 3;
+  var C = scBem('sc-kitin');
+  var CSS = scPickCss('sc-kitin', C) +
+    '#sc-kitin a.sc-kitin__all{display:inline-block;margin-top:10px;font-size:13px;color:#2b7de9;text-decoration:none}' +
+    '#sc-kitin a.sc-kitin__all:hover{text-decoration:underline}';
+  function sku() {
+    var m = document.querySelector('meta[itemprop="sku"]');
+    return m ? (m.getAttribute('content') || '').trim() : '';
+  }
+  function init() {
+    if (document.getElementById('sc-kitin')) return;
+    var ids = MAP[sku()];
+    if (!ids) return;
+    var anchor = scAnchor();
+    if (!anchor) return;
+    scStyle('sc-kitin-style', CSS);
+    var box = document.createElement('div');
+    box.id = 'sc-kitin';
+    box.style.display = 'none';
+    box.innerHTML =
+      '<div class="sc-kitin__title">🎥 Ця модель є в готовому комплекті — на 10% дешевше</div>' +
+      '<div class="sc-kitin__text">Камери, реєстратор, жорсткий диск і (де потрібно) PoE-комутатор уже підібрані між собою.</div>' +
+      '<div class="sc-kitin__list"></div>' +
+      '<a class="sc-kitin__all" href="' + SC_LANG + '/komplekty-videonahliadu/">Усі комплекти відеонагляду →</a>';
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
+    var list = box.querySelector('.sc-kitin__list');
+    scNear(box, function () {
+      Promise.all(ids.map(function (i) { return scPickLoad({ url: '/' + KITS[i] + '/', note: 'комплект −10%' }, scAvailOk); }))
+        .then(function (items) {
+          items.filter(Boolean).slice(0, MAX).forEach(function (p) { list.appendChild(scItem(p, C)); });
+          if (list.children.length) box.style.display = '';
+          else box.remove();
+        });
+    });
+  }
+  scInit(52, init);
+});
