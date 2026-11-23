@@ -13,7 +13,7 @@
 })();
 
 /* ===== Загальні налаштування ===== */
-var SC_TG_BOT = 'clienttext_bot'; // username Telegram-бота БЕЗ @ (підтвердження замовлень)
+var SC_TG_BOT = 'SafeCityUA_bot'; // username Telegram-бота БЕЗ @ (підтвердження замовлень)
 var SC_CLIENT_BOT = 'SafeCityUA_bot';          // username клієнтського бота (наявність, менеджер) — для «Повідомити про наявність» і «Замовити в месенджері»; порожньо = без кнопки Telegram
 var SC_PHONE  = '380503941500';     // номер для Viber і WhatsApp (лише цифри, з 380)
 // Сторож (блок 20): URL веб-застосунку Google Apps Script з apps-script/health/Code.gs
