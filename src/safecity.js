@@ -5230,6 +5230,10 @@ scModule(37, function () {
     [/^(?=.*(?:poe|пое|поє|рое)).*$/i, function (m) { return m.replace(/(^|\s)(?:удлинител\S*|подовжувач\S*|продлител\S*)(?=\s|$)/gi, '$1розширювач'); }],
     // 16.11.2026: «gen 3», «ген 3» — у назвах Starlink «Gen3» разом
     [/(^|\s)(?:gen|ген)\s+([1-3])(?=\s|$)/gi, '$1gen$2'],
+    // 23.11.2026: «mini x» / «міні х» (Starlink Mini X) без коду моделі → starlink mini. Код зарядного Power Queen …-MINI-X пишуть через дефіс — його не чіпаємо
+    [/^(?!.*(?:queen|bcha|p24v|-[xх]\b)).*$/i, function (s) {
+      return s.replace(/(^|\s)(?:(?:starlink|старл[іи]нк)\s+)?(?:mini|міні|мини)\s+[xх](?=\s|$)/gi, '$1starlink mini');
+    }],
     // 23.11.2026: нові назви Starlink — «Standard 4 / 4X», «V4», «Rev4» = антена Gen3; «Mini X» = Mini; «Standard Actuated» = Gen2
     [/^(?=.*(?:starlink|старл[іи]н|тар[іе]лк)).*$/i, function (s) {
       return s.replace(/(^|\s)(?:standard|стандарт|стандард)\s?-?\s?4\s?[xх]?(?=\s|$)/gi, '$1gen3')
