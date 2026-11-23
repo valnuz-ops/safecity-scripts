@@ -3905,7 +3905,17 @@ scModule(27, function () {
     // мобільна версія (11.11.2026): стікер «Доставимо безкоштовно» заходив під кнопку «в обране» і обрізався
     // («ДОСТАВИМО БЕЗКОШТОВ…»). Стікер закінчується перед кнопками (32 px + відступ), довгий текст — у два рядки.
     '.catalog-card .product-sticker{right:auto!important;max-width:calc(100% - 36px)!important}' +
-    '.catalog-card .product-sticker__content{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;line-height:11px!important}');
+    '.catalog-card .product-sticker__content{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;line-height:11px!important}' +
+    // 23.11.2026: три стікери стовпчиком закривали фото (комплекти). Десктоп: «Новинка» і знижка — в один рядок угорі,
+    // інші стікери (іконки на кшталт «Доставимо безкоштовно») — в нижній лівий кут фото.
+    '.catalogCard-view .productSticker{display:flex!important;flex-wrap:wrap!important;align-items:flex-start!important;align-content:flex-start!important;gap:4px!important;right:15px!important;bottom:10px!important;pointer-events:none}' +
+    '.catalogCard-view .productSticker-item{margin:0!important;pointer-events:auto}' +
+    '.catalogCard-view .productSticker-item:not([class*="_auto"]):not(.__discount){position:absolute!important;left:0!important;bottom:0!important}' +
+    // мобільна версія: «Новинка» і знижка — в один рядок, іконка — під ними
+    '.catalog-card .product-sticker{display:flex!important;flex-wrap:wrap!important;align-items:flex-start!important;gap:3px!important}' +
+    '.catalog-card .product-sticker__separator{display:none!important}' +
+    '.catalog-card .product-sticker__item{margin:0!important}' +
+    '.catalog-card .product-sticker__item:not([class*="_auto"]):not(.product-sticker__item--discount){flex-basis:100%!important;max-width:max-content!important}');
 });
 
 scModule(26, function () {
