@@ -3915,7 +3915,8 @@ scModule(27, function () {
     '.catalog-card .product-sticker{display:flex!important;flex-wrap:wrap!important;align-items:flex-start!important;gap:3px!important}' +
     '.catalog-card .product-sticker__separator{display:none!important}' +
     '.catalog-card .product-sticker__item{margin:0!important}' +
-    '.catalog-card .product-sticker__item:not([class*="_auto"]):not(.product-sticker__item--discount){flex-basis:100%!important;max-width:max-content!important}');
+    '.catalog-card .product-sticker::after{content:"";flex-basis:100%;order:1}' +
+    '.catalog-card .product-sticker__item:not([class*="_auto"]):not(.product-sticker__item--discount){order:2}');
 });
 
 scModule(26, function () {
