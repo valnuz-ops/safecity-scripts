@@ -3916,7 +3916,15 @@ scModule(27, function () {
     '.catalog-card .product-sticker__separator{display:none!important}' +
     '.catalog-card .product-sticker__item{margin:0!important}' +
     '.catalog-card .product-sticker::after{content:"";flex-basis:100%;order:1}' +
-    '.catalog-card .product-sticker__item:not([class*="_auto"]):not(.product-sticker__item--discount){order:2}');
+    '.catalog-card .product-sticker__item:not([class*="_auto"]):not(.product-sticker__item--discount){order:2}' +
+    /* мобільна: «Доставимо безкоштовно» — в один рядок унизу фото, щоб не закривати товар */
+    '@media (max-width:600px){' +
+    '.catalog-card .product-sticker{top:0!important;bottom:6px!important;right:0!important;max-width:100%!important;height:auto!important;align-content:space-between!important;pointer-events:none}' +
+    '.catalog-card .product-sticker__item{pointer-events:auto}' +
+    '.catalog-card .product-sticker__item:not([class*="_auto"]):not(.product-sticker__item--discount),' +
+    '.catalog-card .product-sticker__item:not([class*="_auto"]):not(.product-sticker__item--discount) .product-sticker__content{white-space:nowrap!important}' +
+    '.catalog-card .product-sticker__item:not([class*="_auto"]):not(.product-sticker__item--discount) .product-sticker__content{font-size:9px!important;letter-spacing:0!important}' +
+    '}');
 });
 
 scModule(26, function () {
