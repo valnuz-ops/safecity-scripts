@@ -969,6 +969,8 @@ scModule(2, function () {
 
 /* =====================================================================
  * 3. Картки інверторів і ДБЖ 12-24V → підбір АКБ
+ *    + з 24.11.2026 навпаки: картка АКБ → «До яких ДБЖ / інверторів підходить» (#sc-akbfit),
+ *      за тими самими правилами (cfgFor), пристрої в наявності з індексу пошуку
  * ===================================================================== */
 scModule(3, function () {
   'use strict';
@@ -1030,7 +1032,10 @@ scModule(3, function () {
   var langPrefix = SC_LANG;
   var features = scFeatures, get = scGet;
 
-  function detect() {
+  // 24.11.2026: дані пристрою (інвертор / ДБЖ 12-24V) окремо від правил підбору (cfgFor) —
+  // ті самі правила працюють в обидва боки: на картці ДБЖ / інвертора → АКБ, на картці АКБ → ДБЖ / інвертори.
+  // Тут — з характеристик відкритої сторінки; devFromName нижче — з назви товару в індексі пошуку.
+  function readDev() {
     var f = features();
     var type = get(f, /^тип (пристрою|устройства)$/);
     var title = scH1();
@@ -1049,6 +1054,61 @@ scModule(3, function () {
       var pw = scNum(get(f, /^потужність, вт$/));
       if (!pw) { var pm = get(f, /^потужність$/).match(/(\d+(?:[.,]\d+)?)\s*(кВт|Вт)(?!.*(?:кВт|Вт))/); if (pm) pw = parseFloat(pm[1].replace(',', '.')) * (pm[2] === 'кВт' ? 1000 : 1); }
       var amp = scNum(get(f, /^струм розряду$/)) || (pw ? pw / 0.9 / vn : 0);
+      return { inv: true, v: v, vn: vn, amp: amp };
+    }
+
+    // --- ДБЖ 12-24V (бокс або плата) ---
+    var board = /плата/i.test(type) || /^плата/i.test(title.trim()) || /PSU-\S*DIN/i.test(title);
+    if (/безперебійн|бесперебойн/i.test(type) && /PSU-/i.test(title) &&
+        (board || /купується окремо|не входить|підключається окремо/i.test(desc))) {
+      var cap = get(f, /^ємність акумулятора$/);
+      return {
+        ups: true, board: board,
+        lfp: /LiFePO4/i.test(title) || /літій-залізо-фосфатні/i.test(desc),
+        two: /2\s*шт/i.test(cap),
+        slot: parseFloat(cap) || parseFloat((desc.match(/12 В \/ (\d+) А·год/) || [])[1]) || 0,
+        iout: scNum(get(f, /^вихідний струм$/)),
+        fastChg: /\((MH|PH|BH)\)/i.test(title)
+      };
+    }
+    return null;
+  }
+
+  // Пристрій з назви в індексі пошуку (назви на сайті однакові за шаблоном):
+  //   «ДБЖ Kraft PSU-1205LED(P) 12V 5A, пластиковий бокс, під АКБ 7Ah», «Плата ДБЖ … на DIN-рейку»,
+  //   «Гібридний однофазний інвертор 6kW 48V Deye …», «Інвертор з функцією ДБЖ Kraft KRF-AVR1000VA/800W-12V …»
+  function devFromName(it) {
+    var n = it.n, m;
+    if (/інвертор/i.test(n)) {
+      if (/мікроінвертор|вбудован|високовольт|\bHV\b/i.test(n)) return null;
+      var vs = (n.match(/\b\d+(?:\.\d+)?V\b/g) || []).map(parseFloat).filter(function (x) { return x <= 70; });
+      if (!vs.length) return null;
+      var v = Math.max.apply(null, vs), vn = v <= 14 ? 12.8 : v <= 30 ? 25.6 : 51.2;
+      // потужність: «6kW», «6.2kW», «/800W», «/1.5kW» — береться остання (у «6.5KVA 6200W» — Вт, не ВА)
+      var pw = 0, re = /(\d+(?:\.\d+)?)\s*(kW|W)\b/gi;
+      while ((m = re.exec(n))) pw = parseFloat(m[1]) * (/k/i.test(m[2]) ? 1000 : 1);
+      return { inv: true, v: v, vn: vn, amp: pw ? pw / 0.9 / vn : 0, pw: pw };
+    }
+    if (/PSU-/i.test(n) && /^(?:ДБЖ|Плата)/i.test(n)) {
+      var board = /^Плата/i.test(n) || /PSU-\S*DIN/i.test(n);
+      var slot = parseFloat((n.match(/під АКБ\s*(\d+(?:\.\d+)?)\s*Ah/i) || [])[1]) || 0;
+      if (!board && !slot) return null;
+      var iout = parseFloat((n.match(/\b\d+V\s+(\d+(?:\.\d+)?)A\b/) || [])[1]) || 0, v24 = /\b24V\b/.test(n);
+      return {
+        ups: true, board: board, lfp: /LiFePO4/i.test(n), slot: slot, v24: v24, iout: iout,
+        // «Ємність акумулятора: … (2 шт.)» на сторінках (перевірено 24.11.2026): усі боксові ДБЖ 24 В
+        // і ДБЖ 12 В / 20 А (PSU-1220LED, PSU-1220/16CH) — у назві цього немає
+        two: !!slot && (v24 || iout >= 20),
+        fastChg: /\((MH|PH|BH)\)/i.test(n)
+      };
+    }
+    return null;
+  }
+
+  // Правила підбору АКБ до пристрою: список кандидатів (P) + фільтри сумісності
+  function cfgFor(d) {
+    if (d.inv) {
+      var v = d.v, vn = d.vn, amp = d.amp;
       var need = amp ? Math.ceil(amp / 100 - 0.02) : 1;
       var more = need > 1
         ? ' Одна АКБ 100 А·год віддає до 100 А — це до ≈ ' + String(Math.round(vn * 100 * 0.9 / 100) / 10).replace('.', ',') +
@@ -1056,71 +1116,172 @@ scModule(3, function () {
         : '';
       var fitA = function (list) { return list.filter(function (b) { return !b.maxA || !amp || amp <= b.maxA; }); };
       if (v <= 14) return {
-        list: fitA(P.inv12), links: [LINKS.lfpAll, LINKS.cables],
+        list: fitA(P.inv12), links: [LINKS.lfpAll, LINKS.cables], need: need,
         title: 'Підберіть акумулятор 12 В',
         text: 'Інвертор працює від АКБ 12 В. LiFePO4 12,8 В / 100 А·год ≈ 1,28 кВт·год запасу.' + more
       };
       if (v <= 30) return {
-        list: fitA(P.inv24), links: [LINKS.lfpAll, LINKS.cables],
+        list: fitA(P.inv24), links: [LINKS.lfpAll, LINKS.cables], need: need,
         title: 'Підберіть акумулятор 24 В',
         text: 'Потрібна АКБ 24 В: LiFePO4 25,6 В або дві однакові АКБ 12 В, з’єднані послідовно.' + more
       };
       return {
-        list: fitA(P.inv48), links: [LINKS.lfpAll, LINKS.cables],
+        list: fitA(P.inv48), links: [LINKS.lfpAll, LINKS.cables], need: need,
         title: 'Підберіть акумулятор 48 В',
         text: 'Потрібна АКБ 48 В (LiFePO4 51,2 В). Для роботи з BMS перевірте, чи є батарея у списку сумісності інвертора — підкажемо.' + more
       };
     }
 
-    // --- ДБЖ 12-24V (бокс або плата) ---
-    var board = /плата/i.test(type) || /^плата/i.test(title.trim()) || /PSU-\S*DIN/i.test(title);
-    if (/безперебійн|бесперебойн/i.test(type) && /PSU-/i.test(title) &&
-        (board || /купується окремо|не входить|підключається окремо/i.test(desc))) {
-      var lfp = /LiFePO4/i.test(title) || /літій-залізо-фосфатні/i.test(desc);
-      var cap = get(f, /^ємність акумулятора$/);
-      var two = /2\s*шт/i.test(cap);
-      var slot = parseFloat(cap) || parseFloat((desc.match(/12 В \/ (\d+) А·год/) || [])[1]) || 0;
-      var list, links;
-
-      if (board && !slot) {
-        list = lfp
-          ? [P.ups7lead[0], P.ups7lfp[0], P.ups18lfp[0], P.ups18lead[0], P.ups7lead[1]]
-          : [P.ups7lead[0], P.ups7lead[1], P.ups18lead[0]].concat(P.ups7lead.slice(2), P.ups18lead.slice(1));
-      } else if (slot >= 15) {
-        list = lfp ? P.ups18lead.concat(P.ups18lfp) : P.ups18lead;
-      } else {
-        list = lfp ? [P.ups7lead[0], P.ups7lfp[0], P.ups7lead[1], P.ups7lfp[1]].concat(P.ups7lead.slice(2)) : P.ups7lead;
-      }
-      links = lfp ? [LINKS.leadAll, LINKS.lfpAll] : [LINKS.leadAll];
-      // 18.11.2026: LiFePO4 з малим струмом розряду / заряду не радимо до ДБЖ, який бере чи дає більше
-      // (TLFP-1209 — до 9,2 А, LFP 12V6Ah — розряд до 6 А, заряд до 3 А; ДБЖ (MH)/(PH)/(BH) заряджають до 4 А)
-      var iout = scNum(get(f, /^вихідний струм$/)), fastChg = /\((MH|PH|BH)\)/i.test(title);
-      list = list.filter(function (b) { return !(b.maxOut && iout > b.maxOut) && !(b.maxChg && fastChg); });
-
-      var text = board && !slot
-        ? 'Плата ставиться на DIN-рейку, акумулятор 12 В розміщується поруч — ємність обирайте під навантаження.'
-        : 'У боксі є місце під АКБ 12 В / ' + slot + ' А·год' + (two ? ' — потрібно 2 шт.' : '') + '.';
-      if (lfp) text += ' Підтримує свинцево-кислотні та LiFePO4 АКБ.';
-      else text += ' Підходять свинцево-кислотні АКБ (AGM або GEL).';
-
-      return { list: list, links: links, title: '🔋 Акумулятор не входить у комплект', text: text, slot: slot, lfp: lfp };
+    var board = d.board, lfp = d.lfp, slot = d.slot, list, links;
+    if (board && !slot) {
+      list = lfp
+        ? [P.ups7lead[0], P.ups7lfp[0], P.ups18lfp[0], P.ups18lead[0], P.ups7lead[1]]
+        : [P.ups7lead[0], P.ups7lead[1], P.ups18lead[0]].concat(P.ups7lead.slice(2), P.ups18lead.slice(1));
+    } else if (slot >= 15) {
+      list = lfp ? P.ups18lead.concat(P.ups18lfp) : P.ups18lead;
+    } else {
+      list = lfp ? [P.ups7lead[0], P.ups7lfp[0], P.ups7lead[1], P.ups7lfp[1]].concat(P.ups7lead.slice(2)) : P.ups7lead;
     }
-    return null;
+    links = lfp ? [LINKS.leadAll, LINKS.lfpAll] : [LINKS.leadAll];
+    // 18.11.2026: LiFePO4 з малим струмом розряду / заряду не радимо до ДБЖ, який бере чи дає більше
+    // (TLFP-1209 — до 9,2 А, LFP 12V6Ah — розряд до 6 А, заряд до 3 А; ДБЖ (MH)/(PH)/(BH) заряджають до 4 А)
+    var iout = d.iout, fastChg = d.fastChg;
+    list = list.filter(function (b) { return !(b.maxOut && iout > b.maxOut) && !(b.maxChg && fastChg); });
+
+    var text = board && !slot
+      ? 'Плата ставиться на DIN-рейку, акумулятор 12 В розміщується поруч — ємність обирайте під навантаження.'
+      : 'У боксі є місце під АКБ 12 В / ' + slot + ' А·год' + (d.two ? ' — потрібно 2 шт.' : '') + '.';
+    if (lfp) text += ' Підтримує свинцево-кислотні та LiFePO4 АКБ.';
+    else text += ' Підходять свинцево-кислотні АКБ (AGM або GEL).';
+
+    return { list: list, links: links, title: '🔋 Акумулятор не входить у комплект', text: text, slot: slot, lfp: lfp };
   }
+
+  function detect() { var d = readDev(); return d && cfgFor(d); }
 
   function loadProduct(pick) { return scPickLoad(pick, scAvailOk); }
 
-  // Завантажуємо кандидатів по 3 і зупиняємось, щойно набрали MAX у наявності
-  function pickInStock(list, cb) {
+  // Завантажуємо кандидатів по 3 і зупиняємось, щойно набрали max у наявності
+  function pickInStock(list, cb, max) {
+    max = max || MAX;
     var found = [], i = 0;
     (function next() {
-      if (found.length >= MAX || i >= list.length) return cb(found.slice(0, MAX));
+      if (found.length >= max || i >= list.length) return cb(found.slice(0, max));
       var batch = list.slice(i, i + 3); i += 3;
       Promise.all(batch.map(loadProduct)).then(function (res) {
-        res.forEach(function (p) { if (p && found.length < MAX) found.push(p); });
+        res.forEach(function (p) { if (p && found.length < max) found.push(p); });
         next();
       });
     })();
+  }
+
+  /* ---------- 24.11.2026: картка АКБ → «Підходить до» (ДБЖ 12-24V та інвертори) ----------
+   * Показується лише на АКБ, які блок 3 сам пропонує хоч до одного пристрою (є в списках P).
+   * Пристрої — з індексу пошуку (блок 37) у наявності; для кожного той самий cfgFor, що й на його
+   * картці: АКБ підходить, якщо вона є в його списку після всіх фільтрів (струм, LiFePO4, розмір відсіку).
+   * Без пристроїв, які вже є в штатних «Комплектах» Хорошопа на цій сторінці. До REV_MAX у наявності.
+   * Перевірка з консолі: SC_AKBFIT_TEST('/url-акумулятора/') → список пристроїв і підписів. */
+  var REV_MAX = 4;
+  var REV_LINKS = {
+    ups: { text: 'Усі ДБЖ 12-24V →', url: '/dbzh-12-24v/' },
+    inv: { text: 'Усі інвертори →',  url: '/invertory-dlia-soniachnykh-panelei/2335/' }
+  };
+  function batPath() {
+    var p = location.pathname;
+    return SC_LANG && p.indexOf(SC_LANG + '/') === 0 ? p.slice(SC_LANG.length) : p;
+  }
+  function inP(u) {
+    for (var k in P) for (var i = 0; i < P[k].length; i++) if (P[k][i].url === u) return true;
+    return false;
+  }
+  // пристрої з індексу, до яких підходить АКБ u: [{ it, d, note }]
+  function fitsFor(items, u, all) {
+    var out = [];
+    items.forEach(function (it) {
+      if (!all && !it.s) return;
+      var d = devFromName(it);
+      if (!d) return;
+      var cfg = cfgFor(d), b = null;
+      for (var i = 0; i < cfg.list.length; i++) if (cfg.list[i].url === u) { b = cfg.list[i]; break; }
+      if (!b) return;
+      out.push({ it: it, d: d, note: revNote(d, cfg, b) });
+    });
+    // порядок: ДБЖ у боксі під цю АКБ → плати / DIN (АКБ поруч) → де потрібно 2 АКБ (24 В, 20 А) → інвертори;
+    // усередині — дешевші першими
+    function rank(x) { return x.d.inv ? 3 : x.d.two || x.d.v24 ? 2 : x.d.slot ? 0 : 1; }
+    out.sort(function (a, b) { return rank(a) - rank(b) || a.it.p - b.it.p; });
+    return out;
+  }
+  function revNote(d, cfg, b) {
+    var t;
+    // кількість АКБ для інвертора тут не пишемо: на його картці вона рахується від «Струму розряду» з
+    // характеристик, а в назві його немає (оцінка за потужністю: Megarevo 05KL1D — 108 А проти 100 А на сторінці).
+    // Тому й «кілька» — лише з запасом, від 120 А за оцінкою (звірено з усіма інверторами 24.11.2026)
+    if (d.inv) return 'Інвертор ' + d.v + ' В' + (d.amp > 120 ? ' — на повну потужність потрібно кілька таких АКБ паралельно' : '');
+    t = d.board && !d.slot ? 'АКБ ставиться поруч з ДБЖ' : 'Бокс під АКБ ' + d.slot + ' А·год';
+    if (d.two) t += ' — потрібно 2 такі АКБ';
+    else if (d.v24) t += ' · ДБЖ 24 В — потрібно 2 такі АКБ послідовно';
+    if (/джампер/i.test(b.note || '')) t += ' · джампер — на 14,4 В';
+    return t;
+  }
+  // товари з посиланнями в штатних «Комплектах» Хорошопа (той самий ДБЖ уже запропоновано з АКБ)
+  function kitUrls() {
+    var have = {};
+    [].forEach.call(document.querySelectorAll('.product-set__block a[href]'), function (x) {
+      var h = (x.getAttribute('href') || '').replace(/^https?:\/\/[^/]+/, '').replace(/[?#].*$/, '');
+      if (SC_LANG && h.indexOf(SC_LANG + '/') === 0) h = h.slice(SC_LANG.length);
+      if (h.length > 1) have[h] = 1;
+    });
+    return have;
+  }
+  window.SC_AKBFIT_TEST = function (u, all) {
+    var api = window.scSearchApi;
+    if (!api) return 'немає пошуку';
+    var items = api.items();
+    if (!items.length) { api.load(function () {}); return 'індекс ще вантажиться'; }
+    if (!inP(u)) return 'цієї АКБ немає в списках блоку 3';
+    return fitsFor(items, u, all).map(function (x) { return (x.it.s ? '+ ' : '- ') + x.it.n.slice(0, 70) + ' — ' + x.note; });
+  };
+
+  function initRev(anchor) {
+    if (document.getElementById('sc-akbfit')) return;
+    var u = batPath();
+    if (!inP(u)) return;
+    var api = window.scSearchApi;
+    if (!api) return;
+
+    scStyle('sc-akbfit-style', scPickCss('sc-akbfit', C));   // ті самі класи sc-akb__*, але під #sc-akbfit
+    var box = document.createElement('div');
+    box.id = 'sc-akbfit';
+    box.innerHTML = '<div class="sc-akb__title"></div><div class="sc-akb__text"></div><div class="sc-akb__list"></div><div class="sc-akb__links"></div>';
+    box.style.display = 'none';                         // показуємо, коли знайдено хоч один пристрій
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
+
+    scNear(box, function () { api.load(scSafe(3, function () {
+      var kits = kitUrls();
+      var fits = fitsFor(api.items(), u).filter(function (x) { return !kits[x.it.u]; });
+      if (!fits.length) return box.remove();
+      var notes = {};
+      fits.forEach(function (x) { notes[x.it.u] = x.note; });
+      var hasUps = fits.some(function (x) { return x.d.ups; }), hasInv = fits.some(function (x) { return x.d.inv; });
+      box.querySelector('.sc-akb__title').textContent = hasUps && !hasInv ? '🔌 До яких ДБЖ підходить цей акумулятор'
+        : !hasUps ? '🔌 До яких інверторів підходить цей акумулятор' : '🔌 До чого підходить цей акумулятор';
+      box.querySelector('.sc-akb__text').textContent = hasInv && !hasUps
+        ? 'Інвертори в наявності, до яких ми самі радимо цю АКБ. Сумісність BMS з інвертором уточнюйте — підкажемо.'
+        : 'Моделі в наявності, до яких ми самі радимо цю АКБ: вона поміщається у відсік і підходить за струмом заряду.';
+      var linksEl = box.querySelector('.sc-akb__links');
+      [hasUps && REV_LINKS.ups, hasInv && REV_LINKS.inv].forEach(function (l) {
+        if (!l) return;
+        var a = document.createElement('a'); a.href = SC_LANG + l.url; a.textContent = l.text; linksEl.appendChild(a);
+      });
+      var listEl = box.querySelector('.sc-akb__list');
+      // наявність і ціна — зі сторінки пристрою (свіжіше за індекс), як у прямому підборі
+      pickInStock(fits.map(function (x) { return { url: x.it.u, note: notes[x.it.u] }; }), function (items) {
+        if (!items.length) return box.remove();
+        items.forEach(function (p) { listEl.appendChild(scItem(p, C)); });
+        box.style.display = '';
+      }, REV_MAX);
+    })); });
   }
 
   function init() {
@@ -1128,7 +1289,7 @@ scModule(3, function () {
     var anchor = scAnchor();
     if (!anchor) return;
     var cfg = detect();
-    if (!cfg) return;
+    if (!cfg) return initRev(anchor);
 
     scStyle('sc-akb-style', CSS);
     var box = document.createElement('div');
@@ -8389,14 +8550,15 @@ scModule(50, function () {
  *       sc_reco_view_<блок>  — блок реально з'явився на екрані (раз за перегляд сторінки);
  *       sc_reco_click_<блок> — клік по товару / фішці / посиланню в блоці (kind: item | chip | link, pos, item_url);
  *       sc_reco_add_<блок>   — на сторінці товару, куди перейшли з блоку (протягом 30 хв), натиснули «Купити».
- *     <блок>: psu, akb, cam, nvr, pick. Вимкнути: SC_RECO_ON = false.
+ *     <блок>: psu, akb, akbfit (з 24.11.2026 — «До яких ДБЖ підходить» на картці АКБ), cam, nvr, pick.
+ *     Вимкнути: SC_RECO_ON = false.
  * ===================================================================== */
 scModule(51, function () {
   'use strict';
   var SC_RECO_ON = true;
   if (!SC_RECO_ON) return;
 
-  var BOXES = { 'sc-psu': 'psu', 'sc-akb': 'akb', 'sc-cam': 'cam', 'sc-nvr': 'nvr', 'sc-pick': 'pick' };
+  var BOXES = { 'sc-psu': 'psu', 'sc-akb': 'akb', 'sc-akbfit': 'akbfit', 'sc-cam': 'cam', 'sc-nvr': 'nvr', 'sc-pick': 'pick' };
   var KEY = 'sc_reco_last', TTL = 30 * 60 * 1000;
   var BUY = '.j-buy-button-add, .product-card__buy-button button';
 
