@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Відкриваю Viber…</title>
+<style>
+  body{font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:24px;color:#1d2733;background:#f6f8f7}
+  a.b{display:block;text-align:center;background:#7360F2;color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:600;margin:16px 0}
+  pre{white-space:pre-wrap;background:#fff;border:1px solid #e3e8e5;border-radius:10px;padding:12px;font:14px/1.4 inherit}
+  button{font:inherit;padding:10px 14px;border-radius:10px;border:1px solid #cfd8e2;background:#fff}
+</style>
+</head>
+<body>
+<!-- Перехідник для кнопки «Viber» у Telegram-боті замовлень: Telegram не відкриває viber:// напряму.
+     Параметри: p — телефон (лише цифри, 380…), t — текст повідомлення. Нічого не зберігає й нікуди не надсилає. -->
+<p id="s">Відкриваю Viber…</p>
+<a class="b" id="go" href="#">Відкрити чат у Viber</a>
+<p>Якщо текст не підставився, скопіюйте його:</p>
+<pre id="t"></pre>
+<button id="c" type="button">Скопіювати текст</button>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var p = (q.get('p') || '').replace(/\D/g, '');
+  var t = q.get('t') || '';
+  document.getElementById('t').textContent = t;
+  if (!/^380\d{9}$/.test(p)) { document.getElementById('s').textContent = 'Немає коректного номера телефону.'; return; }
+  var url = 'viber://chat?number=%2B' + p + (t ? '&draft=' + encodeURIComponent(t) : '');
+  document.getElementById('go').href = url;
+  document.getElementById('c').onclick = function () {
+    try { navigator.clipboard.writeText(t); this.textContent = 'Скопійовано ✓'; } catch (e) {}
+  };
+  location.href = url;
+})();
+</script>
+</body>
+</html>
