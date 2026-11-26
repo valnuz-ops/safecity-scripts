@@ -8703,3 +8703,53 @@ scModule(52, function () {
   }
   scInit(52, init);
 });
+
+
+/* =====================================================================
+ * 53. Картка товару зі статусом «Очікується» → «Очікуємо поставку … · замовити заздалегідь» (26.11.2026)
+ *     Лише для артикулів з EXPECT (артикул на сайті → коли чекаємо). Статус «Очікується» Хорошоп віддає
+ *     в Google-фід і мікророзмітку як out of stock / OutOfStock — реклама не вмикається (перевірено 26.11).
+ *     Telegram — клієнтський бот (start=buy_<артикул>), Viber — чат із готовим текстом. GA4: sc_preorder_click.
+ *     Коли товар надійде — статус «В наявності», рядок з EXPECT прибрати.
+ * ===================================================================== */
+scModule(53, function () {
+  'use strict';
+  var EXPECT = {
+    '42-00248': 'орієнтовно наступного тижня',   // WGP UPS103C 16000mAh (22339)
+    '42-00317': 'орієнтовно наступного тижня'    // WGP UPS103C Quick Charge 20000mAh з БЖ (23948)
+  };
+  var CSS =
+    '#sc-expect{margin:12px 0 0;padding:10px 12px;border:1px solid #f1dca6;border-radius:10px;background:#fff8e6;color:#1d2733;font-size:14px;line-height:1.4}' +
+    '#sc-expect b{display:block;margin-bottom:6px}' +
+    '#sc-expect .sce-b{display:flex;flex-wrap:wrap;gap:8px;align-items:center}' +
+    '#sc-expect .sce-b a{display:inline-flex;align-items:center;height:32px;padding:0 14px;border:1px solid #dbe2ea;border-radius:16px;background:#fff;color:#1d2733;text-decoration:none;font-weight:500;white-space:nowrap}' +
+    '#sc-expect .sce-b a:hover{border-color:#b9c6d4;background:#f6f9fc}';
+  function init() {
+    if (document.getElementById('sc-expect')) return;
+    var m = document.querySelector('meta[itemprop="sku"]');
+    var art = m ? (m.getAttribute('content') || '').trim() : '';
+    if (!art || !EXPECT[art]) return;
+    var st = document.querySelector('.product-header__availability, [class*="presence"], [class*="availability"]');
+    if (!st || !/очікується/i.test(st.textContent || '')) return;   // надійшов — блок зникне сам
+    var anchor = scAnchor();
+    if (!anchor) return;
+    var name = scH1().replace(/\s+/g, ' ').trim();
+    var msg = 'Добрий день! Хочу замовити заздалегідь: ' + name + ' (арт. ' + art + ')\n' + location.origin + location.pathname;
+    scStyle('sc-expect-style', CSS);
+    var box = document.createElement('div');
+    box.id = 'sc-expect';
+    box.innerHTML = '<b>📦 Очікуємо поставку ' + EXPECT[art] + '</b>' +
+      '<div class="sce-b"><span>Замовити заздалегідь:</span>' +
+      (SC_CLIENT_BOT ? '<a data-m="telegram" target="_blank" rel="noopener">Telegram</a>' : '') +
+      '<a data-m="viber">Viber</a></div>';
+    if (SC_CLIENT_BOT) box.querySelector('[data-m="telegram"]').href = 'https://t.me/' + SC_CLIENT_BOT + '?start=buy_' + art;
+    box.querySelector('[data-m="viber"]').href = 'viber://chat?number=%2B' + SC_PHONE + '&draft=' + encodeURIComponent(msg);
+    [].forEach.call(box.querySelectorAll('a'), function (a) {
+      a.addEventListener('click', function () {
+        try { if (typeof window.gtag === 'function') window.gtag('event', 'sc_preorder_click', { messenger: a.getAttribute('data-m'), item_id: art }); } catch (x) {}
+      });
+    });
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
+  }
+  scInit(53, init);
+});
