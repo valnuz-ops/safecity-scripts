@@ -8750,6 +8750,13 @@ scModule(53, function () {
       });
     });
     anchor.parentNode.insertBefore(box, anchor.nextSibling);
+    // 26.11: відступи як у блоках 16/35 — під кнопками в Хорошопа великий margin-bottom, його «з'їдає» від'ємний відступ.
+    // Якщо плашка «Повідомити в Telegram» (блок 16) уже стоїть під нами з таким відступом — забираємо його собі, їй — звичайні 12 px
+    // (інакше вона наїжджала на нашу плашку)
+    var next = box.nextElementSibling, mb = parseFloat(getComputedStyle(anchor).marginBottom) || 0;
+    if (next && next.id === 'sc-stock' && next.style.marginTop) { box.style.marginTop = next.style.marginTop; next.style.marginTop = '12px'; }
+    else if (mb > 16) box.style.marginTop = (12 - mb) + 'px';
+    if (next && next.id === 'sc-stock' && !next.style.marginTop) next.style.marginTop = '12px';
   }
   scInit(53, init);
 });
