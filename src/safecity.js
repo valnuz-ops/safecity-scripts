@@ -8812,8 +8812,17 @@ scModule(54, function () {
       'background:#2a9d4a;color:#fff;text-decoration:none;font-weight:500;white-space:nowrap}' +
     '#sc-bulk .scb-go:hover{background:#238a40;color:#fff}' +
     '#sc-bulk .scb-e{display:none;width:100%;margin:6px 0 0;color:#c0392b;font-size:13px}' +
-    '#sc-bulk .scb-s{margin:8px 0 0;color:#7a828c;font-size:12px}' +
-    '#sc-bulk .scb-s a{color:#1f6fd1;text-decoration:underline}';
+    '#sc-bulk .scb-s{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:10px 0 0;color:#5f6b78;font-size:13px}' +
+    '#sc-bulk .scb-s a{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px 0 7px;border:1px solid #dbe2ea;border-radius:15px;' +
+      'background:#fff;color:#1d2733;text-decoration:none;font-weight:500;font-size:13px;white-space:nowrap;transition:border-color .15s,background .15s}' +
+    '#sc-bulk .scb-s a:hover{border-color:#b9c6d4;background:#f6f9fc;color:#1d2733}' +
+    '#sc-bulk .scb-s svg{flex:0 0 18px;width:18px;height:18px}';
+  // круглі значки Telegram і Viber — як були в блоці 35
+  var I_TG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#2AABEE"/>' +
+    '<path d="M5.4 11.7l11.2-4.3c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.1-1.4 1.3c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6.1-.9z" fill="#fff"/></svg>';
+  var I_VB = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#7360F2"/>' +
+    '<path d="M9.3 6.6c-.3-.3-.8-.3-1.1 0l-.9.9c-.7.7-.8 1.9-.2 3.1 1.3 2.6 3.4 4.8 6.1 6.1 1.2.6 2.4.5 3.1-.2l.9-.9c.3-.3.3-.8 0-1.1l-1.7-1.5c-.3-.3-.8-.3-1.1 0l-.8.8c-1.4-.6-2.6-1.8-3.2-3.2l.8-.8c.3-.3.3-.8 0-1.1L9.3 6.6z" fill="#fff"/>' +
+    '<path d="M13 6.3a4.8 4.8 0 0 1 4.7 4.7M13 8.3a2.8 2.8 0 0 1 2.7 2.7" fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/></svg>';
   var BOX = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#2a9d4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>';
   var CHEV = '<svg class="scb-c" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1f7a3a" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
@@ -8860,8 +8869,8 @@ scModule(54, function () {
           (SC_CLIENT_BOT ? '<a class="scb-go" data-m="telegram" target="_blank" rel="noopener">' + TG + 'Отримати пропозицію</a>' : '') +
           '<p class="scb-e">Мінімум ' + min + ' шт. — для меншої кількості купуйте звичайно, кнопкою «Купити»</p>' +
         '</div>' +
-        '<p class="scb-s">Є питання? ' + (SC_CLIENT_BOT ? '<a data-q="telegram" target="_blank" rel="noopener">Telegram</a> · ' : '') +
-          '<a data-q="viber">Viber</a></p>' +
+        '<p class="scb-s"><span>Є питання?</span>' + (SC_CLIENT_BOT ? '<a data-q="telegram" target="_blank" rel="noopener">' + I_TG + 'Telegram</a>' : '') +
+          '<a data-q="viber">' + I_VB + 'Viber</a></p>' +
       '</div>';
 
     var head = box.querySelector('.scb-h'), inp = box.querySelector('input'), err = box.querySelector('.scb-e');
