@@ -4770,6 +4770,7 @@ scModule(34, function () {
 
 /* =====================================================================
  * 35. Картка товару → «Або напишіть нам: Telegram · Viber» — компактний рядок під «Купити» (06.11.2026)
+ *     ВИМКНЕНО 26.11.2026 (SC_MSG_ROW = false) — див. нижче.
  *     Telegram — клієнтський бот (start=buy_<артикул>): картка товару з ціною й наявністю,
  *       замовлення або запитання; менеджеру — сповіщення, відповідь через Reply.
  *     Viber — чат із номером SC_PHONE з готовим текстом (назва, артикул, посилання).
@@ -4803,7 +4804,12 @@ scModule(35, function () {
     try { if (window.ttq && typeof window.ttq.track === 'function') window.ttq.track('Contact', { contents: [{ content_id: art, content_type: 'product' }] }); } catch (x) {}
   }
 
+  // ВИМКНЕНО 26.11.2026 (рішення власника): за 07–26.11 — 10 кліків від 7 людей на ~8 000 переглядів карток, а рядок
+  // перевантажував картку під «Купити». Повернути: SC_MSG_ROW = true. Telegram і Viber лишилися в блоці 54 (оптові товари).
+  var SC_MSG_ROW = false;
+
   function init() {
+    if (!SC_MSG_ROW) return;
     if (document.getElementById('sc-msg')) return;
     var anchor = scAnchor();
     if (!anchor || !document.querySelector(SC_AVAIL_SEL)) return;
@@ -8744,7 +8750,9 @@ scModule(53, function () {
  *     Лише в наявності. Під «Купити» (після «Або напишіть нам», блок 35). На мобільній згорнутий, на комп'ютері розгорнутий.
  *     Поріг: 10 шт., для дешевих — із BULK_MIN (партія від ~5 тис. грн). Ціна — «за запитом» (менеджер рахує сам).
  *     Telegram — клієнтський бот, start=bulk_<артикул>_<кількість> → менеджеру «📦 Гуртовий запит».
- *     Viber — чат із SC_PHONE з готовим текстом. Клік → подія sc_bulk_click (dataLayer + gtag), розгортання → sc_bulk_open.
+ *     Клік → подія sc_bulk_click (dataLayer + gtag), розгортання → sc_bulk_open.
+ *     Унизу «Є питання? Telegram · Viber» — звичайне запитання (бот start=buy_, Viber з текстом), подія sc_messenger_click place=bulk
+ *     (рядок «Або напишіть нам», блок 35, вимкнено 26.11.2026).
  * ===================================================================== */
 scModule(54, function () {
   'use strict';
@@ -8792,7 +8800,7 @@ scModule(54, function () {
     '#sc-bulk .scb-go:hover{background:#238a40;color:#fff}' +
     '#sc-bulk .scb-e{display:none;width:100%;margin:6px 0 0;color:#c0392b;font-size:13px}' +
     '#sc-bulk .scb-s{margin:8px 0 0;color:#7a828c;font-size:12px}' +
-    '#sc-bulk .scb-s a{color:#7360F2;text-decoration:underline}';
+    '#sc-bulk .scb-s a{color:#1f6fd1;text-decoration:underline}';
   var BOX = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#2a9d4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>';
   var CHEV = '<svg class="scb-c" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1f7a3a" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
@@ -8839,17 +8847,23 @@ scModule(54, function () {
           (SC_CLIENT_BOT ? '<a class="scb-go" data-m="telegram" target="_blank" rel="noopener">' + TG + 'Отримати пропозицію</a>' : '') +
           '<p class="scb-e">Мінімум ' + min + ' шт. — для меншої кількості купуйте звичайно, кнопкою «Купити»</p>' +
         '</div>' +
-        '<p class="scb-s">Відповімо в Telegram' + ' або <a data-m="viber">напишіть у Viber</a></p>' +
+        '<p class="scb-s">Є питання? ' + (SC_CLIENT_BOT ? '<a data-q="telegram" target="_blank" rel="noopener">Telegram</a> · ' : '') +
+          '<a data-q="viber">Viber</a></p>' +
       '</div>';
 
     var head = box.querySelector('.scb-h'), inp = box.querySelector('input'), err = box.querySelector('.scb-e');
-    var tg = box.querySelector('[data-m="telegram"]'), vb = box.querySelector('[data-m="viber"]');
+    var tg = box.querySelector('[data-m="telegram"]');
+    var qTg = box.querySelector('[data-q="telegram"]'), qVb = box.querySelector('[data-q="viber"]');
+    // «Є питання?» — звичайне запитання про товар (як колишній блок 35): бот start=buy_, Viber з назвою й посиланням
+    if (qTg) qTg.href = 'https://t.me/' + SC_CLIENT_BOT + '?start=buy_' + art;
+    qVb.href = 'viber://chat?number=%2B' + SC_PHONE + '&draft=' + encodeURIComponent('Добрий день! Питання щодо: ' + name + ' (арт. ' + art + ')\n' + url);
+    [qTg, qVb].forEach(function (a) {
+      if (a) a.addEventListener('click', function () { track('sc_messenger_click', { messenger: a.getAttribute('data-q'), item_id: art, place: 'bulk' }); });
+    });
     function qty() { var q = parseInt(inp.value, 10); return q >= min && q <= 100000 ? q : 0; }
     function links() {
       var q = qty() || min;
       if (tg) tg.href = 'https://t.me/' + SC_CLIENT_BOT + '?start=bulk_' + art + '_' + q;
-      vb.href = 'viber://chat?number=%2B' + SC_PHONE + '&draft=' + encodeURIComponent(
-        'Добрий день! Гуртовий запит: ' + name + ' (арт. ' + art + ') — ' + q + ' шт. Підготуйте, будь ласка, пропозицію.\n' + url);
     }
     links();
     head.addEventListener('click', function () {
@@ -8859,7 +8873,7 @@ scModule(54, function () {
       if (open) track('sc_bulk_open', { item_id: art });
     });
     inp.addEventListener('input', function () { err.style.display = 'none'; links(); });
-    [tg, vb].forEach(function (a) {
+    [tg].forEach(function (a) {
       if (!a) return;
       a.addEventListener('click', function (e) {
         var q = qty();
@@ -8868,9 +8882,19 @@ scModule(54, function () {
       });
     });
 
-    // після «Або напишіть нам» (блок 35), якщо він уже є, інакше одразу під «Купити»
+    // після «Або напишіть нам» (блок 35, якщо його ввімкнуть), інакше одразу під «Купити»
     var after = document.getElementById('sc-msg') || anchor;
     after.parentNode.insertBefore(box, after.nextSibling);
+    if (after === anchor) {
+      // відступи як у блоках 16 і 35: плашка довіри (блок 15) могла підтягнутися до кнопок від'ємним відступом — тепер він у нас
+      var trust = document.getElementById('sc-trust');
+      if (trust && trust.previousElementSibling === box && trust.style.marginTop) {
+        box.style.marginTop = trust.style.marginTop; trust.style.marginTop = '';
+      } else {
+        var mb = parseFloat(getComputedStyle(anchor).marginBottom) || 0;
+        if (mb > 16) box.style.marginTop = (12 - mb) + 'px';
+      }
+    }
   }
 
   scInit(54, init);
