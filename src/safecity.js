@@ -2802,10 +2802,13 @@ scModule(15, function () {
   // 19.11.2026: компактний вигляд — один рядок «іконка + текст» замість трьох карток (картка товару перевантажена).
   // Повернути картки — TRUST_COMPACT = false.
   var TRUST_COMPACT = true;
+  // 26.11.2026: компактний вигляд — три рівні колонки «значок / назва / значення» в одній рамці (варіант А, рішення власника):
+  // рядок переносився 2 + 1, значки були різного стилю. Повернути рядок — TRUST_COLS = false.
+  var TRUST_COLS = true;
   var ICONS = {
     pay: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#38ab87" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><circle cx="12" cy="12.5" r="2.6"/><path d="M6 9.5v.01M18 15.5v.01"/></svg>',
-    warranty: '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="#f59e0b"/><path d="M8.3 12.2l2.5 2.5 4.9-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    ret: '<svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="11" fill="#3b82f6"/><path d="M16.6 9.4A5 5 0 0 0 7.5 9.8M7.4 14.6a5 5 0 0 0 9.1-.4" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/><path d="M16.9 6.8v2.9H14M7.1 17.2v-2.9H10" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    warranty: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#2E9E4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 2.6v5.6c0 4.4-3 8.2-7 9.8-4-1.6-7-5.4-7-9.8V5.6z"/><path d="M9 12l2.2 2.2L15.5 10"/></svg>',
+    ret: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#2E9E4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'
   };
 
   var CSS =
@@ -2829,7 +2832,17 @@ scModule(15, function () {
     '#sc-trust.compact .sct-i{flex:0 0 16px;width:16px;height:16px;margin:0}' +
     '#sc-trust.compact .sct-i svg{width:16px;height:16px}' +
     '#sc-trust.compact .sct-t,#sc-trust.compact .sct-v{display:inline;font-size:inherit;font-weight:400;color:inherit;margin:0}' +
-    '#sc-trust.compact .sct-t:after{content:" "}';
+    '#sc-trust.compact .sct-t:after{content:" "}' +
+    // три колонки в рамці (TRUST_COLS)
+    '#sc-trust.cols{display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr));gap:0;margin:12px 0 0;padding:10px 2px;' +
+      'border:1px solid #e3e8e5;border-radius:12px;background:#fff}' +
+    '#sc-trust.cols li,#sc-trust.cols li:hover{padding:0 4px;border:0;border-radius:0;background:none;text-align:center}' +
+    '#sc-trust.cols li+li,#sc-trust.cols li+li:hover{border-left:1px solid #e3e8e5}' +
+    '#sc-trust.cols .sct-in{display:flex;flex-direction:column;align-items:center;gap:1px}' +
+    '#sc-trust.cols .sct-i{width:22px;height:22px;margin:0 0 3px}' +
+    '#sc-trust.cols .sct-t{display:block;font-size:13.5px;font-weight:600;color:#1d2733;line-height:1.25}' +
+    '#sc-trust.cols .sct-v{display:block;font-size:12.5px;color:#2E9E4F;line-height:1.3;margin:0}' +
+    '#sc-trust.cols a.sct-in:hover .sct-t{text-decoration:underline;text-underline-offset:2px}';
 
   // «24 міс.» / «12 місяців» / «1 рік» → 24 / 12 / 12
   function warrantyMonths() {
@@ -2878,7 +2891,7 @@ scModule(15, function () {
     var prev = ul.previousElementSibling;
     var mb = prev ? parseFloat(getComputedStyle(prev).marginBottom) || 0 : 0;
     if (mb > 16) ul.style.marginTop = (12 - mb) + 'px';
-    if (TRUST_COMPACT) { ul.className = 'compact'; return; }
+    if (TRUST_COMPACT) { ul.className = TRUST_COLS ? 'cols' : 'compact'; return; }
     // кожна картка ширша за 150 px — іконку ставимо зліва
     if (ul.offsetWidth / items.length >= 150) ul.className = 'wide';
   }
