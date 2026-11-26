@@ -8731,6 +8731,10 @@ scModule(53, function () {
     if (!art || !EXPECT[art]) return;
     var st = document.querySelector('.product-header__availability, [class*="presence"], [class*="availability"]');
     if (!st || !/очікується/i.test(st.textContent || '')) return;   // надійшов — блок зникне сам
+    // 26.11: Хорошоп для статусу «Очікується» ставить замість «Купити» велику кнопку «Повідомити, коли з'явиться»
+    // (j-widget-favorites-add — список бажань, лише для авторизованих). Сповіщення в нас — Telegram (блок 16) і передзамовлення нижче, тож ховаємо її
+    var fav = document.querySelector('.product-order__block--buy .j-widget-favorites-add');
+    if (fav) fav.style.display = 'none';
     var anchor = scAnchor();
     if (!anchor) return;
     var name = scH1().replace(/\s+/g, ' ').trim();
