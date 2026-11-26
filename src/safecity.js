@@ -8735,3 +8735,143 @@ scModule(53, function () {
   }
   scInit(53, init);
 });
+
+
+/* =====================================================================
+ * 54. Картка товару → «Від N шт. — гуртова ціна» (26.11.2026)
+ *     Лише на товарах із BULK (артикул на сайті): те, що брали партіями, і цілі лінійки (оптичні HDMI,
+ *     кабелі й перехідники Starlink, ІЧ-прожектори Light Vision, плати ДБЖ Trinix на DIN, Hiitio) — рішення власника 26.11.
+ *     Лише в наявності. Під «Купити» (після «Або напишіть нам», блок 35). На мобільній згорнутий, на комп'ютері розгорнутий.
+ *     Поріг: 10 шт., для дешевих — із BULK_MIN (партія від ~5 тис. грн). Ціна — «за запитом» (менеджер рахує сам).
+ *     Telegram — клієнтський бот, start=bulk_<артикул>_<кількість> → менеджеру «📦 Гуртовий запит».
+ *     Viber — чат із SC_PHONE з готовим текстом. Клік → подія sc_bulk_click (dataLayer + gtag), розгортання → sc_bulk_open.
+ * ===================================================================== */
+scModule(54, function () {
+  'use strict';
+  var BULK = [
+    // оптичні HDMI (34)
+    '74-00103', '74-00104', '74-00105', '74-00140', '74-00143', '74-00144', '74-00145', '74-00146', '74-00147', '74-00148', '74-00149', '74-00150', '74-00151', '74-00152', '74-00153', '74-00154', '74-00155', '74-00156', '74-00157', '74-00158', '74-00159', '74-00164', '74-00165', '74-00166', '74-00167', '74-00168', '74-00169', '74-00170', '74-00171', '74-00172', '74-00173', '74-00174', '74-00175', '74-00176',
+    // кабелі й перехідники Starlink (45)
+    '73-00559', '73-00560', '73-00561', '73-00562', '73-00563', '73-00564', '73-00568', '73-00569', '73-00589', '73-00590', '73-00591', '73-00592', '73-00593', '73-00594', '73-00595', '73-00596', '73-00597', '73-00598', '73-00656', '73-00657', '73-00658', '73-00661', '73-00662', '73-00663', '73-00664', '73-00665', '73-00666', '73-00667', '73-01010', '73-01011', '73-01013', '73-01014', '73-01015', '73-01016', '73-01017', '73-01018', '73-01019', '73-01020', '73-01021', '73-01022', '73-01033', '73-01036', '73-01639', '73-01640', '73-01641',
+    // ІЧ-прожектори Light Vision (10)
+    '80-00033', '80-00034', '80-00035', '80-00036', '80-00037', '80-00038', '80-00039', '80-00040', '80-00041', '80-00042',
+    // плати ДБЖ Trinix на DIN-рейку (3)
+    '41-00058', '41-00059', '41-00061',
+    // Hiitio (5)
+    '44-00501', '44-00502', '44-00503', '44-00504', '44-00505',
+    // окремі товари, які брали партіями (14)
+    '42-00172', '42-00269', '42-00272', '51-00116', '51-00134', '51-00144', '69-00071', '73-00135', '73-00148', '73-00278', '73-00521', '73-00604', '74-00102', '74-00118'
+  ];
+  // поріг для дешевих товарів (решта — 10 шт.)
+  var BULK_MIN = { '74-00118': 20, '73-00559': 20, '73-01013': 20, '73-01022': 20, '73-01639': 20, '51-00134': 20, '51-00144': 20,
+                   '74-00102': 50, '73-00604': 200, '69-00071': 500 };
+  var TXT_HEAD = 'гуртова ціна, рахунок з ПДВ або без';
+  var TXT_PAY = 'Безготівкова оплата з ПДВ або без ПДВ — для компаній, ФОП і військових частин';
+
+  var CSS =
+    '#sc-bulk{margin:12px 0 0;border:1px solid #cfe5cf;background:#f4faf4;border-radius:12px;font-size:14px;line-height:1.4;color:#1d2733}' +
+    '#sc-bulk .scb-h{display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;border:0;background:none;cursor:pointer;text-align:left;font:inherit;color:#1f7a3a}' +
+    '#sc-bulk .scb-h b{font-weight:600}' +
+    '#sc-bulk .scb-h span{flex:1}' +
+    '#sc-bulk .scb-h svg{flex:0 0 20px}' +
+    '#sc-bulk .scb-c{transition:transform .2s}' +
+    '#sc-bulk.open .scb-c{transform:rotate(180deg)}' +
+    '#sc-bulk .scb-b{display:none;padding:0 12px 12px}' +
+    '#sc-bulk.open .scb-b{display:block}' +
+    '#sc-bulk .scb-t{background:#fff;border-radius:8px;padding:6px 10px}' +
+    '#sc-bulk .scb-t div{display:flex;justify-content:space-between;gap:10px;padding:4px 0}' +
+    '#sc-bulk .scb-t div+div{border-top:1px solid #e3e6ea}' +
+    '#sc-bulk .scb-t span{color:#5f6b78}' +
+    '#sc-bulk .scb-t b{color:#1f7a3a;font-weight:600}' +
+    '#sc-bulk .scb-p{margin:10px 0 12px;color:#5f6b78;font-size:13px}' +
+    '#sc-bulk .scb-f{display:flex;align-items:center;gap:8px;flex-wrap:wrap}' +
+    '#sc-bulk .scb-f input{width:78px;height:38px;border:1px solid #cfd8e2;border-radius:8px;text-align:center;font:inherit;font-size:15px;background:#fff;color:#1d2733}' +
+    '#sc-bulk .scb-f .scb-u{color:#5f6b78}' +
+    '#sc-bulk .scb-go{flex:1 1 180px;display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;padding:0 14px;border-radius:19px;' +
+      'background:#2a9d4a;color:#fff;text-decoration:none;font-weight:500;white-space:nowrap}' +
+    '#sc-bulk .scb-go:hover{background:#238a40;color:#fff}' +
+    '#sc-bulk .scb-e{display:none;width:100%;margin:6px 0 0;color:#c0392b;font-size:13px}' +
+    '#sc-bulk .scb-s{margin:8px 0 0;color:#7a828c;font-size:12px}' +
+    '#sc-bulk .scb-s a{color:#7360F2;text-decoration:underline}';
+  var BOX = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#2a9d4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>';
+  var CHEV = '<svg class="scb-c" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1f7a3a" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  var TG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5.4 11.7l11.2-4.3c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.1-1.4 1.3c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6.1-.9z" fill="#fff"/></svg>';
+
+  function track(ev, p) {
+    try { (window.dataLayer = window.dataLayer || []).push(Object.assign({ event: ev }, p)); } catch (x) {}
+    try { if (typeof window.gtag === 'function') window.gtag('event', ev, p); } catch (x) {}
+  }
+  function money(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' грн'; }
+
+  function init() {
+    if (document.getElementById('sc-bulk')) return;
+    var m = document.querySelector('meta[itemprop="sku"]');
+    var art = m ? (m.getAttribute('content') || '').trim() : '';
+    if (!art) art = scArt();
+    if (BULK.indexOf(art) < 0) return;
+    var anchor = scAnchor();
+    if (!anchor || !document.querySelector(SC_AVAIL_SEL)) return;
+    var name = scH1().replace(/\s+/g, ' ').trim();
+    if (!name) return;
+    var min = BULK_MIN[art] || 10;
+    var pm = document.querySelector('[itemprop="offers"] [itemprop="price"], .product-card__price [itemprop="price"]');
+    var price = pm ? parseFloat(String(pm.getAttribute('content') || '').replace(',', '.')) : 0;
+    var url = location.origin + location.pathname;
+    var mob = window.matchMedia && matchMedia('(max-width:767px)').matches;
+
+    scStyle('sc-bulk-style', CSS);
+    var box = document.createElement('div');
+    box.id = 'sc-bulk';
+    if (!mob) box.className = 'open';
+    box.innerHTML =
+      '<button type="button" class="scb-h" aria-expanded="' + (!mob) + '">' + BOX +
+        '<span><b>Від ' + min + ' шт.</b> — ' + TXT_HEAD + '</span>' + CHEV + '</button>' +
+      '<div class="scb-b">' +
+        '<div class="scb-t">' +
+          (price ? '<div><span>1–' + (min - 1) + ' шт.</span><span style="color:#1d2733">' + money(price) + '</span></div>' : '') +
+          '<div><span>від ' + min + ' шт.</span><b>ціна за запитом</b></div>' +
+        '</div>' +
+        '<p class="scb-p">' + TXT_PAY + '</p>' +
+        '<div class="scb-f">' +
+          '<input type="number" inputmode="numeric" min="' + min + '" step="1" value="' + min + '" aria-label="Кількість, шт.">' +
+          '<span class="scb-u">шт.</span>' +
+          (SC_CLIENT_BOT ? '<a class="scb-go" data-m="telegram" target="_blank" rel="noopener">' + TG + 'Отримати пропозицію</a>' : '') +
+          '<p class="scb-e">Мінімум ' + min + ' шт. — для меншої кількості купуйте звичайно, кнопкою «Купити»</p>' +
+        '</div>' +
+        '<p class="scb-s">Відповімо в Telegram' + ' або <a data-m="viber">напишіть у Viber</a></p>' +
+      '</div>';
+
+    var head = box.querySelector('.scb-h'), inp = box.querySelector('input'), err = box.querySelector('.scb-e');
+    var tg = box.querySelector('[data-m="telegram"]'), vb = box.querySelector('[data-m="viber"]');
+    function qty() { var q = parseInt(inp.value, 10); return q >= min && q <= 100000 ? q : 0; }
+    function links() {
+      var q = qty() || min;
+      if (tg) tg.href = 'https://t.me/' + SC_CLIENT_BOT + '?start=bulk_' + art + '_' + q;
+      vb.href = 'viber://chat?number=%2B' + SC_PHONE + '&draft=' + encodeURIComponent(
+        'Добрий день! Гуртовий запит: ' + name + ' (арт. ' + art + ') — ' + q + ' шт. Підготуйте, будь ласка, пропозицію.\n' + url);
+    }
+    links();
+    head.addEventListener('click', function () {
+      var open = !box.classList.contains('open');
+      box.classList.toggle('open', open);
+      head.setAttribute('aria-expanded', String(open));
+      if (open) track('sc_bulk_open', { item_id: art });
+    });
+    inp.addEventListener('input', function () { err.style.display = 'none'; links(); });
+    [tg, vb].forEach(function (a) {
+      if (!a) return;
+      a.addEventListener('click', function (e) {
+        var q = qty();
+        if (!q) { e.preventDefault(); err.style.display = 'block'; inp.focus(); return; }
+        track('sc_bulk_click', { messenger: a.getAttribute('data-m'), item_id: art, quantity: q });
+      });
+    });
+
+    // після «Або напишіть нам» (блок 35), якщо він уже є, інакше одразу під «Купити»
+    var after = document.getElementById('sc-msg') || anchor;
+    after.parentNode.insertBefore(box, after.nextSibling);
+  }
+
+  scInit(54, init);
+});
