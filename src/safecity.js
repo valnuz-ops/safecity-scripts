@@ -7122,6 +7122,11 @@ scModule(39, function () {
     });
     return out;
   }
+  // 27.11.2026: ті самі правила — на картці товару (блок 55 «До цього знадобиться»)
+  window.scUpsellPick = function (urls) {
+    var api = window.scSearchApi;
+    return api ? pick(api, urls.map(api.byUrl).filter(Boolean)) : [];
+  };
   window.SC_UPSELL_TEST = function (urls) {
     var api = window.scSearchApi;
     if (!api) return 'немає пошуку';
@@ -8596,7 +8601,8 @@ scModule(50, function () {
  *       sc_reco_view_<блок>  — блок реально з'явився на екрані (раз за перегляд сторінки);
  *       sc_reco_click_<блок> — клік по товару / фішці / посиланню в блоці (kind: item | chip | link, pos, item_url);
  *       sc_reco_add_<блок>   — на сторінці товару, куди перейшли з блоку (протягом 30 хв), натиснули «Купити».
- *     <блок>: psu, akb, akbfit (з 24.11.2026 — «До яких ДБЖ підходить» на картці АКБ), cam, nvr, pick.
+ *     <блок>: psu, akb, akbfit (з 24.11.2026 — «До яких ДБЖ підходить» на картці АКБ), cam, nvr, pick,
+ *     need (з 27.11.2026 — «До цього знадобиться» на картці, блок 55).
  *     Вимкнути: SC_RECO_ON = false.
  * ===================================================================== */
 scModule(51, function () {
@@ -8604,7 +8610,7 @@ scModule(51, function () {
   var SC_RECO_ON = true;
   if (!SC_RECO_ON) return;
 
-  var BOXES = { 'sc-psu': 'psu', 'sc-akb': 'akb', 'sc-akbfit': 'akbfit', 'sc-cam': 'cam', 'sc-nvr': 'nvr', 'sc-pick': 'pick' };
+  var BOXES = { 'sc-psu': 'psu', 'sc-akb': 'akb', 'sc-akbfit': 'akbfit', 'sc-cam': 'cam', 'sc-nvr': 'nvr', 'sc-pick': 'pick', 'sc-need': 'need' };
   var KEY = 'sc_reco_last', TTL = 30 * 60 * 1000;
   var BUY = '.j-buy-button-add, .product-card__buy-button button';
 
@@ -8656,6 +8662,7 @@ scModule(51, function () {
   }
   // блоки 2–19 вставляються через scInit (idle + повтор через 2 с) — шукаємо їх двічі
   scIdle(scSafe(51, function () { setTimeout(scSafe(51, watch), 2500); setTimeout(scSafe(51, watch), 6000); }));
+  window.scRecoWatch = scSafe(51, watch);   // 27.11.2026: блок 55 заповнюється при прокручуванні — кличе сам
 });
 
 /* =====================================================================
@@ -8947,4 +8954,85 @@ scModule(54, function () {
   }
 
   scInit(54, init);
+});
+
+
+/* =====================================================================
+ * 55. Картка товару → «До цього знадобиться» (27.11.2026)
+ *     Ті самі правила, що й у кошику (блок 39), але на картці — для розділів, де свого блоку підбору
+ *     на картці немає: відеодомофони й панелі (панель / монітор того ж бренду й типу, замок, кнопка),
+ *     комплекти домофонів, СКУД (зчитувачі, контролери, кнопки, клавіатури, ел.-мех. замки, защіпки → ключі,
+ *     замок, кнопка, БЖ), мережа (комутатори, точки доступу, вита пара), шафи 19″, U-Prox (центр охорони),
+ *     ІЧ-бар'єри, звук (гучномовці ↔ підсилювачі), АКБ LiFePO4 (зарядний), сонячні панелі, повербанки, генератори.
+ *     Перевірено 27.11.2026 прогоном усіх товарів у наявності: у цих розділах блок є в 380 із ~460 карток;
+ *     розділи, де підбирати нічого (кронштейни, коробки, доводчики, Akubela, кабелі живлення…), — не чіпаємо.
+ *     Якщо на картці вже є інший блок підбору (2, 3, 6, 7, 9, 19, 44, 52) — нічого не додаємо.
+ *     Лише товари в наявності; немає що запропонувати — блок не з'являється.
+ *     Індекс пошуку (блок 37) вантажиться, коли покупець догортає до місця блоку (scNear).
+ *     GA4 — через блок 51: sc_reco_view_need, sc_reco_click_need, sc_reco_add_need.
+ *     Вимкнути: SC_NEED_ON = false.
+ * ===================================================================== */
+scModule(55, function () {
+  'use strict';
+  var SC_NEED_ON = true;
+  if (!SC_NEED_ON) return;
+
+  // розділи (адреси з хлібних крихт, без мовного префікса)
+  var CATS = ['/videodomofony/2309/', '/videopaneli/2310/', '/komplekty-videodomofoniv/2311/', '/komutatory/',
+    '/elektromekhanichni-zamky/', '/elektrozashchipky/', '/kontrolery/2370/', '/zchytuvachi/2366/', '/knopky-vykhodu/2368/',
+    '/kodovi-klaviatury/', '/tochky-dostupu/2379/', '/syhnalizatsiia-u-prox/', '/ich-bariery/', '/huchnomovtsi/2341/',
+    '/mikshery-i-pidsyliuvachi/2344/', '/shafy-ta-stiiky/2380/', '/poverbanky/2332/', '/akumuliatory-dlia-dbzh/',
+    '/kabel-vyta-para/2348/', '/soniachni-paneli/2338/', '/heneratory/2328/'];
+  // інші блоки підбору на картці — якщо є хоч один, цей не показуємо
+  var OTHER = ['sc-pick', 'sc-akb', 'sc-akbfit', 'sc-psu', 'sc-cam', 'sc-nvr', 'sc-ajax', 'sc-en54', 'sc-kitin'];
+  var C = { title: 'scn-t', text: 'scn-x', list: 'scn-l', a: 'scn-i', img: 'scn-img', info: 'scn-in',
+            name: 'scn-n', note: 'scn-o', price: 'scn-p' };
+
+  function strip(u) {
+    var p;
+    try { p = new URL(u, location.href).pathname; } catch (e) { return ''; }
+    return SC_LANG && p.indexOf(SC_LANG + '/') === 0 ? p.slice(SC_LANG.length) : p;
+  }
+  function inCats() {
+    var links = document.querySelectorAll('.breadcrumbs a, [itemtype*="BreadcrumbList"] a');
+    for (var i = 0; i < links.length; i++) if (CATS.indexOf(strip(links[i].href)) >= 0) return true;
+    return false;
+  }
+  function other() { return OTHER.some(function (id) { return document.getElementById(id); }); }
+  function price(p) { return String(p).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' грн'; }
+
+  function init() {
+    if (document.getElementById('sc-need') || document.getElementById('sc-need-wait') || other()) return;
+    var anchor = scAnchor();
+    if (!anchor || !inCats() || !window.scSearchApi) return;
+    var here = strip(location.href);
+
+    // поки товарів немає — порожній блок без рамки (його видно лише scNear)
+    var box = document.createElement('div');
+    box.id = 'sc-need-wait';                                // id блоку — лише коли є товари (для аналітики, блок 51)
+    var after = document.getElementById('sc-cheaper') || document.getElementById('sc-trust') || anchor;
+    after.parentNode.insertBefore(box, after.nextSibling);
+
+    scNear(box, function () {
+      window.scSearchApi.load(scSafe(55, function () {
+        if (!box.isConnected) return;
+        if (other()) { box.remove(); return; }              // інший блок з'явився, поки вантажився індекс
+        var items = (window.scUpsellPick ? window.scUpsellPick([here]) : []).filter(function (p) { return p.it.u !== here; });
+        if (!items.length) { box.remove(); return; }
+        box.id = 'sc-need';
+        scStyle('sc-need-style', scPickCss('sc-need', C));
+        box.innerHTML = '<div class="scn-t">До цього знадобиться</div>' +
+          '<div class="scn-x">Товари в наявності, які беруть разом із цим</div><div class="scn-l"></div>';
+        var list = box.querySelector('.scn-l');
+        items.forEach(function (p) {
+          var x = p.it;
+          list.appendChild(scItem({ url: SC_LANG + x.u, name: x.n, price: price(x.p), img: x.i, note: p.note || '' }, C));
+        });
+        if (window.scRecoWatch) window.scRecoWatch();
+      }));
+    });
+  }
+
+  // після інших блоків картки: вони стартують через scInit (idle + повтор через 2 с)
+  scIdle(function () { setTimeout(scSafe(55, init), 3000); });
 });
