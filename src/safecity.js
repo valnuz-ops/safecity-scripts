@@ -5563,7 +5563,8 @@ scModule(37, function () {
         .replace(/(^|\s)(?:тайп|тип)[\s-]?(?:си|с|c)(?=\s|$)/gi, '$1type-c')
         .replace(/(^|\s)(?:(?:від|от)\s+)?12\s?(?:v|в|вольт\S*)(?=\s|$)/gi, '$1живлення')
         .replace(/(^|\s)стекл\S*/gi, '$1скло').replace(/(^|\s)крыш\S*/gi, '$1дах')
-        .replace(/(^|\s)pipe(?=\s|$)/gi, '$1трубу');
+        .replace(/(^|\s)pipe(?=\s|$)/gi, '$1трубу')
+        .replace(/(^|\s)(?:тримач|держател|холдер|holder|кріпленн?|крепл)\S*/gi, '$1кріплення');   // 27.11.2026: «тримач для старлінка»
       // «lan / ethernet порт» — це дата-кабель (але не кабель 2 в 1 і не адаптер Gen2)
       if (!/(?:^|\s)(?:dc|2\s?в\s?1|2в1|живлен\S*|питан\S*|адаптер\S*|adapter)(?=\s|$)/i.test(x))
         x = x.replace(/(^|\s)(?:lan|лан|ethernet|езернет|ethernet-?кабель|інтернет\S*|интернет\S*)(?:\s+(?:порт\S*|port|кабель|cable))?(?=\s|$)/gi, '$1дата кабель');
@@ -5987,8 +5988,12 @@ scModule(37, function () {
     function dist(it) { var x = qtyOf(it, main.k); return main.k === 'r' ? x[1] - x[0] : x - main.v; }
     var items = base.items.filter(function (it) { return use.every(function (u) { return ok(it, u); }); });
     // найближче до потрібного — першим, серед однакових — у наявності
-    items = items.map(function (it, i) { return [it, i, dist(it)]; }).sort(function (a, b) {
-      return (a[2] - b[2]) || (b[0].s - a[0].s) || (a[1] - b[1]);
+    // 27.11.2026: але спершу товари лінійки із запиту (Starlink): «DC 5.5x2.1, 1 м … (Starlink Mini)» давав першими
+    // кабелі для роутера 1 м, а кабелі Starlink Mini 2–3 м — нижче
+    var line = normText(query).filter(function (t) { return /^(?:starlink|старлінк)/.test(t); });
+    function miss(it) { var w = ' ' + (it.wn || '') + ' ' + (it.wo || '') + ' '; return line.some(function (q) { return w.indexOf(q) < 0; }) ? 1 : 0; }
+    items = items.map(function (it, i) { return [it, i, dist(it), line.length ? miss(it) : 0]; }).sort(function (a, b) {
+      return (a[3] - b[3]) || (a[2] - b[2]) || (b[0].s - a[0].s) || (a[1] - b[1]);
     }).map(function (x) { return x[0]; });
     var note = use.map(function (u) { return QTY_TXT[u.k].replace('{}', String(+u.v.toFixed(2)).replace('.', ',')); }).join(', ');
     return { total: items.length, partial: base.partial, items: items, cats: facet(items, 'k'), brands: facet(items, 'b'), fixed: base.fixed, qnote: note };
@@ -6059,16 +6064,38 @@ scModule(37, function () {
       res.push({ doc: doc, score: score, hit: hit, full: hit === qt.length });
     });
     var full = res.filter(function (r) { return r.full; }), list = full;
-    if (!full.length && qt.length > 1) {
+    // 27.11.2026: запит — повна назва товару з іншого сайту / старого фіду («Пристрій захисту від імпульсних
+    // перенапруг ПЗІП TOMZN TZG40-PV»): усі слова не збігаються, але код моделі збігся точно — це точний збіг
+    // (без «Точного збігу немає»), показуємо лише ці товари. Розміри й одиниці (10x38мм, 1100v, 18awg) — не код
+    if (!full.length) {
+      // код рахується, лише якщо він у 1–4 товарів: «lifepo4», «poe24v» — не модель
+      var exact = [];
+      models.forEach(function (m) {
+        if (/^\d+(?:x\d+)+[a-zа-яіїєґ]*$/.test(m) || /^\d+[a-zа-яіїєґ]{1,5}$/.test(m)) return;
+        var hitM = res.filter(function (r) { return r.doc.codes.indexOf(m) >= 0 || r.doc.sku.indexOf(m) >= 0; });
+        if (hitM.length && hitM.length <= 4) hitM.forEach(function (r) { if (exact.indexOf(r) < 0) exact.push(r); });
+      });
+      if (exact.length) full = list = exact;
+    }
+    var partial = !full.length;
+    if (partial && qt.length > 1) {
       // точного збігу немає: лише товари з найбільшою кількістю збіглих слів
       // («сонячна панель 450» → сонячні панелі, а не будь-яка «панель»)
       var maxHit = 0;
       res.forEach(function (r) { if (r.hit > maxHit) maxHit = r.hit; });
       list = res.filter(function (r) { return r.hit === maxHit && r.score > 0.9; });
     }
+    // 27.11.2026: «лише схожі» — товари не з лінійки із запиту (Starlink) нижче: «DC 5.5x2.1 … (Starlink Mini)» показував
+    // першими кабелі для роутера Trinix (збіглися «dc» і «5.5x2.1»), а кабелі Starlink Mini — нижче
+    if (partial) {
+      var strong = qt.filter(function (q) { return /^(?:starlink|старлінк)/.test(q); });   // бренди не беремо: «lithium» ≠ Lithium Valley
+      if (strong.length) list.forEach(function (r) {
+        if (strong.some(function (q) { return r.doc.toks.indexOf(q) < 0; })) r.score -= 0.8;
+      });
+    }
     list.sort(function (a, b) { return b.score - a.score || a.doc.len - b.doc.len; });
     var items = list.map(function (r) { return r.doc.it; });
-    return { total: items.length, partial: !full.length && items.length > 0, items: items, cats: facet(items, 'k'), brands: facet(items, 'b'), fixed: items.length ? fixed : [] };
+    return { total: items.length, partial: partial && items.length > 0, items: items, cats: facet(items, 'k'), brands: facet(items, 'b'), fixed: items.length ? fixed : [] };
   }
   // характеристики для фільтрів на сторінці результатів — з уже нормалізованих слів індексу (wn — назва,
   // wx — характеристики постачальника), тож індекс не росте; рахуються лише для знайдених товарів
